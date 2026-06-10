@@ -971,24 +971,21 @@ function deleteMatch(idx) {
 
 function matchCard(m, showDate, matchNum) {
   const winner = m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0;
-  const scoreDisplay = m.scoreMode === 'sets' && m.sets
-    ? m.sets.map(s => s[0] + '-' + s[1]).join(' / ')
-    : m.score[0] + ' — ' + m.score[1];
-  const numLabel = matchNum ? '<span style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-right:8px">Match ' + matchNum + '</span>' : '';
-  return '<div class="match-card">'
-    + (showDate ? '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">' + m.sessionDate + '</div>' : '')
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-    + numLabel
-    + '<div class="match-actions admin-only" style="margin-left:auto"><button onclick="openMatchModal(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">✏️</button><button onclick="deleteMatch(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">🗑️</button></div>'
+  const cardClass = winner===1 ? 'win-a' : winner===2 ? 'win-b' : 'draw';
+  const setsDetail = m.scoreMode === 'sets' && m.sets ? m.sets.map(s => s[0]+'-'+s[1]).join(' ') : '';
+  return '<div class="match-card ' + cardClass + '">'
+    + '<div class="match-header">'
+    + '<span class="match-num">' + (matchNum ? 'Match '+matchNum : '') + (showDate ? ' · '+m.sessionDate : '') + '</span>'
+    + '<div class="match-actions admin-only"><button onclick="openMatchModal('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">✏️</button><button onclick="deleteMatch('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">🗑️</button></div>'
     + '</div>'
-    + '<div class="match-teams">'
-    + '<div class="match-team"><div class="match-team-label">Équipe A</div><div class="match-team-players' + (winner===1?' match-winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
-    + '<div style="text-align:center;min-width:70px">'
-    + '<div class="match-score">' + m.score[0] + '<span style="font-size:14px;color:var(--muted)"> — </span>' + m.score[1] + '</div>'
-    + (winner===1 ? '<div style="font-size:10px;color:var(--accent)">🏆 A</div>' : winner===2 ? '<div style="font-size:10px;color:var(--accent2)">🏆 B</div>' : '<div style="font-size:10px;color:var(--muted)">Égalité</div>')
-    + (m.scoreMode === 'sets' ? '<div class="match-score-detail">' + scoreDisplay + '</div>' : '')
+    + '<div class="match-body">'
+    + '<div class="match-team-a"><div class="match-team-label a">Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
+    + '<div class="match-center">'
+    + '<div class="match-score"><span class="s-a">' + m.score[0] + '</span><span class="sep">—</span><span class="s-b">' + m.score[1] + '</span></div>'
+    + '<div class="match-trophy">' + (winner===1?'🏆':'') + (winner===0?'🤝':'') + (winner===2?'🏆':'') + '</div>'
+    + (setsDetail ? '<div class="match-score-detail">'+setsDetail+'</div>' : '')
     + '</div>'
-    + '<div class="match-team" style="text-align:right"><div class="match-team-label" style="text-align:right">Équipe B</div><div class="match-team-players' + (winner===2?' match-winner':'') + '" style="text-align:right">' + m.team2.join('<br>') + '</div></div>'
+    + '<div class="match-team-b"><div class="match-team-label b" style="text-align:right">Équipe B</div><div class="match-team-players' + (winner===2?' winner-b':'') + '" style="text-align:right">' + m.team2.join('<br>') + '</div></div>'
     + '</div>'
     + '</div>';
 }
@@ -1021,7 +1018,7 @@ function renderMatches() {
     .filter(m => m.sessionDate === latestDate);
 
   container.innerHTML = '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">' + latestDate + '</div>'
-    + latestMatches.map((m, i) => matchCard(m, false, i+1)).join('');
+    + '<div class="matches-grid">' + latestMatches.map((m, i) => matchCard(m, false, i+1)).join('') + '</div>';
 
   const allBySession = {};
   state.matches.forEach((m, i) => {
@@ -1032,7 +1029,7 @@ function renderMatches() {
   allContainer.innerHTML = '<div class="section-title" style="margin-top:16px;margin-bottom:8px">Historique complet</div>'
     + Object.entries(allBySession).sort((a,b) => b[0].localeCompare(a[0])).map(([date, matches]) => {
       return '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin:12px 0 6px">' + date + '</div>'
-        + matches.map((m, i) => matchCard(m, false, i+1)).join('');
+        + '<div class="matches-grid">' + matches.map((m, i) => matchCard(m, false, i+1)).join('') + '</div>';
     }).join('');
 }
 
