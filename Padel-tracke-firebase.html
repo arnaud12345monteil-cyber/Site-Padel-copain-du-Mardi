@@ -1143,13 +1143,9 @@ DOC_REF.onSnapshot(function(snap) {
       return { ...s, attendees: new Set(s.attendees || []) };
     });
     state.matches = data.matches || [];
-    render();
-    if (_fbInitialized) toast("✓ Données synchronisées");
-    _fbInitialized = true;
+    setTimeout(function() { render(); }, 50);
   } else {
-    // Pas encore de données — uploader SEED_DATA
     pushToFirebase();
-    _fbInitialized = true;
   }
 }, function(err) {
   console.error("Firebase read error:", err);
