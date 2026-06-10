@@ -896,9 +896,18 @@ function buildPlayerPicks() {
 
 function cycleTeam(player) {
   const cur = _teamAssign[player] || 0;
-  if (cur === 0) _teamAssign[player] = 1;
-  else if (cur === 1) _teamAssign[player] = 2;
-  else delete _teamAssign[player];
+  const t1Count = Object.values(_teamAssign).filter(v => v===1).length;
+  const t2Count = Object.values(_teamAssign).filter(v => v===2).length;
+  if (cur === 0) {
+    if (t1Count < 2) _teamAssign[player] = 1;
+    else if (t2Count < 2) _teamAssign[player] = 2;
+    else { toast('Max 2 joueurs par équipe'); return; }
+  } else if (cur === 1) {
+    if (t2Count < 2) _teamAssign[player] = 2;
+    else { toast('Équipe 2 déjà complète (2 joueurs max)'); delete _teamAssign[player]; }
+  } else {
+    delete _teamAssign[player];
+  }
   buildPlayerPicks();
 }
 
@@ -960,20 +969,27 @@ function deleteMatch(idx) {
   toast('✓ Match supprimé');
 }
 
-function matchCard(m, showDate) {
+function matchCard(m, showDate, matchNum) {
   const winner = m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0;
   const scoreDisplay = m.scoreMode === 'sets' && m.sets
     ? m.sets.map(s => s[0] + '-' + s[1]).join(' / ')
     : m.score[0] + ' — ' + m.score[1];
+  const numLabel = matchNum ? '<span style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-right:8px">Match ' + matchNum + '</span>' : '';
   return '<div class="match-card">'
     + (showDate ? '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">' + m.sessionDate + '</div>' : '')
-    + '<div class="match-teams">'
-    + '<div class="match-team"><div class="match-team-label">🟢 Équipe 1</div><div class="match-team-players' + (winner===1?' match-winner':'') + '">' + m.team1.join(' & ') + '</div></div>'
-    + '<div class="match-score">' + m.score[0] + '<span style="font-size:14px;color:var(--muted)">—</span>' + m.score[1] + (winner===1 ? '<div style="font-size:10px;color:var(--accent)">🏆</div>' : winner===2 ? '<div style="font-size:10px;color:var(--accent2)">🏆</div>' : '') + '</div>'
-    + '<div class="match-team" style="text-align:right"><div class="match-team-label">🟠 Équipe 2</div><div class="match-team-players' + (winner===2?' match-winner':'') + '">' + m.team2.join(' & ') + '</div></div>'
-    + '<div class="match-actions admin-only"><button onclick="openMatchModal(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">✏️</button><button onclick="deleteMatch(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">🗑️</button></div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    + numLabel
+    + '<div class="match-actions admin-only" style="margin-left:auto"><button onclick="openMatchModal(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">✏️</button><button onclick="deleteMatch(' + m.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px">🗑️</button></div>'
     + '</div>'
-    + (m.scoreMode === 'sets' ? '<div class="match-score-detail">Sets : ' + scoreDisplay + '</div>' : '')
+    + '<div class="match-teams">'
+    + '<div class="match-team"><div class="match-team-label">Équipe A</div><div class="match-team-players' + (winner===1?' match-winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
+    + '<div style="text-align:center;min-width:70px">'
+    + '<div class="match-score">' + m.score[0] + '<span style="font-size:14px;color:var(--muted)"> — </span>' + m.score[1] + '</div>'
+    + (winner===1 ? '<div style="font-size:10px;color:var(--accent)">🏆 A</div>' : winner===2 ? '<div style="font-size:10px;color:var(--accent2)">🏆 B</div>' : '<div style="font-size:10px;color:var(--muted)">Égalité</div>')
+    + (m.scoreMode === 'sets' ? '<div class="match-score-detail">' + scoreDisplay + '</div>' : '')
+    + '</div>'
+    + '<div class="match-team" style="text-align:right"><div class="match-team-label" style="text-align:right">Équipe B</div><div class="match-team-players' + (winner===2?' match-winner':'') + '" style="text-align:right">' + m.team2.join('<br>') + '</div></div>'
+    + '</div>'
     + '</div>';
 }
 
@@ -1005,9 +1021,8 @@ function renderMatches() {
     .filter(m => m.sessionDate === latestDate);
 
   container.innerHTML = '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">' + latestDate + '</div>'
-    + latestMatches.map(m => matchCard(m, false)).join('');
+    + latestMatches.map((m, i) => matchCard(m, false, i+1)).join('');
 
-  // Historique complet groupé par séance (toutes les séances sauf la plus récente déjà affichée)
   const allBySession = {};
   state.matches.forEach((m, i) => {
     if (!allBySession[m.sessionDate]) allBySession[m.sessionDate] = [];
@@ -1017,7 +1032,7 @@ function renderMatches() {
   allContainer.innerHTML = '<div class="section-title" style="margin-top:16px;margin-bottom:8px">Historique complet</div>'
     + Object.entries(allBySession).sort((a,b) => b[0].localeCompare(a[0])).map(([date, matches]) => {
       return '<div style="font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin:12px 0 6px">' + date + '</div>'
-        + matches.map(m => matchCard(m, false)).join('');
+        + matches.map((m, i) => matchCard(m, false, i+1)).join('');
     }).join('');
 }
 
@@ -1052,20 +1067,23 @@ function renderRanking() {
     .sort((a,b) => b[1].jeux - a[1].jeux || b[1].victoires - a[1].victoires);
 
   const posClass = ['gold','silver','bronze'];
-  container.innerHTML = '<div class="ranking-grid">' + ranked.map(([player, s], i) => {
-    const ratio = s.matchs > 0 ? Math.round(s.jeux / s.matchs * 10) / 10 : 0;
+  const rows = ranked.map(([player, s], i) => {
+    const ratio = s.matchs > 0 ? (s.jeux / s.matchs).toFixed(1) : '0';
     const winPct = s.matchs > 0 ? Math.round(s.victoires / s.matchs * 100) : 0;
-    return '<div class="ranking-card">'
-      + '<div class="ranking-pos ' + (posClass[i] || '') + '">' + (i+1) + '</div>'
-      + '<div class="ranking-name">' + player + '</div>'
-      + '<div class="ranking-stats">'
-      + '<div class="ranking-stat"><div class="v">' + s.jeux + '</div><div class="l">Jeux</div></div>'
-      + '<div class="ranking-stat"><div class="v">' + ratio + '</div><div class="l">Jeux/match</div></div>'
-      + '<div class="ranking-stat"><div class="v">' + winPct + '%</div><div class="l">Victoires</div></div>'
-      + '<div class="ranking-stat"><div class="v">' + s.matchs + '</div><div class="l">Matchs</div></div>'
-      + '</div>'
-      + '</div>';
-  }).join('') + '</div>';
+    const pos = i < 3 ? '<span class="' + posClass[i] + '">' + (i+1) + '</span>' : (i+1);
+    return '<tr>'
+      + '<td>' + pos + '</td>'
+      + '<td>' + player + '</td>'
+      + '<td class="val-accent">' + s.jeux + '</td>'
+      + '<td>' + ratio + '</td>'
+      + '<td>' + winPct + '%</td>'
+      + '<td>' + s.victoires + '/' + s.matchs + '</td>'
+      + '</tr>';
+  }).join('');
+  container.innerHTML = '<table class="ranking-table">'
+    + '<thead><tr><th>#</th><th>Joueur</th><th>Jeux</th><th>Jeux/match</th><th>Victoires</th><th>V/M</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>';
 }
 
 function deletePlayer(playerName) {
