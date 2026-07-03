@@ -628,13 +628,9 @@ function renderBotReservations() {
       + deleteBtn
       + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
-      + (r.terrain ? '<div class="bot-resa-bot">' + r.terrain + '</div>' : '')
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
-      + (r.email ? '<div class="bot-resa-bot">' + r.email + '</div>' : '')
-      + '<div class="bot-resa-bot">' + (r.bot||'') + ' · ' + ts + '</div>'
-      + '</div>';
-  }).join('');
-}
+      + '<div class="bot-resa-email">' + icon + ' ' + (r.email||'') + '</div>'
+      + '<div class="bot-resa-terrain">' + icon + ' ' + (r.terrain||'') + '</div>'
 
 function render() { renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderRanking(); }
 
