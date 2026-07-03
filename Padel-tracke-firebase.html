@@ -586,6 +586,24 @@ function saveEditSession() {
   toast('Séance mise à jour');
 }
 
+function deleteBotResa(idx) {
+  if (!isAdmin) return;
+  if (!confirm('Supprimer cette entrée ?')) return;
+  var list = (state.bot_reservations || []).slice();
+  // Retrouver l'index réel dans la liste non-triée
+  var sorted = list.slice().sort(function(a,b){
+    return (b.date||'').localeCompare(a.date||'') || (b.timestamp||'').localeCompare(a.timestamp||'');
+  });
+  var item = sorted[idx];
+  var realIdx = list.findIndex(function(r){ return r.timestamp === item.timestamp && r.date === item.date && r.heure === item.heure; });
+  if (realIdx === -1) return;
+  list.splice(realIdx, 1);
+  state.bot_reservations = list;
+  DOC_REF.set({ bot_reservations: list }, { merge: true });
+  renderBotReservations();
+  toast('Entrée supprimée');
+}
+
 function renderBotReservations() {
   var container = document.getElementById('bot-resa-container');
   var statusEl = document.getElementById('bot-resa-status');
@@ -601,19 +619,19 @@ function renderBotReservations() {
   if (statusEl) statusEl.textContent = reservations.length + ' entrée(s)';
   var statutClass = { 'confirmée':'confirmee','probable':'probable','deja_reservé':'info','aucun_creneau_disponible':'echec','echec_connexion':'echec','dry_run':'info' };
   var statutIcon = { 'confirmée':'✅','probable':'⚠️','deja_reservé':'ℹ️','aucun_creneau_disponible':'❌','echec_connexion':'❌','dry_run':'🔵' };
-  container.innerHTML = reservations.slice(0, 12).map(function(r) {
+  container.innerHTML = reservations.slice(0, 20).map(function(r, i) {
     var cls = statutClass[r.statut] || 'info';
     var icon = statutIcon[r.statut] || '•';
     var ts = r.timestamp ? r.timestamp.substring(0,16).replace('T',' ') : '';
+    var deleteBtn = isAdmin ? '<button onclick="deleteBotResa(' + i + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;float:right;padding:0" title="Supprimer">🗑️</button>' : '';
     return '<div class="bot-resa-card ' + cls + '">'
+      + deleteBtn
       + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
+      + (r.terrain ? '<div class="bot-resa-bot">' + r.terrain + '</div>' : '')
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
-      + '<div class="bot-resa-email">' + icon + ' ' + (r.email||'') + '</div>'
-      + '<div class="bot-resa-terrain">' + icon + ' ' + (r.terrain||'') + '</div>'
-      + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
-
-      
+      + (r.email ? '<div class="bot-resa-bot">' + r.email + '</div>' : '')
+      + '<div class="bot-resa-bot">' + (r.bot||'') + ' · ' + ts + '</div>'
       + '</div>';
   }).join('');
 }
