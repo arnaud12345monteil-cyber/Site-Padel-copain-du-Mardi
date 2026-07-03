@@ -606,7 +606,6 @@ function renderBotReservations() {
     var icon = statutIcon[r.statut] || '•';
     var ts = r.timestamp ? r.timestamp.substring(0,16).replace('T',' ') : '';
     return '<div class="bot-resa-card ' + cls + '">'
-      + deleteBtn
       + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
