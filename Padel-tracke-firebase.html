@@ -609,7 +609,11 @@ function renderBotReservations() {
       + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
+      + '<div class="bot-resa-email">' + icon + ' ' + (r.email||'') + '</div>'
+      + '<div class="bot-resa-terrain">' + icon + ' ' + (r.terrain||'') + '</div>'
       + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
+
+      
       + '</div>';
   }).join('');
 }
