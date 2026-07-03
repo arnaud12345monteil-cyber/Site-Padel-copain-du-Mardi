@@ -151,6 +151,16 @@
   .match-score .sep { color: var(--muted); font-size: 18px; margin: 0 2px; }
   .match-trophy { font-size: 10px; margin-top: 2px; }
   .match-score-detail { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .bot-resa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 32px; }
+  .bot-resa-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; border-left: 3px solid var(--border); }
+  .bot-resa-card.confirmee { border-left-color: var(--accent); }
+  .bot-resa-card.probable { border-left-color: #f5c518; }
+  .bot-resa-card.echec { border-left-color: #e74c3c; }
+  .bot-resa-card.info { border-left-color: var(--muted); }
+  .bot-resa-date { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 1px; }
+  .bot-resa-heure { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--accent); line-height: 1; }
+  .bot-resa-statut { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+  .bot-resa-bot { font-size: 9px; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body class="">
@@ -178,6 +188,12 @@
   </div>
   <div class="section-title">Prochaine séance</div>
   <div id="next-session-container"><div class="next-session-card"><div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;width:100%"><div style="flex-shrink:0"><div class="ns-date">mar. 09 juin 2026</div><div class="ns-label">Dernière séance</div></div><div style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 16px;text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:1;color:var(--accent)">12<span style="font-size:18px;color:var(--muted)">/12</span></div><div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:2px">INSCRITS / PLACES</div><div style="font-size:10px;margin-top:4px;color:var(--accent);letter-spacing:1px">✓ Complet</div></div><div style="flex:1;min-width:180px"><div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Joueurs inscrits</div><div class="ns-players"><span class="ns-chip">Arnaud M.</span><span class="ns-chip">Frederic P.</span><span class="ns-chip">Frederic O.</span><span class="ns-chip">Thomas M.</span><span class="ns-chip">Pascal M.</span><span class="ns-chip">David L.</span><span class="ns-chip">Richard D.</span><span class="ns-chip">Julien T.</span><span class="ns-chip">Thibault F.</span><span class="ns-chip nicolas">Nicolas C.</span><span class="ns-chip">Robert R.</span><span class="ns-chip">Yannick B.</span></div><div class="ns-payer">Suggestion paiement Nicolas : <strong>Ivano</strong> (0% de ses séances)</div></div></div></div></div>
+  <div class="section-title" style="margin-top:24px;margin-bottom:8px">
+    Reservations automatiques
+    <span id="bot-resa-status" style="font-size:10px;color:var(--muted);margin-left:8px;letter-spacing:1px"></span>
+  </div>
+  <div id="bot-resa-container" class="bot-resa-grid"></div>
+
   <div class="section-title" style="margin-top:24px;margin-bottom:8px">
     Matchs de la séance
     <button class="btn match-btn admin-only" onclick="openMatchModal(null)" style="font-size:10px;padding:4px 12px">+ Match</button>
@@ -570,7 +586,35 @@ function saveEditSession() {
   toast('Séance mise à jour');
 }
 
-function render() { renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderMatches(); renderRanking(); }
+function renderBotReservations() {
+  var container = document.getElementById('bot-resa-container');
+  var statusEl = document.getElementById('bot-resa-status');
+  if (!container) return;
+  var reservations = (state.bot_reservations || []).slice().sort(function(a,b){
+    return (b.date||'').localeCompare(a.date||'') || (b.timestamp||'').localeCompare(a.timestamp||'');
+  });
+  if (reservations.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucune réservation bot enregistrée.</div>';
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+  if (statusEl) statusEl.textContent = reservations.length + ' entrée(s)';
+  var statutClass = { 'confirmée':'confirmee','probable':'probable','deja_reservé':'info','aucun_creneau_disponible':'echec','echec_connexion':'echec','dry_run':'info' };
+  var statutIcon = { 'confirmée':'✅','probable':'⚠️','deja_reservé':'ℹ️','aucun_creneau_disponible':'❌','echec_connexion':'❌','dry_run':'🔵' };
+  container.innerHTML = reservations.slice(0, 12).map(function(r) {
+    var cls = statutClass[r.statut] || 'info';
+    var icon = statutIcon[r.statut] || '•';
+    var ts = r.timestamp ? r.timestamp.substring(0,16).replace('T',' ') : '';
+    return '<div class="bot-resa-card ' + cls + '">'
+      + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
+      + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
+      + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
+      + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function render() { renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderRanking(); }
 
 // ── Spots counter (live) ──────────────────────────────────────────────────────
 function updateSpotsCounter(gridId, counterId, spotsInputId) {
@@ -1342,6 +1386,7 @@ DOC_REF.onSnapshot(function(snap) {
       return { ...s, attendees: new Set(s.attendees || []) };
     });
     state.matches = data.matches || [];
+    state.bot_reservations = data.bot_reservations || [];
     setTimeout(function() { render(); }, 50);
   } else {
     pushToFirebase();
