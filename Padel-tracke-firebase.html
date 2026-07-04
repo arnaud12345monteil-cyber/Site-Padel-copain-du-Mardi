@@ -407,7 +407,8 @@ function pushToFirebase() {
   const data = {
     players: state.players,
     sessions: state.sessions.map(s => ({ ...s, attendees: [...s.attendees] })),
-    matches: state.matches || []
+    matches: state.matches || [],
+    bot_reservations: state.bot_reservations || []
   };
   DOC_REF.set(data).catch(e => {
     console.error("Firebase write error:", e);
