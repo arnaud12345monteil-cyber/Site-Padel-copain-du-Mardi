@@ -410,7 +410,7 @@ function pushToFirebase() {
     matches: state.matches || [],
     bot_reservations: state.bot_reservations || []
   };
-  DOC_REF.set(data).catch(e => {
+  DOC_REF.set(data,, { merge: true }).catch(e => {
     console.error("Firebase write error:", e);
   });
 }
