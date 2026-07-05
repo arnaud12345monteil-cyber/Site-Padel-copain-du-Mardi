@@ -161,6 +161,8 @@
   .bot-resa-heure { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--accent); line-height: 1; }
   .bot-resa-statut { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
   .bot-resa-bot { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .bot-resa-email { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .bot-resa-terrain { font-size: 10px; color: var(--text); margin-top: 2px; font-weight: bold; }
 </style>
 </head>
 <body class="">
@@ -407,10 +409,9 @@ function pushToFirebase() {
   const data = {
     players: state.players,
     sessions: state.sessions.map(s => ({ ...s, attendees: [...s.attendees] })),
-    matches: state.matches || [],
-    bot_reservations: state.bot_reservations || []
+    matches: state.matches || []
   };
-  DOC_REF.set(data,, { merge: true }).catch(e => {
+  DOC_REF.set(data).catch(e => {
     console.error("Firebase write error:", e);
   });
 }
@@ -419,7 +420,6 @@ function loadState() {
   state.players = [...SEED_DATA.players];
   state.sessions = SEED_DATA.sessions.map(s => ({ ...s, attendees: new Set(s.attendees) }));
   state.matches = SEED_DATA.matches || [];
-  state.bot_reservations = SEED_DATA.bot_reservations || [];
 }
 
 function saveState() {
@@ -611,8 +611,8 @@ function renderBotReservations() {
       + '<div class="bot-resa-date">' + (r.date||'—') + '</div>'
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
-      + '<div class="bot-resa-email">' + icon + ' ' + (r.email||'') + '</div>'
-      + '<div class="bot-resa-terrain">' + icon + ' ' + (r.terrain||'') + '</div>'
+      + (r.email ? '<div class="bot-resa-email">✉ ' + r.email + '</div>' : '')
+      + (r.terrain ? '<div class="bot-resa-terrain">🎾 ' + r.terrain + '</div>' : '')
       + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
       + '</div>';
     
