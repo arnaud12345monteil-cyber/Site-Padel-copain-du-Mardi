@@ -1465,6 +1465,7 @@ DOC_REF.onSnapshot(function(snap) {
       return { ...s, attendees: new Set(s.attendees || []) };
     });
     state.matches = data.matches || [];
+    document.getElementById('bot-resa-status').textContent = 'matches:' + state.matches.length;
     state.bot_reservations = data.bot_reservations || [];
     document.title = 'BR:' + (data.bot_reservations||[]).length;
     _firebaseLoaded = true;
