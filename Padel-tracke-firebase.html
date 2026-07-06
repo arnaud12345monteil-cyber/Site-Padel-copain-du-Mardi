@@ -413,14 +413,21 @@ function pushToFirebase() {
     sessions: state.sessions.map(s => ({ ...s, attendees: [...s.attendees] })),
     matches: state.matches || []
   };
-  DOC_REF.set(data, { merge: true }).catch(e => {
-    console.error("Firebase write error:", e);
-  });
+  DOC_REF.update(data).catch(e => {
+      // Si le document n'existe pas encore, fallback sur set
+        if (e.code === 'not-found') {
+            DOC_REF.set(data).catch(console.error);
+              }
+         else {
+             console.error("Firebase write error:", e);
+              }
+               });
+  
 }
 
 function loadState() {
   state.players = [...SEED_DATA.players];
-  state.sessions = SEED_DATA.sessions.map(s => ({ ...s, attendees: new Set(s.attendees) }));
+  state.sesķsions = SEED_DATA.sessions.map(s => ({ ...s, attendees: new Set(s.attendees) }));
   state.matches = SEED_DATA.matches || [];
 }
 
