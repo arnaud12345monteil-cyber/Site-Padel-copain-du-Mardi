@@ -427,7 +427,7 @@ function pushToFirebase() {
 
 function loadState() {
   state.players = [...SEED_DATA.players];
-  state.sesķsions = SEED_DATA.sessions.map(s => ({ ...s, attendees: new Set(s.attendees) }));
+  state.sessions = SEED_DATA.sessions.map(s => ({ ...s, attendees: new Set(s.attendees) }));
   state.matches = SEED_DATA.matches || [];
 }
 
