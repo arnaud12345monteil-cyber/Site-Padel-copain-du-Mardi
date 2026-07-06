@@ -1377,7 +1377,7 @@ function initAdmin() {
     document.body.classList.remove('locked');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔓 Admin';
-    btn.classList.add('unlocked');
+    btn.classList.add('unlocked')
   }
 }
 
@@ -1394,6 +1394,7 @@ DOC_REF.onSnapshot(function(snap) {
     });
     state.matches = data.matches || [];
     state.bot_reservations = data.bot_reservations || [];
+    document.title = 'BR:' + (data.bot_reservations||[]).length;
     setTimeout(function() { render(); }, 50);
   } else {
     pushToFirebase();
