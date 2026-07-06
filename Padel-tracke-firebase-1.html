@@ -1157,7 +1157,7 @@ function toggleAllMatches() {
 }
 
 function renderMatches() {
-  document.title = 'M:' + (state.matches||[]).length
+  document.title = 'M:' + (state.matches||[]).length;
   document.getElementById('bot-resa-status').textContent = 'M:' + (state.matches||[]).length;
   const container = document.getElementById('matches-container');
   const allContainer = document.getElementById('all-matches-container');
