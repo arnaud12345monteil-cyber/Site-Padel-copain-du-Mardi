@@ -1459,6 +1459,7 @@ loadState(); initAdmin(); render();
 
 // Écouter Firebase en temps réel
 DOC_REF.onSnapshot(function(snap) {
+  document.title = 'snap:' + snap.exists + '/matches:' + (snap.exists && snap.data() ? (snap.data().matches||[]).length : 'N/A');
   if (snap.exists) {
     const data = snap.data();
     if (!data) return;
