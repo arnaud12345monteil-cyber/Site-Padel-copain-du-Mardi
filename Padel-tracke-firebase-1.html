@@ -1461,7 +1461,7 @@ loadState(); initAdmin(); render();
 DOC_REF.onSnapshot(function(snap) {
   if (snap.exists) {
     const data = snap.data();
-    if (!data || !data.players) return;
+    if (!data) return;
     state.players = data.players;
     state.sessions = (data.sessions || []).map(function(s) {
       return { ...s, attendees: new Set(s.attendees || []) };
