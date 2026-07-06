@@ -406,11 +406,12 @@ const DOC_REF = db.collection("padel").doc("tracker");
 let _fbInitialized = false;
 
 function pushToFirebase() {
+  // bot_reservations est exclu intentionnellement — géré uniquement par le bot Python
+  // merge:true garantit que bot_reservations existant n'est pas écrasé
   const data = {
     players: state.players,
     sessions: state.sessions.map(s => ({ ...s, attendees: [...s.attendees] })),
-    matches: state.matches || [],
-    bot_reservations: state.bot_reservations || []
+    matches: state.matches || []
   };
   DOC_REF.set(data, { merge: true }).catch(e => {
     console.error("Firebase write error:", e);
