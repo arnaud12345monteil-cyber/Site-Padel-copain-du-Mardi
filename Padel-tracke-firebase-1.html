@@ -1470,7 +1470,6 @@ DOC_REF.onSnapshot(function(snap) {
     state.matches = data.matches || [];
     document.getElementById('bot-resa-status').textContent = 'matches:' + state.matches.length;
     state.bot_reservations = data.bot_reservations || [];
-// document.title = 'BR:' + (data.bot_reservations||[]).length;
     _firebaseLoaded = true;
     setTimeout(function() { render(); }, 50);
   } else {
