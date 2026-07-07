@@ -1,6 +1,4 @@
 <html lang="fr"><head>
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script> eruda.init({useShadowDom: false});</script>
 <meta charset="UTF-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -408,8 +406,6 @@ const DOC_REF = db.collection("padel").doc("tracker");
 let _fbInitialized = false;
 
 function pushToFirebase() {
-  // Protection : ne pas écraser Firebase si les données ne sont pas encore chargées
-  if (state.sessions.length === 0 && state.matches.length === 0 && state.players.length === 0) return;
   // bot_reservations est exclu intentionnellement — géré uniquement par le bot Python
   // merge:true garantit que bot_reservations existant n'est pas écrasé
   const data = {
@@ -601,64 +597,6 @@ function saveEditSession() {
   toast('Séance mise à jour');
 }
 
-function adminBtns(i) {
-  var s = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 4px';
-  return '<div style="text-align:right">' 
-       + '<button class="admin-only style="' + s + '" onclick="openEditBotResa(' + i + ')">&#9999;&#65039;</button>'
-       + '<button class="admin-only style="' + s + '" onclick="deleteBotResa(' + i + ')">&#128465;&#65039;</button>'
-       + '</div>';
-}
-
-var _ebIdx = -1;
-
-function _sortedResa() {
-  return (state.bot_reservations||[]).slice().sort(function(a,b){
-    return (b.date||'').localeCompare(a.date||'')||(b.timestamp||'').localeCompare(a.timestamp||'');
-  });
-}
-
-function _realIdx(si) {
-  var item = _sortedResa()[si]; if (!item) return -1;
-  return (state.bot_reservations||[]).findIndex(function(r){
-    return r.timestamp===item.timestamp&&r.date===item.date&&r.heure===item.heure;
-  });
-}
-
-function deleteBotResa(si) {
-  if (document.body.classList.contains("locked")||!confirm('Supprimer ?')) return;
-  var ri = _realIdx(si); if (ri===-1) return;
-  var l = (state.bot_reservations||[]).slice();
-  l.splice(ri,1); state.bot_reservations=l;
-  DOC_REF.update({bot_reservations:l}).catch(function(e){console.error(e);});
-  renderBotReservations(); toast('Supprime');
-}
-
-function openEditBotResa(si) {
-  if (document.body.classList.contains("locked")) return;
-  var item = _sortedResa()[si]; if (!item) return;
-  _ebIdx = _realIdx(si);
-  document.getElementById('eb_d').value = item.date||'';
-  document.getElementById('eb_h').value = (item.heure&&item.heure!=='N/A')?item.heure:'';
-  document.getElementById('eb_t').value = item.terrain||'';
-  document.getElementById('eb_s').value = item.statut||'confirmee';
-  document.getElementById('eb_modal').classList.add('open');
-}
-
-function saveBotResa() {
-  if (_ebIdx===-1) return;
-  var l = (state.bot_reservations||[]).slice();
-  l[_ebIdx] = Object.assign({},l[_ebIdx],{
-    date:document.getElementById('eb_d').value,
-    heure:document.getElementById('eb_h').value||'N/A',
-    terrain:document.getElementById('eb_t').value,
-    statut:document.getElementById('eb_s').value
-  });
-  state.bot_reservations=l;
-  DOC_REF.update({bot_reservations:l}).catch(function(e){console.error(e);});
-  document.getElementById('eb_modal').classList.remove('open');
-  renderBotReservations(); toast('Mis a jour');
-}
-
 function renderBotReservations() {
   var container = document.getElementById('bot-resa-container');
   var statusEl = document.getElementById('bot-resa-status');
@@ -674,7 +612,7 @@ function renderBotReservations() {
   if (statusEl) statusEl.textContent = reservations.length + ' entrée(s)';
   var statutClass = { 'confirmée':'confirmee','probable':'probable','deja_reservé':'info','aucun_creneau_disponible':'echec','echec_connexion':'echec','dry_run':'info' };
   var statutIcon = { 'confirmée':'✅','probable':'⚠️','deja_reservé':'ℹ️','aucun_creneau_disponible':'❌','echec_connexion':'❌','dry_run':'🔵' };
-  container.innerHTML = reservations.slice(0, 12).map(function(r, i) {
+  container.innerHTML = reservations.slice(0, 12).map(function(r) {
     var cls = statutClass[r.statut] || 'info';
     var icon = statutIcon[r.statut] || '•';
     var ts = r.timestamp ? r.timestamp.substring(0,16).replace('T',' ') : '';
@@ -685,7 +623,6 @@ function renderBotReservations() {
       + (r.email ? '<div class="bot-resa-email">✉ ' + r.email + '</div>' : '')
       + (r.terrain ? '<div class="bot-resa-terrain">🎾 ' + r.terrain + '</div>' : '')
       + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
-      +  adminBtns(i)
       + '</div>';
     
   }).join('');
@@ -1477,6 +1414,4 @@ DOC_REF.onSnapshot(function(snap) {
 
 
 
-<div class="modal-overlay" id="eb_modal"><div class="modal" style="max-width:400px"><h2>Modifier</h2><div class="modal-row"><label>Date</label><input type="date" id="eb_d" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Heure</label><input type="time" id="eb_h" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Terrain</label><input type="text" id="eb_t" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Statut</label><select id="eb_s" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"><option value="confirmee">confirmee</option><option value="probable">probable</option><option value="deja_reserve">deja_reserve</option><option value="aucun_creneau">aucun_creneau</option><option value="echec_connexion">echec_connexion</option><option value="dry_run">dry_run</option></select></div><div class="modal-actions"><button class="btn" onclick="saveBotResa()">Enregistrer</button><button class="btn secondary" onclick="document.getElementById('eb_modal').classList.remove('open')">Annuler</button></div></div></div>
-<div class="modal-overlay" id="eb_modal"><div class="modal" style="max-width:400px"><h2>Modifier la réservation</h2><div class="modal-row"><label>Date</label><input type="date" id="eb_d" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Heure</label><input type="time" id="eb_h" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Terrain</label><input type="text" id="eb_t" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Statut</label><select id="eb_s" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"><option value="confirmee">confirmee</option><option value="probable">probable</option><option value="deja_reserve">deja_reserve</option><option value="aucun_creneau">aucun_creneau</option><option value="echec_connexion">echec_connexion</option><option value="dry_run">dry_run</option></select></div><div class="modal-actions"><button class="btn" onclick="saveBotResa()">Enregistrer</button><button class="btn secondary" onclick="document.getElementById('eb_modal').classList.remove('open')">Annuler</button></div></div></div>
 </body></html>
