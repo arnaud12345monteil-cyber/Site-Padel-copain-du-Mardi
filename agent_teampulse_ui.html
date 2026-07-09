@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Pulse → Padel Tracker</title>
+<style>
+  :root {
+    --bg: #0e0e0e;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #c8f135;
+    --text: #f0f0f0;
+    --muted: #666;
+    --error: #e74c3c;
+    --success: #2ecc71;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', 'Courier New', monospace; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  h1 { font-family: 'Bebas Neue', Impact, sans-serif; font-size: 28px; letter-spacing: 4px; color: var(--accent); margin-bottom: 4px; }
+  .subtitle { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 32px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: 100%; max-width: 480px; }
+  .field { margin-bottom: 20px; }
+  label { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  input[type="date"], input[type="text"], input[type="number"] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: 14px; padding: 12px 14px; border-radius: 4px; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 6px; padding: 32px 16px;
+    text-align: center; cursor: pointer; transition: border-color 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-text { font-size: 12px; color: var(--muted); }
+  .preview { width: 100%; border-radius: 4px; margin-top: 12px; display: none; max-height: 200px; object-fit: contain; }
+  .btn {
+    width: 100%; background: var(--accent); color: #000; border: none; border-radius: 4px;
+    font-family: 'Bebas Neue', Impact, sans-serif; font-size: 18px; letter-spacing: 2px;
+    padding: 14px; cursor: pointer; margin-top: 8px; transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn.secondary { background: var(--border); color: var(--text); font-size: 13px; letter-spacing: 1px; margin-top: 8px; }
+  .status { margin-top: 20px; padding: 14px; border-radius: 4px; font-size: 12px; display: none; line-height: 1.6; }
+  .status.loading { background: #1a1a2e; border: 1px solid #444; color: var(--muted); display: block; }
+  .status.success { background: #0d2818; border: 1px solid var(--success); color: var(--success); display: block; }
+  .status.error { background: #2d0a0a; border: 1px solid var(--error); color: var(--error); display: block; }
+  .result-list { margin-top: 12px; }
+  .result-list .group { margin-bottom: 12px; }
+  .result-list .group-title { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .result-list .names { font-size: 12px; line-height: 1.8; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.present { background: var(--success); }
+  .dot.absent { background: var(--error); }
+  .dot.pending { background: #f39c12; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .key-field { margin-bottom: 20px; }
+  .key-toggle { font-size: 10px; color: var(--accent); cursor: pointer; letter-spacing: 1px; margin-top: 4px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<h1>Team Pulse</h1>
+<div class="subtitle">Importation des présences → Padel Tracker</div>
+
+<div class="card">
+
+  <!-- Clé API -->
+  <div class="key-field">
+    <label>Clé API Anthropic</label>
+    <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off">
+    <span class="key-toggle" onclick="toggleKeyVisibility()">Afficher</span>
+  </div>
+
+  <!-- Date de la session -->
+  <div class="field">
+    <label>Date de la session</label>
+    <input type="date" id="session-date">
+  </div>
+
+  <!-- Nombre de places -->
+  <div class="field">
+    <label>Nombre de places</label>
+    <input type="number" id="spots" value="8" min="1" max="20">
+  </div>
+
+  <!-- Upload capture -->
+  <div class="field">
+    <label>Capture Team Pulse</label>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('dragover')"
+         ondragleave="this.classList.remove('dragover')"
+         ondrop="handleDrop(event)">
+      <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+      <div class="upload-icon">📸</div>
+      <div class="upload-text">Appuie pour sélectionner une capture<br>ou glisse-dépose ici</div>
+      <img id="preview" class="preview">
+    </div>
+  </div>
+
+  <!-- Bouton analyser -->
+  <button class="btn" id="analyze-btn" onclick="analyze()" disabled>Analyser et importer</button>
+  <button class="btn secondary" id="dry-run-btn" onclick="analyze(true)" disabled>Tester sans écrire</button>
+
+  <!-- Statut -->
+  <div class="status" id="status"></div>
+  <div class="result-list" id="result-list"></div>
+
+</div>
+
+<script>
+// ── Config Firebase ────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1GKvFGYwgyu7qxSSXlyMG06A0wHnHJoU",
+  authDomain: "padel-tracker-ecd0f.firebaseapp.com",
+  projectId: "padel-tracker-ecd0f",
+};
+const COLLECTION = "padel";
+const DOCUMENT = "tracker";
+const SPOTS_DEFAULT = 8;
+
+// Joueurs connus pour aide au matching
+const KNOWN_PLAYERS = [
+  "Arnaud Monteil","Frederic Prieur","Frederic Olive","Thomas Mikolasek",
+  "Olivier Dupouy","Pascal Maury","David Longuet","Richard Deloge",
+  "Julien Trigalet","Thibault Firmin","Nicolas Chidaine","Robert Roma",
+  "Yannick Brunel","Ivano","Geoffrey","Sébastien Simon","Fabienne Gaston","Olivier Demont"
+];
+
+let selectedFile = null;
+
+function toggleKeyVisibility() {
+  const input = document.getElementById('api-key');
+  const btn = event.target;
+  if (input.type === 'password') { input.type = 'text'; btn.textContent = 'Masquer'; }
+  else { input.type = 'password'; btn.textContent = 'Afficher'; }
+}
+
+function handleFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  const preview = document.getElementById('preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  document.getElementById('upload-zone').querySelector('.upload-text').textContent = file.name;
+  updateBtns();
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  handleFile(e.dataTransfer.files[0]);
+}
+
+function updateBtns() {
+  const ready = selectedFile && document.getElementById('api-key').value && document.getElementById('session-date').value;
+  document.getElementById('analyze-btn').disabled = !ready;
+  document.getElementById('dry-run-btn').disabled = !ready;
+}
+
+document.getElementById('api-key').addEventListener('input', updateBtns);
+document.getElementById('session-date').addEventListener('input', updateBtns);
+
+function setStatus(type, msg) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.innerHTML = msg;
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function callClaude(imageBase64, mimeType) {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const prompt = `Analyse cette capture d'écran de l'application Team Pulse.
+Extrais la liste des participants avec leur statut.
+
+Voici les noms connus (utilise-les si proche) :
+${JSON.stringify(KNOWN_PLAYERS)}
+
+Réponds UNIQUEMENT en JSON :
+{"presents":["Nom Prénom",...],"absents":["Nom Prénom",...],"en_attente":["Nom Prénom",...]}`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "x-api-key": apiKey,
+      "anthropic-dangerous-direct-browser-calls": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mimeType, data: imageBase64 } },
+          { type: "text", text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!response.ok) throw new Error(`Claude API error: ${response.status}`);
+  const data = await response.json();
+  let text = data.content[0].text.trim();
+  if (text.startsWith("```")) { text = text.split("```")[1]; if (text.startsWith("json")) text = text.slice(4); }
+  return JSON.parse(text);
+}
+
+async function writeToFirebase(dateStr, presences, spots) {
+  // Utiliser l'API REST Firestore
+  const projectId = FIREBASE_CONFIG.projectId;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${COLLECTION}/${DOCUMENT}`;
+  const apiKey = FIREBASE_CONFIG.apiKey;
+
+  // Lire le document actuel
+  const getResp = await fetch(`${url}?key=${apiKey}`);
+  if (!getResp.ok) throw new Error("Impossible de lire Firebase");
+  const docData = await getResp.json();
+
+  // Extraire les sessions existantes
+  let sessions = [];
+  if (docData.fields && docData.fields.sessions) {
+    sessions = docData.fields.sessions.arrayValue.values.map(v => {
+      const f = v.mapValue.fields;
+      const attendeesArr = f.attendees && f.attendees.arrayValue.values
+        ? f.attendees.arrayValue.values.map(a => a.stringValue)
+        : [];
+      return {
+        date: f.date ? f.date.stringValue : '',
+        label: f.label ? f.label.stringValue : '',
+        spots: f.spots ? (f.spots.integerValue || f.spots.doubleValue || 8) : 8,
+        attendees: attendeesArr,
+        paidForNicolas: f.paidForNicolas ? f.paidForNicolas.stringValue : null,
+      };
+    });
+  }
+
+  // Format label
+  const dt = new Date(dateStr + 'T12:00:00');
+  const days = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+  const months = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  const label = `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+
+  const newSession = {
+    date: dateStr,
+    label: label,
+    spots: spots,
+    attendees: presences.presents || [],
+    paidForNicolas: null,
+  };
+
+  const existIdx = sessions.findIndex(s => s.date === dateStr);
+  if (existIdx >= 0) sessions[existIdx] = newSession;
+  else { sessions.push(newSession); sessions.sort((a,b) => b.date.localeCompare(a.date)); }
+
+  // Convertir en format Firestore
+  function toFirestore(sessions) {
+    return {
+      arrayValue: {
+        values: sessions.map(s => ({
+          mapValue: {
+            fields: {
+              date: { stringValue: s.date },
+              label: { stringValue: s.label },
+              spots: { integerValue: s.spots },
+              attendees: { arrayValue: { values: (s.attendees||[]).map(a => ({ stringValue: a })) } },
+              paidForNicolas: s.paidForNicolas ? { stringValue: s.paidForNicolas } : { nullValue: null },
+            }
+          }
+        }))
+      }
+    };
+  }
+
+  // Patch uniquement le champ sessions
+  const patchUrl = `${url}?updateMask.fieldPaths=sessions&key=${apiKey}`;
+  const patchResp = await fetch(patchUrl, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { sessions: toFirestore(sessions) } })
+  });
+
+  if (!patchResp.ok) {
+    const err = await patchResp.text();
+    throw new Error(`Firebase write error: ${err}`);
+  }
+}
+
+async function analyze(dryRun = false) {
+  const dateStr = document.getElementById('session-date').value;
+  const spots = parseInt(document.getElementById('spots').value) || 8;
+
+  if (!selectedFile || !dateStr) return;
+
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('dry-run-btn').disabled = true;
+  document.getElementById('result-list').innerHTML = '';
+  setStatus('loading', '<span class="spinner"></span> Analyse en cours avec Claude Vision...');
+
+  try {
+    // 1. Convertir l'image
+    const base64 = await fileToBase64(selectedFile);
+    const mime = selectedFile.type || 'image/jpeg';
+
+    // 2. Appeler Claude
+    setStatus('loading', '<span class="spinner"></span> Extraction des présences...');
+    const presences = await callClaude(base64, mime);
+
+    const presents = presences.presents || [];
+    const absents = presences.absents || [];
+    const en_attente = presences.en_attente || [];
+
+    // 3. Écrire dans Firebase (si pas dry-run)
+    if (!dryRun) {
+      setStatus('loading', '<span class="spinner"></span> Écriture dans Firebase...');
+      await writeToFirebase(dateStr, presences, spots);
+      setStatus('success', `✅ Session du ${dateStr} enregistrée avec ${presents.length} présent(s)`);
+    } else {
+      setStatus('success', `🔵 [TEST] ${presents.length} présent(s) détecté(s) — aucune écriture`);
+    }
+
+    // 4. Afficher le résultat
+    document.getElementById('result-list').innerHTML =
+      (presents.length ? `<div class="group"><div class="group-title">✅ Présents (${presents.length})</div><div class="names">${presents.map(n=>`<span class="dot present"></span>${n}<br>`).join('')}</div></div>` : '') +
+      (absents.length ? `<div class="group"><div class="group-title">❌ Absents (${absents.length})</div><div class="names">${absents.map(n=>`<span class="dot absent"></span>${n}<br>`).join('')}</div></div>` : '') +
+      (en_attente.length ? `<div class="group"><div class="group-title">⏳ En attente (${en_attente.length})</div><div class="names">${en_attente.map(n=>`<span class="dot pending"></span>${n}<br>`).join('')}</div></div>` : '');
+
+  } catch(e) {
+    setStatus('error', '❌ Erreur : ' + e.message);
+  }
+
+  document.getElementById('analyze-btn').disabled = false;
+  document.getElementById('dry-run-btn').disabled = false;
+}
+</script>
+
+</body>
+</html>
