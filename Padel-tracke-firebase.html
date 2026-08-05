@@ -147,7 +147,7 @@
   .bot-resa-statut { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
   .bot-resa-bot { font-size: 9px; color: var(--muted); margin-top: 2px; }
   .bot-resa-email { font-size: 9px; color: var(--muted); margin-top: 2px; }
-  .bot-resa-terrain { font-size: 9px; color: #ff8c1a; margin-top: 2px; font-weight: bold; }
+  .bot-resa-terrain { font-size: 10px; color: var(--text); margin-top: 2px; font-weight: bold; }
 </style>
 </head>
 <body class="">
@@ -631,7 +631,7 @@ function renderBotReservations() {
       + '<div class="bot-resa-heure">' + (r.heure !== 'N/A' ? r.heure : '—') + '</div>'
       + '<div class="bot-resa-statut">' + icon + ' ' + (r.statut||'') + '</div>'
       + (r.email ? '<div class="bot-resa-email">✉ ' + r.email + '</div>' : '')
-      + (r.terrain ? '<div class="bot-resa-terrain">🎾 ' + r.terrain.replace(/^Padel/, 'Country Club') + '</div>' : '')
+      + (r.terrain ? '<div class="bot-resa-terrain">🎾 ' + r.terrain + '</div>' : '')
       + '<div class="bot-resa-bot">' + (r.bot||'') + ' ' + ts + '</div>'
       +  adminBtns(i)
       + '</div>';
@@ -772,7 +772,7 @@ function renderSessionCard(next, idx) {
       + '<div style="display:flex;gap:12px;flex-wrap:wrap">'
       +   courts.map(c =>
             '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 20px;text-align:center">'
-            + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:32px;line-height:1;color:var(--accent);letter-spacing:1px">🎾 ' + c.numero + '</div>'
+            + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;line-height:1;color:#ff8c1a;letter-spacing:1px">🎾 Country Club ' + c.numero + '</div>'
             + (c.email ? '<div style="font-size:9px;color:var(--muted);margin-top:3px">' + c.email + '</div>' : '')
             + '</div>'
           ).join('')
