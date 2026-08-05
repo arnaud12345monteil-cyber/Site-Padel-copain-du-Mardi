@@ -223,7 +223,7 @@
       <div id="ranking-container-matches"></div>
     </div>
     <div style="flex:1;min-width:300px">
-      <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--muted);font-size:15px;margin:0 0 10px">Présence</h3>
+      <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--muted);font-size:15px;margin:0 0 10px">Jeux / Présence</h3>
       <div id="ranking-container-presence"></div>
     </div>
   </div>
@@ -1393,6 +1393,11 @@ function renderRanking() {
 
 // Classement Présence — même plage de dates que le classement Jeux gagnés,
 // classe les joueurs par % de présence sur la période.
+// Classement Jeux/Présence — même plage de dates que le classement Jeux gagnés.
+// Pondère les jeux gagnés par le taux de présence sur la période : un joueur
+// présent seulement la moitié du temps voit ses jeux "remis à l'échelle" comme
+// s'il avait joué toutes les séances, pour comparer équitablement l'efficacité
+// de jeu indépendamment de l'assiduité.
 function renderPresenceRanking() {
   const container = document.getElementById('ranking-container-presence');
   const todayStr = todayISO();
@@ -1406,38 +1411,55 @@ function renderPresenceRanking() {
     return true;
   });
 
-  if (sessions.length === 0) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucune séance sur cette période.</div>';
+  if (sessions.length === 0 || !state.matches || state.matches.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pas assez de données sur cette période.</div>';
     return;
   }
 
-  const total = sessions.length;
-  const stats = {};
-  state.players.forEach(p => {
-    const played = sessions.filter(s => s.attendees.has(p)).length;
-    if (played > 0) stats[p] = { played, total, pct: Math.round((played/total)*100) };
+  const filteredMatches = state.matches.filter(m => {
+    if (fromDate && m.sessionDate < fromDate) return false;
+    if (toDate && m.sessionDate > toDate) return false;
+    return true;
   });
 
-  const ranked = Object.entries(stats).sort((a,b) => b[1].pct - a[1].pct || b[1].played - a[1].played);
+  const totalSessions = sessions.length;
+  const jeuxParJoueur = {};
+  filteredMatches.forEach(m => {
+    m.team1.forEach(p => { jeuxParJoueur[p] = (jeuxParJoueur[p] || 0) + m.score[0]; });
+    m.team2.forEach(p => { jeuxParJoueur[p] = (jeuxParJoueur[p] || 0) + m.score[1]; });
+  });
+
+  const stats = {};
+  Object.keys(jeuxParJoueur).forEach(p => {
+    const played = sessions.filter(s => s.attendees.has(p)).length;
+    if (played === 0) return; // pas de présence sur la période = pas de ratio calculable
+    const pct = played / totalSessions; // fraction 0-1
+    const jeux = jeuxParJoueur[p];
+    stats[p] = { jeux, played, total: totalSessions, pct: Math.round(pct*100), adjusted: Math.round(jeux / pct) };
+  });
+
+  const ranked = Object.entries(stats).sort((a,b) => b[1].adjusted - a[1].adjusted || b[1].jeux - a[1].jeux);
 
   if (ranked.length === 0) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucune présence sur cette période.</div>';
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pas assez de données sur cette période.</div>';
     return;
   }
 
-  const slots = buildPodiumSlots(ranked, ([,s]) => s.pct);
+  const slots = buildPodiumSlots(ranked, ([,s]) => s.adjusted);
   const podiumEntries = slots.map(slot => {
     if (!slot) return null;
     const names = slot.group.map(([p]) => p.split(' ')[0]).join(' & ');
     const s = slot.group[0][1];
-    return { name: names, big: s.pct + '%', bigLabel: 'PRÉSENCE', sub: s.played + '/' + s.total + ' séances', isEx: slot.isEx };
+    return { name: names, big: s.adjusted, bigLabel: 'JEUX PONDÉRÉS', sub: s.jeux + ' jeux · ' + s.pct + '% présence', isEx: slot.isEx };
   });
 
   const podiumCards = buildPodiumSVG(podiumEntries);
 
   const posClass = ['gold','silver','bronze'];
+  const maxAdjusted = ranked[0][1].adjusted || 1;
   const rows = ranked.map(([player, s], i) => {
     const pos = i < 3 ? '<span class="' + posClass[i] + '">' + (i+1) + '</span>' : (i+1);
+    const bar = Math.round((s.adjusted / maxAdjusted) * 100);
     return '<tr>'
       + '<td>' + pos + '</td>'
       + '<td style="text-align:left">'
@@ -1445,16 +1467,18 @@ function renderPresenceRanking() {
       + '<div style="flex:1;min-width:0">'
       + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + player + '</div>'
       + '<div style="height:2px;background:var(--border);border-radius:2px;margin-top:3px">'
-      + '<div style="height:100%;width:' + s.pct + '%;background:var(--accent);border-radius:2px;transition:width 0.6s"></div>'
+      + '<div style="height:100%;width:' + bar + '%;background:var(--accent);border-radius:2px;transition:width 0.6s"></div>'
       + '</div></div></div></td>'
-      + '<td class="val-accent">' + s.pct + '%</td>'
+      + '<td class="val-accent">' + s.adjusted + '</td>'
+      + '<td>' + s.jeux + '</td>'
+      + '<td>' + s.pct + '%</td>'
       + '<td>' + s.played + '/' + s.total + '</td>'
       + '</tr>';
   }).join('');
 
   container.innerHTML = '<div class="ranking-podium">' + podiumCards + '</div>'
     + '<table class="ranking-table">'
-    + '<thead><tr><th>#</th><th>Joueur</th><th>% Présence</th><th>Séances</th></tr></thead>'
+    + '<thead><tr><th>#</th><th>Joueur</th><th>Jeux pondérés</th><th>Jeux</th><th>% Présence</th><th>Séances</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '</table>';
 }
