@@ -766,12 +766,19 @@ function renderSessionCard(next, idx) {
 
   const label = idx === 0 ? 'Prochaine séance' : 'Séance suivante';
   const courts = courtsForDate(next.date);
-  const courtsHeader = courts.length
-    ? '<div class="ns-label" style="margin-top:3px">' + courts.length + ' terrain' + (courts.length > 1 ? 's' : '') + ' réservé' + (courts.length > 1 ? 's' : '') + '</div>'
+  const courtsBlock = courts.length
+    ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);width:100%">'
+      + '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Terrain' + (courts.length > 1 ? 's' : '') + ' réservé' + (courts.length > 1 ? 's' : '') + '</div>'
+      + '<div style="display:flex;gap:12px;flex-wrap:wrap">'
+      +   courts.map(c =>
+            '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 20px;text-align:center">'
+            + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:32px;line-height:1;color:var(--accent);letter-spacing:1px">🎾 ' + c.numero + '</div>'
+            + (c.email ? '<div style="font-size:9px;color:var(--muted);margin-top:3px">' + c.email + '</div>' : '')
+            + '</div>'
+          ).join('')
+      + '</div>'
+      + '</div>'
     : '';
-  const courtsDetail = courts.map(c =>
-    '<div style="font-size:10px;color:var(--text);margin-top:2px">🎾 Terrain ' + c.numero + (c.email ? ' <span style="color:var(--muted)">— ' + c.email + '</span>' : '') + '</div>'
-  ).join('');
 
   return '<div class="next-session-card" style="position:relative">'
     + '<button class="del-btn admin-only" onclick="openEditModal(\'' + next.id + '\')" title="Modifier la séance" style="position:absolute;top:12px;right:14px;font-size:14px">✏️</button>'
@@ -779,8 +786,6 @@ function renderSessionCard(next, idx) {
     + '<div style="flex-shrink:0">'
     +   '<div class="ns-date">' + formatDate(next.date) + '</div>'
     +   '<div class="ns-label">' + label + '</div>'
-    +   courtsHeader
-    +   courtsDetail
     + '</div>'
     + '<div style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 16px;text-align:center">'
     +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:34px;line-height:1;color:' + spotsColor + '">' + filled + '<span style="font-size:18px;color:var(--muted)">/' + spots + '</span></div>'
@@ -791,6 +796,7 @@ function renderSessionCard(next, idx) {
     +   '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Joueurs inscrits</div>'
     +   '<div class="ns-players">' + attendeesArr.map(p => '<span class="ns-chip">' + shortName(p) + '</span>').join('') + '</div>'
     + '</div>'
+    +   courtsBlock
     + '</div>'
     + '</div>';
 }
