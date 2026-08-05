@@ -790,6 +790,22 @@ function renderNextSession() {
   container.innerHTML = upcoming.map((next, idx) => renderSessionCard(next, idx)).join('');
 }
 
+// Terrains distincts confirmés par le bot pour une date donnée, avec leur numéro
+// (extrait de "Padel - Terrain n.6 - Outdoor") et le compte qui a réservé.
+function courtsForDate(date) {
+  const confirmed = (state.bot_reservations || []).filter(r => r.statut === 'confirmée' && r.date === date);
+  const seen = new Set();
+  const list = [];
+  confirmed.forEach(r => {
+    const key = (r.terrain || '') + '|' + (r.heure || '');
+    if (seen.has(key)) return;
+    seen.add(key);
+    const m = /Terrain\s*n\.?\s*(\d+)/i.exec(r.terrain || '');
+    list.push({ numero: m ? m[1] : (r.terrain || '?'), email: r.email || '' });
+  });
+  return list;
+}
+
 function renderSessionCard(next, idx) {
   const spots = next.spots || 8;
   const attendeesArr = [...next.attendees];
@@ -808,16 +824,21 @@ function renderSessionCard(next, idx) {
   const spotsColor = remaining > 0 ? 'var(--nicolas)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
 
   const label = idx === 0 ? 'Prochaine séance' : 'Séance suivante';
-  const courtsLine = next.courts
-    ? '<div class="ns-label" style="margin-top:3px">' + next.courts + ' terrain' + (next.courts > 1 ? 's' : '') + ' réservé' + (next.courts > 1 ? 's' : '') + '</div>'
+  const courts = courtsForDate(next.date);
+  const courtsHeader = courts.length
+    ? '<div class="ns-label" style="margin-top:3px">' + courts.length + ' terrain' + (courts.length > 1 ? 's' : '') + ' réservé' + (courts.length > 1 ? 's' : '') + '</div>'
     : '';
+  const courtsDetail = courts.map(c =>
+    '<div style="font-size:10px;color:var(--text);margin-top:2px">🎾 Terrain ' + c.numero + (c.email ? ' <span style="color:var(--muted)">— ' + c.email + '</span>' : '') + '</div>'
+  ).join('');
 
   return '<div class="next-session-card">'
     + '<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;width:100%">'
     + '<div style="flex-shrink:0">'
     +   '<div class="ns-date">' + formatDate(next.date) + '</div>'
     +   '<div class="ns-label">' + label + '</div>'
-    +   courtsLine
+    +   courtsHeader
+    +   courtsDetail
     + '</div>'
     + '<div style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 16px;text-align:center">'
     +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:34px;line-height:1;color:' + spotsColor + '">' + filled + '<span style="font-size:18px;color:var(--muted)">/' + spots + '</span></div>'
