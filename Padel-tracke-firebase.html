@@ -832,7 +832,8 @@ function renderSessionCard(next, idx) {
     '<div style="font-size:10px;color:var(--text);margin-top:2px">🎾 Terrain ' + c.numero + (c.email ? ' <span style="color:var(--muted)">— ' + c.email + '</span>' : '') + '</div>'
   ).join('');
 
-  return '<div class="next-session-card">'
+  return '<div class="next-session-card" style="position:relative">'
+    + '<button class="del-btn admin-only" onclick="openEditModal(\'' + next.id + '\')" title="Modifier la séance" style="position:absolute;top:12px;right:14px;font-size:14px">✏️</button>'
     + '<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;width:100%">'
     + '<div style="flex-shrink:0">'
     +   '<div class="ns-date">' + formatDate(next.date) + '</div>'
