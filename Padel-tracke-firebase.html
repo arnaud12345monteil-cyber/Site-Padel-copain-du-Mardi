@@ -691,7 +691,76 @@ function renderBotReservations() {
   }).join('');
 }
 
-function render() { renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderRanking(); }
+// ── Date du jour en local (évite le décalage UTC de toISOString près de minuit) ─
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// ── Création automatique des séances à venir depuis les réservations bot ───────
+// Un court de padel = 4 joueurs. On compte les réservations bot confirmées à
+// venir, regroupées par date, en dédupliquant par terrain+heure pour obtenir le
+// nombre de terrains distincts réservés ce jour-là.
+var PLAYERS_PER_COURT = 4;
+
+function autoCreateSessionsFromBotReservations() {
+  const todayStr = todayISO();
+  const confirmed = (state.bot_reservations || []).filter(function(r) {
+    return r.statut === 'confirmée' && r.date && r.date >= todayStr;
+  });
+  if (confirmed.length === 0) return false;
+
+  const courtsByDate = {};
+  confirmed.forEach(function(r) {
+    if (!courtsByDate[r.date]) courtsByDate[r.date] = new Set();
+    courtsByDate[r.date].add((r.terrain || '') + '|' + (r.heure || ''));
+  });
+
+  let changed = false;
+  Object.keys(courtsByDate).forEach(function(date) {
+    const nbCourts = courtsByDate[date].size;
+    const spots = nbCourts * PLAYERS_PER_COURT;
+    let session = state.sessions.find(function(s) { return s.date === date; });
+    if (!session) {
+      state.sessions.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        date: date,
+        label: 'Mardi au Padel',
+        attendees: new Set(),
+        paidForNicolas: null,
+        spots: spots,
+        courts: nbCourts,
+        autoCreated: true
+      });
+      changed = true;
+    } else if (session.autoCreated && (session.spots !== spots || session.courts !== nbCourts)) {
+      // Un terrain supplémentaire a été confirmé depuis (ou un précédent a été retiré) —
+      // on met à jour la capacité, mais jamais les joueurs déjà cochés ni le paiement Nicolas.
+      session.spots = spots;
+      session.courts = nbCourts;
+      changed = true;
+    }
+    // Si la séance existe déjà et n'est PAS autoCreated, elle a été créée/éditée
+    // manuellement : on ne touche jamais à ses places, même si le nombre de
+    // terrains confirmés diffère.
+  });
+
+  if (changed) {
+    state.sessions.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+    // Comme toutes les autres écritures de l'app, on ne persiste que depuis une
+    // session admin déverrouillée — un visiteur lecture-seule voit quand même le
+    // résultat (recalculé côté client à chaque chargement), sans déclencher d'écriture.
+    if (!document.body.classList.contains('locked')) {
+      saveState();
+    }
+  }
+  return changed;
+}
+
+function render() {
+  autoCreateSessionsFromBotReservations();
+  renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderRanking();
+}
 
 // ── Spots counter (live) ──────────────────────────────────────────────────────
 function updateSpotsCounter(gridId, counterId, spotsInputId) {
@@ -703,33 +772,31 @@ function updateSpotsCounter(gridId, counterId, spotsInputId) {
   val.className = 'spots-val ' + (checked > spots ? 'over' : checked === spots ? 'ok' : 'warn');
 }
 
-// ── Next session card ─────────────────────────────────────────────────────────
+// ── Next session cards (jusqu'à 3 séances à venir) ──────────────────────────────
 function renderNextSession() {
   const container = document.getElementById('next-session-container');
-  // Find the most recent session (largest date) — it's the "current/next" reference
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  // Sort desc, take first (most recent)
-  const sorted = [...state.sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
-  const next = sorted[0];
-  if (!next) { container.innerHTML = ''; return; }
+  const todayStr = todayISO();
 
+  const upcoming = state.sessions
+    .filter(s => s.date >= todayStr)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 3);
+
+  if (upcoming.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:16px 0">Aucune séance à venir pour le moment — elle apparaîtra ici dès qu\'une réservation sera confirmée.</div>';
+    return;
+  }
+
+  container.innerHTML = upcoming.map((next, idx) => renderSessionCard(next, idx)).join('');
+}
+
+function renderSessionCard(next, idx) {
   const spots = next.spots || 8;
   const attendeesArr = [...next.attendees];
   const filled = attendeesArr.length;
   const remaining = spots - filled;
-  const nicolasName = state.players.find(isNicolas);
-
-  const spotsClass = filled > spots ? 'over' : filled === spots ? 'ok' : 'warn';
 
   const sug = computeSuggestedPayer(state.players, state.sessions);
-
-  let chipsHtml = attendeesArr.map(p =>
-    '<span class="ns-chip' + (isNicolas(p) ? ' nicolas' : '') + '">' + p.split(' ')[0] + '</span>'
-  ).join('');
-  if (remaining > 0) {
-    for (let i = 0; i < Math.min(remaining, 6); i++) chipsHtml += '<span class="ns-chip missing">+ place libre</span>';
-  }
 
   const payerLine = next.paidForNicolas
     ? '<div class="ns-payer">Place Nicolas payée par <strong>' + next.paidForNicolas + '</strong></div>'
@@ -740,11 +807,17 @@ function renderNextSession() {
     : remaining < 0 ? Math.abs(remaining) + ' en surnombre' : '✓ Complet';
   const spotsColor = remaining > 0 ? 'var(--nicolas)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
 
-  container.innerHTML = '<div class="next-session-card">'
+  const label = idx === 0 ? 'Prochaine séance' : 'Séance suivante';
+  const courtsLine = next.courts
+    ? '<div class="ns-label" style="margin-top:3px">' + next.courts + ' terrain' + (next.courts > 1 ? 's' : '') + ' réservé' + (next.courts > 1 ? 's' : '') + '</div>'
+    : '';
+
+  return '<div class="next-session-card">'
     + '<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;width:100%">'
     + '<div style="flex-shrink:0">'
     +   '<div class="ns-date">' + formatDate(next.date) + '</div>'
-    +   '<div class="ns-label">Dernière séance</div>'
+    +   '<div class="ns-label">' + label + '</div>'
+    +   courtsLine
     + '</div>'
     + '<div style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 16px;text-align:center">'
     +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:34px;line-height:1;color:' + spotsColor + '">' + filled + '<span style="font-size:18px;color:var(--muted)">/' + spots + '</span></div>'
@@ -767,6 +840,11 @@ function renderTable() {
   const nicolasName = players.find(isNicolas);
   const sorted = [...sessions].sort((a,b) => new Date(b.date)-new Date(a.date));
   const showAll = document.body.classList.contains('show-all-sessions');
+  const todayStr = todayISO();
+  // La ligne visible par défaut doit être la dernière séance PASSÉE (déjà jouée),
+  // pas une séance future auto-créée dont les présences ne sont pas encore connues.
+  let defaultVisibleIdx = sorted.findIndex(s => s.date <= todayStr);
+  if (defaultVisibleIdx === -1) defaultVisibleIdx = 0;
 
   // Compact header: first name only, rotated label for space
   let html = '<table><thead><tr><th class="sticky-col">Date</th>';
@@ -776,7 +854,7 @@ function renderTable() {
   html += '<th>💶</th><th></th></tr></thead><tbody>';
 
   sorted.forEach((session, idx) => {
-    const isHidden = idx > 0; // hide all but first (most recent)
+    const isHidden = idx !== defaultVisibleIdx; // hide all but the most recent past session
     const rowClass = isHidden ? 'hidden-row' + (showAll ? ' show-all' : '') : '';
     html += '<tr class="' + rowClass + '">';
     // Date: compact — just dd/mm
@@ -815,7 +893,11 @@ function toggleSessions() {
 }
 
 function renderStats() {
-  const { players, sessions } = state;
+  const { players } = state;
+  // Ne compter que les séances déjà jouées — une séance future auto-créée n'a
+  // pas encore de présences connues, elle ne doit pas diluer les statistiques.
+  const todayStr = todayISO();
+  const sessions = state.sessions.filter(s => s.date <= todayStr);
   const grid = document.getElementById('stats-grid');
   if (sessions.length === 0) { grid.innerHTML = ''; return; }
   const total = sessions.length;
@@ -852,7 +934,9 @@ function renderStats() {
 }
 
 function renderHeaderStats() {
-  const { players, sessions } = state;
+  const { players } = state;
+  const todayStr = todayISO();
+  const sessions = state.sessions.filter(s => s.date <= todayStr);
   const total = sessions.length;
   let avgPct = '—';
   if (total > 0 && players.length > 0) avgPct = Math.round(sessions.reduce((acc,s)=>acc+s.attendees.size,0)/(total*players.length)*100)+'%';
