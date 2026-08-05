@@ -164,11 +164,13 @@
   </div>
   <div class="ranking-header" style="margin-top:10px">
     <div class="ranking-filter">
-      <label>Matchs depuis le</label>
-      <input type="date" id="matches-from-date" oninput="renderHeaderStats()">
-      <button onclick="document.getElementById('matches-from-date').value='';renderHeaderStats()" title="Réinitialiser">✕</button>
+      <label>Du</label>
+      <input type="date" id="stats-from-date" oninput="renderHeaderStats();renderStats();">
+      <label>au</label>
+      <input type="date" id="stats-to-date" oninput="renderHeaderStats();renderStats();">
+      <button onclick="document.getElementById('stats-from-date').value='';document.getElementById('stats-to-date').value='';renderHeaderStats();renderStats();" title="Réinitialiser">✕</button>
     </div>
-    <div id="matches-period-label" class="ranking-period"></div>
+    <div id="stats-period-label" class="ranking-period"></div>
   </div>
 </header>
 <main>
@@ -835,9 +837,16 @@ function renderStats() {
   // Ne compter que les séances déjà jouées — une séance future auto-créée n'a
   // pas encore de présences connues, elle ne doit pas diluer les statistiques.
   const todayStr = todayISO();
-  const sessions = state.sessions.filter(s => s.date <= todayStr);
+  const fromDate = document.getElementById('stats-from-date')?.value || '';
+  const toDate = document.getElementById('stats-to-date')?.value || '';
+  const sessions = state.sessions.filter(s => {
+    if (s.date > todayStr) return false;
+    if (fromDate && s.date < fromDate) return false;
+    if (toDate && s.date > toDate) return false;
+    return true;
+  });
   const grid = document.getElementById('stats-grid');
-  if (sessions.length === 0) { grid.innerHTML = ''; return; }
+  if (sessions.length === 0) { grid.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucune séance sur cette période.</div>'; return; }
   const total = sessions.length;
   const sorted = [...players].sort((a,b) => sessions.filter(s=>s.attendees.has(b)).length - sessions.filter(s=>s.attendees.has(a)).length);
   grid.innerHTML = sorted.map(player => {
@@ -860,7 +869,15 @@ function renderStats() {
 function renderHeaderStats() {
   const { players } = state;
   const todayStr = todayISO();
-  const sessions = state.sessions.filter(s => s.date <= todayStr);
+  const fromDate = document.getElementById('stats-from-date')?.value || '';
+  const toDate = document.getElementById('stats-to-date')?.value || '';
+
+  const sessions = state.sessions.filter(s => {
+    if (s.date > todayStr) return false; // séance pas encore jouée
+    if (fromDate && s.date < fromDate) return false;
+    if (toDate && s.date > toDate) return false;
+    return true;
+  });
   const total = sessions.length;
   let avgPct = '—';
   if (total > 0 && players.length > 0) avgPct = Math.round(sessions.reduce((acc,s)=>acc+s.attendees.size,0)/(total*players.length)*100)+'%';
@@ -868,15 +885,20 @@ function renderHeaderStats() {
   document.getElementById('stat-players').textContent = players.length;
   document.getElementById('stat-avg').textContent = avgPct;
 
-  // Matchs joués, filtrable depuis une date (même principe que le classement)
-  const matches = state.matches || [];
-  const fromDateInput = document.getElementById('matches-from-date');
-  const fromDate = fromDateInput ? fromDateInput.value : '';
-  const filteredMatches = fromDate ? matches.filter(m => m.sessionDate >= fromDate) : matches;
-  document.getElementById('stat-matches').textContent = filteredMatches.length;
-  const periodLabel = document.getElementById('matches-period-label');
+  // Matchs joués, même plage de dates
+  const matches = (state.matches || []).filter(m => {
+    if (fromDate && m.sessionDate < fromDate) return false;
+    if (toDate && m.sessionDate > toDate) return false;
+    return true;
+  });
+  document.getElementById('stat-matches').textContent = matches.length;
+
+  const periodLabel = document.getElementById('stats-period-label');
   if (periodLabel) {
-    periodLabel.textContent = fromDate ? 'depuis le ' + fromDate : 'au total';
+    if (fromDate && toDate) periodLabel.textContent = 'du ' + fromDate + ' au ' + toDate;
+    else if (fromDate) periodLabel.textContent = 'depuis le ' + fromDate;
+    else if (toDate) periodLabel.textContent = 'jusqu\'au ' + toDate;
+    else periodLabel.textContent = 'toutes périodes confondues';
   }
 }
 
