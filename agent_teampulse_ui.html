@@ -35,7 +35,10 @@
   .upload-zone input { display: none; }
   .upload-icon { font-size: 32px; margin-bottom: 8px; }
   .upload-text { font-size: 12px; color: var(--muted); }
-  .preview { width: 100%; border-radius: 4px; margin-top: 12px; display: none; max-height: 200px; object-fit: contain; }
+  .preview-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .preview-item { position: relative; width: 64px; height: 64px; }
+  .preview-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); }
+  .preview-item .remove-thumb { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; background: var(--error); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; border: 2px solid var(--bg); }
   .btn {
     width: 100%; background: var(--accent); color: #000; border: none; border-radius: 4px;
     font-family: 'Bebas Neue', Impact, sans-serif; font-size: 18px; letter-spacing: 2px;
@@ -95,10 +98,10 @@
          ondragover="event.preventDefault();this.classList.add('dragover')"
          ondragleave="this.classList.remove('dragover')"
          ondrop="handleDrop(event)">
-      <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(this.files)">
       <div class="upload-icon">📸</div>
-      <div class="upload-text">Appuie pour sélectionner une capture<br>ou glisse-dépose ici</div>
-      <img id="preview" class="preview">
+      <div class="upload-text" id="upload-text">Appuie pour sélectionner une ou plusieurs captures<br>ou glisse-dépose ici</div>
+      <div class="preview-list" id="preview-list"></div>
     </div>
   </div>
 
@@ -131,7 +134,7 @@ const KNOWN_PLAYERS = [
   "Yannick Brunel","Ivano","Geoffrey","Sébastien Simon","Fabienne Gaston","Olivier Demont"
 ];
 
-let selectedFile = null;
+let selectedFiles = [];
 
 function toggleKeyVisibility() {
   const input = document.getElementById('api-key');
@@ -140,24 +143,39 @@ function toggleKeyVisibility() {
   else { input.type = 'password'; btn.textContent = 'Afficher'; }
 }
 
-function handleFile(file) {
-  if (!file) return;
-  selectedFile = file;
-  const preview = document.getElementById('preview');
-  preview.src = URL.createObjectURL(file);
-  preview.style.display = 'block';
-  document.getElementById('upload-zone').querySelector('.upload-text').textContent = file.name;
+function renderPreviewList() {
+  const list = document.getElementById('preview-list');
+  list.innerHTML = selectedFiles.map((file, i) =>
+    '<div class="preview-item"><img src="' + URL.createObjectURL(file) + '">'
+    + '<div class="remove-thumb" onclick="event.stopPropagation();removeFile(' + i + ')">✕</div></div>'
+  ).join('');
+  const uploadText = document.getElementById('upload-text');
+  uploadText.innerHTML = selectedFiles.length
+    ? selectedFiles.length + ' capture' + (selectedFiles.length > 1 ? 's' : '') + ' sélectionnée' + (selectedFiles.length > 1 ? 's' : '') + ' — clique pour en ajouter d\'autres'
+    : 'Appuie pour sélectionner une ou plusieurs captures<br>ou glisse-dépose ici';
   updateBtns();
+}
+
+function removeFile(i) {
+  selectedFiles.splice(i, 1);
+  renderPreviewList();
+}
+
+function handleFiles(fileList) {
+  const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
+  selectedFiles = selectedFiles.concat(files);
+  renderPreviewList();
+  document.getElementById('file-input').value = ''; // permet de resélectionner le même fichier si retiré puis rajouté
 }
 
 function handleDrop(e) {
   e.preventDefault();
   document.getElementById('upload-zone').classList.remove('dragover');
-  handleFile(e.dataTransfer.files[0]);
+  handleFiles(e.dataTransfer.files);
 }
 
 function updateBtns() {
-  const ready = selectedFile && document.getElementById('api-key').value && document.getElementById('session-date').value;
+  const ready = selectedFiles.length > 0 && document.getElementById('api-key').value && document.getElementById('session-date').value;
   document.getElementById('analyze-btn').disabled = !ready;
   document.getElementById('dry-run-btn').disabled = !ready;
 }
@@ -243,7 +261,6 @@ async function writeToFirebase(dateStr, presences, spots) {
         label: f.label ? f.label.stringValue : '',
         spots: f.spots ? (f.spots.integerValue || f.spots.doubleValue || 8) : 8,
         attendees: attendeesArr,
-        paidForNicolas: f.paidForNicolas ? f.paidForNicolas.stringValue : null,
       };
     });
   }
@@ -254,17 +271,19 @@ async function writeToFirebase(dateStr, presences, spots) {
   const months = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   const label = `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 
-  const newSession = {
-    date: dateStr,
-    label: label,
-    spots: spots,
-    attendees: presences.presents || [],
-    paidForNicolas: null,
-  };
-
+  // Fusion : on ajoute les présences détectées à celles déjà enregistrées pour
+  // cette date, on ne les remplace pas.
+  const newPresents = presences.presents || [];
   const existIdx = sessions.findIndex(s => s.date === dateStr);
-  if (existIdx >= 0) sessions[existIdx] = newSession;
-  else { sessions.push(newSession); sessions.sort((a,b) => b.date.localeCompare(a.date)); }
+  let mergedAttendees;
+  if (existIdx >= 0) {
+    mergedAttendees = [...new Set([...(sessions[existIdx].attendees || []), ...newPresents])];
+    sessions[existIdx] = { ...sessions[existIdx], label, spots, attendees: mergedAttendees };
+  } else {
+    mergedAttendees = [...new Set(newPresents)];
+    sessions.push({ date: dateStr, label, spots, attendees: mergedAttendees });
+    sessions.sort((a,b) => b.date.localeCompare(a.date));
+  }
 
   // Convertir en format Firestore
   function toFirestore(sessions) {
@@ -277,7 +296,6 @@ async function writeToFirebase(dateStr, presences, spots) {
               label: { stringValue: s.label },
               spots: { integerValue: s.spots },
               attendees: { arrayValue: { values: (s.attendees||[]).map(a => ({ stringValue: a })) } },
-              paidForNicolas: s.paidForNicolas ? { stringValue: s.paidForNicolas } : { nullValue: null },
             }
           }
         }))
@@ -297,42 +315,59 @@ async function writeToFirebase(dateStr, presences, spots) {
     const err = await patchResp.text();
     throw new Error(`Firebase write error: ${err}`);
   }
+
+  return mergedAttendees.length;
 }
 
 async function analyze(dryRun = false) {
   const dateStr = document.getElementById('session-date').value;
   const spots = parseInt(document.getElementById('spots').value) || 8;
 
-  if (!selectedFile || !dateStr) return;
+  if (selectedFiles.length === 0 || !dateStr) return;
 
   document.getElementById('analyze-btn').disabled = true;
   document.getElementById('dry-run-btn').disabled = true;
   document.getElementById('result-list').innerHTML = '';
-  setStatus('loading', '<span class="spinner"></span> Analyse en cours avec Claude Vision...');
+
+  // Fusion des résultats de toutes les images — un nom vu "présent" sur au
+  // moins une capture est considéré présent, même s'il apparaît "en attente"
+  // ou "absent" sur une autre (ex : capture prise avant qu'il ne confirme).
+  const presentsSet = new Set();
+  const absentsSet = new Set();
+  const enAttenteSet = new Set();
 
   try {
-    // 1. Convertir l'image
-    const base64 = await fileToBase64(selectedFile);
-    const mime = selectedFile.type || 'image/jpeg';
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      setStatus('loading', `<span class="spinner"></span> Analyse de l'image ${i+1}/${selectedFiles.length}...`);
 
-    // 2. Appeler Claude
-    setStatus('loading', '<span class="spinner"></span> Extraction des présences...');
-    const presences = await callClaude(base64, mime);
+      const base64 = await fileToBase64(file);
+      const mime = file.type || 'image/jpeg';
+      const presences = await callClaude(base64, mime);
 
-    const presents = presences.presents || [];
-    const absents = presences.absents || [];
-    const en_attente = presences.en_attente || [];
-
-    // 3. Écrire dans Firebase (si pas dry-run)
-    if (!dryRun) {
-      setStatus('loading', '<span class="spinner"></span> Écriture dans Firebase...');
-      await writeToFirebase(dateStr, presences, spots);
-      setStatus('success', `✅ Session du ${dateStr} enregistrée avec ${presents.length} présent(s)`);
-    } else {
-      setStatus('success', `🔵 [TEST] ${presents.length} présent(s) détecté(s) — aucune écriture`);
+      (presences.presents || []).forEach(n => presentsSet.add(n));
+      (presences.absents || []).forEach(n => absentsSet.add(n));
+      (presences.en_attente || []).forEach(n => enAttenteSet.add(n));
     }
 
-    // 4. Afficher le résultat
+    // Priorité "présent" en cas de contradiction entre captures
+    absentsSet.forEach(n => { if (presentsSet.has(n)) absentsSet.delete(n); });
+    enAttenteSet.forEach(n => { if (presentsSet.has(n)) enAttenteSet.delete(n); });
+
+    const presents = [...presentsSet];
+    const absents = [...absentsSet];
+    const en_attente = [...enAttenteSet];
+
+    // Écrire dans Firebase (si pas dry-run) — fusionné avec les présences déjà existantes
+    if (!dryRun) {
+      setStatus('loading', '<span class="spinner"></span> Écriture dans Firebase...');
+      const totalAttendees = await writeToFirebase(dateStr, { presents }, spots);
+      setStatus('success', `✅ Session du ${dateStr} : ${presents.length} présent(s) détecté(s) sur ${selectedFiles.length} capture(s) — ${totalAttendees} au total après fusion`);
+    } else {
+      setStatus('success', `🔵 [TEST] ${presents.length} présent(s) détecté(s) sur ${selectedFiles.length} capture(s) — aucune écriture`);
+    }
+
+    // Afficher le résultat
     document.getElementById('result-list').innerHTML =
       (presents.length ? `<div class="group"><div class="group-title">✅ Présents (${presents.length})</div><div class="names">${presents.map(n=>`<span class="dot present"></span>${n}<br>`).join('')}</div></div>` : '') +
       (absents.length ? `<div class="group"><div class="group-title">❌ Absents (${absents.length})</div><div class="names">${absents.map(n=>`<span class="dot absent"></span>${n}<br>`).join('')}</div></div>` : '') +
