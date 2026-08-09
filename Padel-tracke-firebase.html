@@ -704,7 +704,26 @@ function autoCreateSessionsFromBotReservations() {
   return changed;
 }
 
+// Répare les séances anciennes sans id (données migrées avant que le code
+// n'attribue systématiquement un id à la création) — sans ça, openEditModal
+// résout toujours la même séance pour toutes celles qui partagent id=undefined.
+function repairMissingSessionIds() {
+  let changed = false;
+  let counter = 0;
+  state.sessions.forEach(s => {
+    if (s.id === undefined || s.id === null || s.id === '') {
+      s.id = Date.now() + (counter++);
+      changed = true;
+    }
+  });
+  if (changed && !document.body.classList.contains('locked')) {
+    saveState();
+  }
+  return changed;
+}
+
 function render() {
+  repairMissingSessionIds();
   autoCreateSessionsFromBotReservations();
   renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderRanking(); renderPresenceRanking();
 }
