@@ -241,8 +241,7 @@ function renderSessions() {
   const todayStr = todayISO();
   const upcoming = currentData.sessions
     .filter(s => s.date >= todayStr)
-    .sort((a,b) => new Date(a.date) - new Date(b.date))
-    .slice(0, 3);
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
 
   if (upcoming.length === 0) {
     container.innerHTML = '<div class="empty-state">Aucune séance à venir pour le moment.<br>Reviens un peu plus tard.</div>';
@@ -257,7 +256,7 @@ function renderSessionCard(s, idx) {
   const attendees = s.attendees || [];
   const filled = attendees.length;
   const remaining = spots - filled;
-  const label = idx === 0 ? 'Prochaine séance' : 'Séance suivante';
+  const label = idx === 0 ? 'Prochaine séance' : '';
   const imIn = attendees.includes(currentPlayer);
   const spotsColor = remaining > 0 ? 'var(--accent2)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
 
