@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel Mardi — Mon inscription</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0e; --surface: #131612; --surface2: #1a1e1b; --border: #2a2f2b;
+    --accent: #b8f53c; --accent2: #3cffa0; --text: #e8ede9; --muted: #687068;
+    --danger: #ff4f4f; --orange: #ff8c1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px;
+    min-height: 100vh; padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 34px; letter-spacing: 4px; color: var(--accent); line-height: 1; }
+  header p { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
+  .field { margin-bottom: 18px; }
+  label { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  select, input[type="password"], input[type="text"] {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 14px; padding: 12px 14px; border-radius: 4px; outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  .hint { font-size: 10px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+  .btn {
+    width: 100%; background: var(--accent); color: #06110a; border: none; border-radius: 4px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 2px;
+    padding: 14px; cursor: pointer; margin-top: 6px; transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.leave { background: var(--surface2); color: var(--danger); border: 1px solid var(--danger); }
+  .btn.join { background: var(--accent); color: #06110a; }
+  .error-msg { color: var(--danger); font-size: 11px; margin-top: 10px; display: none; }
+
+  .who-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+  .who-bar .name { font-size: 13px; }
+  .who-bar .name b { color: var(--accent); }
+  .who-bar a { color: var(--muted); font-size: 11px; letter-spacing: 1px; cursor: pointer; text-decoration: underline; }
+
+  .session-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .ns-date { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--text); letter-spacing: 1px; line-height: 1; }
+  .ns-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .spots-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; text-align: center; }
+  .spots-box .big { font-family: 'Bebas Neue', sans-serif; font-size: 32px; line-height: 1; }
+  .spots-box .cap { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+  .players-title { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin: 16px 0 8px; }
+  .chip { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 11px; margin: 0 6px 6px 0; }
+  .chip.me { border-color: var(--accent); color: var(--accent); }
+  .court-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 16px; text-align: center; margin: 0 8px 8px 0; }
+  .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
+  .empty-state { text-align: center; color: var(--muted); font-size: 12px; padding: 40px 20px; }
+  .loading-state { text-align: center; color: var(--muted); font-size: 12px; padding: 40px 20px; }
+  @media (max-width: 360px) {
+    header h1 { font-size: 28px; letter-spacing: 2px; }
+    .card { padding: 18px; }
+    .session-card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>PADEL MARDI</h1>
+    <p>Inscription aux prochaines séances</p>
+  </header>
+
+  <!-- Écran de connexion -->
+  <div id="login-screen">
+    <div class="card">
+      <div class="field">
+        <label>Ton nom</label>
+        <select id="login-name"><option value="">— Sélectionne ton nom —</option></select>
+      </div>
+      <div class="field">
+        <label>Ton code (4 chiffres ou plus)</label>
+        <input type="password" id="login-pin" inputmode="numeric" placeholder="••••" autocomplete="off">
+        <div class="hint">Première utilisation ? Le code que tu tapes devient le tien — retiens-le, tu en auras besoin la prochaine fois.</div>
+      </div>
+      <button class="btn" id="login-btn" onclick="doLogin()" disabled>Continuer</button>
+      <div class="error-msg" id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- Écran principal (une fois connecté) -->
+  <div id="main-screen" style="display:none">
+    <div class="who-bar">
+      <div class="name">Connecté : <b id="who-name"></b></div>
+      <a onclick="logout()">Changer de joueur</a>
+    </div>
+    <div id="sessions-container"><div class="loading-state">Chargement des séances...</div></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1GKvFGYwgyu7qxSSXlyMG06A0wHnHJoU",
+  authDomain: "padel-tracker-ecd0f.firebaseapp.com",
+  projectId: "padel-tracker-ecd0f",
+};
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+const docRef = doc(db, "padel", "tracker");
+
+let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {} };
+let currentPlayer = localStorage.getItem('padel_current_player') || '';
+
+// ── Utilitaires date (mêmes règles que le tracker principal) ───────────────
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function formatDate(raw) {
+  const d = new Date(raw + 'T12:00:00');
+  if (isNaN(d)) return raw;
+  const days = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
+  const months = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+  return days[d.getDay()] + ' ' + String(d.getDate()).padStart(2,'0') + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+function shortName(fullName) {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return parts[0] + ' ' + parts[parts.length-1][0].toUpperCase() + '.';
+}
+function courtsForDate(date) {
+  const confirmed = (currentData.bot_reservations || []).filter(r => r.statut === 'confirmée' && r.date === date);
+  const seen = new Set(); const list = [];
+  confirmed.forEach(r => {
+    const key = (r.terrain||'') + '|' + (r.heure||'');
+    if (seen.has(key)) return;
+    seen.add(key);
+    const m = /Terrain\s*n\.?\s*(\d+)/i.exec(r.terrain || '');
+    list.push({ numero: m ? m[1] : (r.terrain || '?') });
+  });
+  return list;
+}
+
+// ── Connexion Firestore en direct ───────────────────────────────────────────
+onSnapshot(docRef, (snap) => {
+  const data = snap.data() || {};
+  currentData = {
+    players: data.players || [],
+    sessions: (data.sessions || []).map(s => ({ ...s, attendees: s.attendees || [] })),
+    bot_reservations: data.bot_reservations || [],
+    player_pins: data.player_pins || {},
+  };
+  populateNameSelect();
+  if (currentPlayer) showMainScreen();
+}, (err) => {
+  document.getElementById('sessions-container').innerHTML =
+    '<div class="empty-state">Impossible de charger les données Firebase.<br>' + err.message + '</div>';
+});
+
+function populateNameSelect() {
+  const sel = document.getElementById('login-name');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Sélectionne ton nom —</option>' +
+    currentData.players.map(p => '<option value="' + p + '"' + (p===current?' selected':'') + '>' + p + '</option>').join('');
+}
+
+document.getElementById('login-name').addEventListener('change', updateLoginBtn);
+document.getElementById('login-pin').addEventListener('input', updateLoginBtn);
+function updateLoginBtn() {
+  document.getElementById('login-btn').disabled =
+    !(document.getElementById('login-name').value && document.getElementById('login-pin').value.length >= 4);
+}
+document.getElementById('login-pin').addEventListener('keydown', e => { if (e.key === 'Enter' && !document.getElementById('login-btn').disabled) doLogin(); });
+
+// ── Connexion / auto-attribution du code au premier usage ──────────────────
+async function doLogin() {
+  const name = document.getElementById('login-name').value;
+  const pin = document.getElementById('login-pin').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!name || pin.length < 4) return;
+
+  document.getElementById('login-btn').disabled = true;
+  document.getElementById('login-btn').textContent = '...';
+
+  try {
+    const result = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(docRef);
+      const data = snap.data() || {};
+      const pins = data.player_pins || {};
+      if (!pins[name]) {
+        // Premier usage : ce code devient le sien
+        pins[name] = pin;
+        tx.update(docRef, { player_pins: pins });
+        return { ok: true, claimed: true };
+      }
+      if (pins[name] === pin) return { ok: true, claimed: false };
+      return { ok: false };
+    });
+
+    if (!result.ok) {
+      errEl.textContent = 'Code incorrect pour ' + name + '.';
+      errEl.style.display = 'block';
+      document.getElementById('login-btn').disabled = false;
+      document.getElementById('login-btn').textContent = 'Continuer';
+      return;
+    }
+
+    currentPlayer = name;
+    localStorage.setItem('padel_current_player', name);
+    showMainScreen();
+  } catch (e) {
+    errEl.textContent = 'Erreur : ' + e.message;
+    errEl.style.display = 'block';
+  }
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('login-btn').textContent = 'Continuer';
+}
+
+function logout() {
+  currentPlayer = '';
+  localStorage.removeItem('padel_current_player');
+  document.getElementById('login-pin').value = '';
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'block';
+}
+
+function showMainScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  document.getElementById('who-name').textContent = currentPlayer;
+  renderSessions();
+}
+
+// ── Séances à venir ──────────────────────────────────────────────────────
+function renderSessions() {
+  const container = document.getElementById('sessions-container');
+  const todayStr = todayISO();
+  const upcoming = currentData.sessions
+    .filter(s => s.date >= todayStr)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  if (upcoming.length === 0) {
+    container.innerHTML = '<div class="empty-state">Aucune séance à venir pour le moment.<br>Reviens un peu plus tard.</div>';
+    return;
+  }
+
+  container.innerHTML = upcoming.map((s, idx) => renderSessionCard(s, idx)).join('');
+}
+
+function renderSessionCard(s, idx) {
+  const spots = s.spots || 8;
+  const attendees = s.attendees || [];
+  const filled = attendees.length;
+  const remaining = spots - filled;
+  const label = idx === 0 ? 'Prochaine séance' : '';
+  const imIn = attendees.includes(currentPlayer);
+  const spotsColor = remaining > 0 ? 'var(--accent2)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
+
+  const courts = courtsForDate(s.date);
+  const courtsHtml = courts.length
+    ? '<div class="players-title">Terrain' + (courts.length>1?'s':'') + ' réservé' + (courts.length>1?'s':'') + '</div>' +
+      courts.map(c => '<div class="court-badge"><div class="num">🎾 ' + c.numero + '</div></div>').join('')
+    : '';
+
+  return '<div class="session-card">'
+    + '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
+    +   '<div style="flex:1;min-width:140px">'
+    +     '<div class="ns-date">' + formatDate(s.date) + '</div>'
+    +     '<div class="ns-label">' + label + '</div>'
+    +   '</div>'
+    +   '<div class="spots-box">'
+    +     '<div class="big" style="color:' + spotsColor + '">' + filled + '<span style="font-size:16px;color:var(--muted)">/' + spots + '</span></div>'
+    +     '<div class="cap">Inscrits</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="players-title">Joueurs inscrits</div>'
+    + '<div>' + (attendees.length
+        ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '">' + shortName(p) + '</span>').join('')
+        : '<span style="color:var(--muted);font-size:11px">Personne pour l\'instant</span>') + '</div>'
+    + courtsHtml
+    + '<button class="btn ' + (imIn ? 'leave' : 'join') + '" onclick="toggleAttendance(\'' + s.id + '\')">'
+    +   (imIn ? 'Je me désinscris' : "Je m'inscris")
+    + '</button>'
+    + '</div>';
+}
+
+// ── Inscription / désinscription (transaction Firestore = pas de perte en cas
+// d'inscriptions simultanées par plusieurs joueurs) ─────────────────────────
+window.toggleAttendance = async function(sessionId) {
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(docRef);
+      const data = snap.data() || {};
+      const sessions = data.sessions || [];
+      const idx = sessions.findIndex(s => String(s.id) === String(sessionId));
+      if (idx === -1) return;
+      const session = sessions[idx];
+      const attendees = session.attendees || [];
+      const has = attendees.includes(currentPlayer);
+      const newAttendees = has ? attendees.filter(p => p !== currentPlayer) : [...attendees, currentPlayer];
+      sessions[idx] = { ...session, attendees: newAttendees };
+      tx.update(docRef, { sessions });
+    });
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+};
+window.doLogin = doLogin;
+window.logout = logout;
+</script>
+
+</body>
+</html>
