@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carnet de recettes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFE9DC;
+    --card:#FBF8F1;
+    --ink:#2A2420;
+    --ink-soft:#6B6153;
+    --line:#CFC5AE;
+    --line-soft:#DFD8C6;
+    --rust:#B5651D;
+    --rust-dark:#8C4E15;
+    --sage:#6B7F5E;
+    --sage-dark:#3F4C36;
+    --mustard:#C9962B;
+    --mustard-dark:#7A5A17;
+    --clay:#A65141;
+    --clay-dark:#6B3226;
+    --navy:#445266;
+    --navy-dark:#2A3341;
+    --danger:#A63A2E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+  }
+  .wrap{
+    max-width:1100px;
+    margin:0 auto;
+    padding:2.5rem 1.5rem 5rem;
+  }
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:1rem;
+    margin-bottom:2rem;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:1.25rem;
+  }
+  header h1{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:2.25rem;
+    margin:0 0 0.25rem;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:0.95rem;
+  }
+  .sync-badge{
+    font-family:'Space Mono',monospace;
+    font-size:0.68rem;
+    color:var(--sage-dark);
+    display:flex;
+    align-items:center;
+    gap:0.35rem;
+  }
+  .sync-dot{
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:var(--sage);
+    display:inline-block;
+  }
+  .reset-link{
+    background:none;
+    border:none;
+    color:var(--ink-soft);
+    font-size:0.8rem;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+    font-family:'Inter',sans-serif;
+  }
+  .reset-link:hover{ color:var(--danger); }
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:1rem;
+    flex-wrap:wrap;
+    margin-bottom:1.25rem;
+  }
+  .toolbar-left{
+    display:flex;
+    align-items:center;
+    gap:0.9rem;
+    flex-wrap:wrap;
+  }
+  .btn-primary{
+    background:var(--ink);
+    color:var(--card);
+    border:none;
+    padding:0.7rem 1.2rem;
+    border-radius:6px;
+    font-family:'Space Mono',monospace;
+    font-weight:700;
+    font-size:0.85rem;
+    letter-spacing:0.02em;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn-primary:hover{ background:var(--rust-dark); }
+  .btn-primary:disabled{ opacity:0.6; cursor:default; }
+  .search-input{
+    flex:1;
+    min-width:180px;
+    max-width:280px;
+    padding:0.6rem 0.8rem;
+    border:1.5px solid var(--line);
+    border-radius:6px;
+    background:var(--card);
+    font-family:'Inter',sans-serif;
+    font-size:0.9rem;
+    color:var(--ink);
+  }
+  .search-input:focus{ outline:2px solid var(--rust); outline-offset:1px; }
+  .chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0.5rem;
+    margin-bottom:2rem;
+  }
+  .chip{
+    display:flex;
+    align-items:center;
+    gap:0.4rem;
+    padding:0.4rem 0.7rem 0.4rem 0.9rem;
+    border-radius:20px;
+    border:1.5px solid var(--line);
+    background:var(--card);
+    font-family:'Space Mono',monospace;
+    font-size:0.78rem;
+    color:var(--ink-soft);
+    cursor:pointer;
+    user-select:none;
+  }
+  .chip.active{
+    background:var(--ink);
+    color:var(--card);
+    border-color:var(--ink);
+  }
+  .chip .chip-x{
+    opacity:0;
+    pointer-events:none;
+    font-size:0.85rem;
+    line-height:1;
+    margin-left:2px;
+  }
+  .chip:hover .chip-x{ opacity:0.6; pointer-events:auto; }
+  .chip .chip-x:hover{ opacity:1; color:var(--danger); }
+  .chip-add{
+    border-style:dashed;
+    background:transparent;
+    color:var(--ink-soft);
+  }
+  .chip-add-input{
+    padding:0.35rem 0.7rem;
+    border-radius:20px;
+    border:1.5px solid var(--ink);
+    background:var(--card);
+    font-family:'Space Mono',monospace;
+    font-size:0.78rem;
+    width:130px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+    gap:1.25rem;
+  }
+  .card{
+    position:relative;
+    background:var(--card);
+    border:1.5px solid var(--line);
+    border-radius:4px;
+    padding:1.5rem 1.1rem 1.1rem;
+  }
+  .card::before,.card::after{
+    content:"";
+    position:absolute;
+    top:-1px;
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    background:var(--paper);
+    border:1.5px solid var(--line);
+  }
+  .card::before{ left:22px; }
+  .card::after{ left:calc(100% - 34px); }
+  .tab{
+    display:inline-block;
+    font-family:'Space Mono',monospace;
+    font-size:0.68rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    padding:0.2rem 0.55rem;
+    border-radius:3px;
+    margin-bottom:0.7rem;
+  }
+  .card h3{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:1.15rem;
+    margin:0 0 0.6rem;
+    line-height:1.3;
+  }
+  .card .divider{
+    border:none;
+    border-top:1.5px dashed var(--line-soft);
+    margin:0 0 0.9rem;
+  }
+  .embed-wrap{
+    display:flex;
+    justify-content:center;
+    margin:0 0 0.9rem;
+    min-height:120px;
+  }
+  .embed-wrap blockquote.instagram-media{
+    margin:0 !important;
+  }
+  .card .notes{
+    font-size:0.85rem;
+    color:var(--ink-soft);
+    margin:0 0 1rem;
+    line-height:1.5;
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .card-footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:0.5rem;
+  }
+  .ig-link{
+    font-family:'Space Mono',monospace;
+    font-size:0.78rem;
+    color:var(--rust-dark);
+    text-decoration:none;
+    font-weight:700;
+  }
+  .ig-link:hover{ text-decoration:underline; }
+  .card-actions{
+    display:flex;
+    gap:0.5rem;
+    opacity:0;
+    transition:opacity 0.15s;
+  }
+  .card:hover .card-actions, .card:focus-within .card-actions{ opacity:1; }
+  .icon-btn{
+    background:none;
+    border:none;
+    cursor:pointer;
+    color:var(--ink-soft);
+    font-size:0.95rem;
+    padding:2px;
+    line-height:1;
+  }
+  .icon-btn:hover{ color:var(--danger); }
+  .card-date{
+    position:absolute;
+    top:8px;
+    right:14px;
+    font-family:'Space Mono',monospace;
+    font-size:0.62rem;
+    color:var(--ink-soft);
+    opacity:0.55;
+  }
+  .empty{
+    text-align:center;
+    padding:4rem 1rem;
+    color:var(--ink-soft);
+  }
+  .empty h2{
+    font-family:'Fraunces',serif;
+    font-size:1.4rem;
+    color:var(--ink);
+    margin:0 0 0.5rem;
+  }
+  .empty .btn-primary{ margin-top:1rem; }
+  .overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(42,36,32,0.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:1.5rem;
+    z-index:50;
+  }
+  .overlay.visible{
+    display:flex;
+  }
+  .modal{
+    background:var(--card);
+    border-radius:6px;
+    border:1.5px solid var(--line);
+    max-width:440px;
+    width:100%;
+    max-height:90vh;
+    overflow-y:auto;
+    padding:1.75rem;
+  }
+  .modal h2{
+    font-family:'Fraunces',serif;
+    font-size:1.35rem;
+    margin:0 0 1.2rem;
+  }
+  .field{ margin-bottom:1rem; }
+  .field label{
+    display:block;
+    font-size:0.78rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:0.35rem;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .field input, .field select, .field textarea{
+    width:100%;
+    padding:0.6rem 0.7rem;
+    border:1.5px solid var(--line);
+    border-radius:5px;
+    background:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:0.9rem;
+    color:var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:2px solid var(--rust);
+    outline-offset:1px;
+  }
+  .field textarea{ resize:vertical; min-height:70px; }
+  .field .hint{
+    font-size:0.75rem;
+    color:var(--ink-soft);
+    margin-top:0.3rem;
+  }
+  .field .warn{
+    font-size:0.75rem;
+    color:var(--mustard-dark);
+    margin-top:0.3rem;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:0.7rem;
+    margin-top:1.4rem;
+  }
+  .btn-ghost{
+    background:none;
+    border:1.5px solid var(--line);
+    padding:0.6rem 1rem;
+    border-radius:5px;
+    font-family:'Inter',sans-serif;
+    font-size:0.85rem;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .btn-ghost:hover{ background:var(--paper); }
+  .loading{
+    text-align:center;
+    padding:4rem 1rem;
+    color:var(--ink-soft);
+    font-family:'Space Mono',monospace;
+    font-size:0.85rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Carnet de recettes</h1>
+      <p>Tes recettes Instagram, rangées par catégorie.</p>
+    </div>
+    <button class="reset-link" id="reset-btn">Vider le carnet</button>
+  </header>
+
+  <div id="loading" class="loading">Connexion à la base de données…</div>
+
+  <div id="app" hidden>
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="btn-primary" id="add-recipe-btn">+ Nouvelle recette</button>
+        <span class="sync-badge"><span class="sync-dot"></span>Synchronisé sur Firestore</span>
+      </div>
+      <input type="text" class="search-input" id="search-input" placeholder="Rechercher un titre ou une note…">
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="grid-container">
+      <div class="grid" id="cards-grid"></div>
+      <div class="empty" id="empty-state" hidden>
+        <h2 id="empty-title"></h2>
+        <p id="empty-desc"></p>
+        <button class="btn-primary" id="empty-add-btn" hidden>+ Nouvelle recette</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.min.js"></script>
+<script async src="https://www.instagram.com/embed.js"></script>
+<script>
+(function(){
+  var firebaseConfig = {
+    apiKey: "AIzaSyBA-Xgr6VFZ3gveorP3ge9UpXZSX_eO2ks",
+    authDomain: "recette-cuisine-79935.firebaseapp.com",
+    projectId: "recette-cuisine-79935",
+    storageBucket: "recette-cuisine-79935.firebasestorage.app",
+    messagingSenderId: "270883214117",
+    appId: "1:270883214117:web:64c11b94ae8af66b69c0cc",
+    measurementId: "G-CCMRZT9C0K"
+  };
+
+  var db = null;
+  var state = { categories: [], recipes: [] };
+  var filterCategory = null;
+  var searchTerm = '';
+  var tagColors = ['sage','mustard','clay','navy','rust'];
+  var loadedCats = false, loadedRecipes = false;
+  var cardCache = {};
+  var gridDiv = null;
+
+  var loadingEl = document.getElementById('loading');
+  var appEl = document.getElementById('app');
+  var chipsEl = document.getElementById('chips');
+  var overlayEl = document.getElementById('overlay');
+  var modalEl = document.getElementById('modal');
+  var searchInput = document.getElementById('search-input');
+
+  function escapeHtml(str){
+    var d = document.createElement('div');
+    d.textContent = str == null ? '' : str;
+    return d.innerHTML;
+  }
+
+  function colorFor(catName){
+    var idx = 0;
+    for (var i=0;i<catName.length;i++){ idx += catName.charCodeAt(i); }
+    return tagColors[idx % tagColors.length];
+  }
+
+  function isInstagramUrl(url){
+    return !!url && url.toLowerCase().indexOf('instagram.com') !== -1;
+  }
+
+  var tagStyles = {
+    sage:   { bg:'#DCE3D5', fg:'#3F4C36' },
+    mustard:{ bg:'#F0DFB8', fg:'#7A5A17' },
+    clay:   { bg:'#E8CFC8', fg:'#6B3226' },
+    navy:   { bg:'#D6DBE3', fg:'#2A3341' },
+    rust:   { bg:'#EAD2BC', fg:'#8C4E15' }
+  };
+
+  function checkLoaded(){
+    if (loadedCats && loadedRecipes){
+      loadingEl.hidden = true;
+      appEl.hidden = false;
+    }
+  }
+
+  function initFirebase(){
+    try{
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    }catch(e){
+      loadingEl.textContent = 'Impossible de se connecter à la base de données : ' + e.message;
+      return;
+    }
+    db.collection('categories').onSnapshot(function(snapshot){
+      state.categories = snapshot.docs.map(function(d){ return { id:d.id, name:d.data().name }; });
+      loadedCats = true;
+      checkLoaded();
+      render();
+    }, function(err){
+      loadingEl.hidden = false;
+      appEl.hidden = true;
+      loadingEl.textContent = 'Erreur de connexion : ' + err.message;
+    });
+    db.collection('recipes').onSnapshot(function(snapshot){
+      state.recipes = snapshot.docs.map(function(d){
+        var data = d.data();
+        var created = (data.createdAt && data.createdAt.toMillis) ? data.createdAt.toMillis() : (data.createdAt || Date.now());
+        return { id:d.id, title:data.title, url:data.url, notes:data.notes, category:data.category || null, createdAt: created };
+      });
+      loadedRecipes = true;
+      checkLoaded();
+      render();
+    }, function(err){
+      loadingEl.hidden = false;
+      appEl.hidden = true;
+      loadingEl.textContent = 'Erreur de connexion : ' + err.message;
+    });
+  }
+
+  function processInstagramEmbeds(){
+    if (window.instgrm && window.instgrm.Embeds){
+      window.instgrm.Embeds.process();
+    } else {
+      setTimeout(function(){
+        if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+      }, 600);
+    }
+  }
+
+  function render(){
+    renderChips();
+    reconcileCards();
+  }
+
+  function renderChips(){
+    var html = '';
+    var total = state.recipes.length;
+    html += '<button class="chip ' + (filterCategory === null ? 'active' : '') + '" data-filter="__all__">Toutes (' + total + ')</button>';
+    state.categories.forEach(function(catObj){
+      var cat = catObj.name;
+      var count = state.recipes.filter(function(r){ return r.category === cat; }).length;
+      html += '<button class="chip ' + (filterCategory === cat ? 'active' : '') + '" data-filter="' + escapeHtml(cat) + '">' +
+        escapeHtml(cat) + ' (' + count + ')' +
+        '<span class="chip-x" data-delete-cat="' + escapeHtml(cat) + '" title="Supprimer la catégorie">✕</span></button>';
+    });
+    html += '<button class="chip chip-add" id="chip-add-btn">+ Catégorie</button>';
+    chipsEl.innerHTML = html;
+
+    chipsEl.querySelectorAll('.chip').forEach(function(chip){
+      chip.addEventListener('click', function(e){
+        if (e.target.hasAttribute('data-delete-cat')) return;
+        var f = chip.getAttribute('data-filter');
+        if (f === undefined || f === null) return;
+        filterCategory = (f === '__all__') ? null : f;
+        renderChips();
+        applyVisibility();
+      });
+    });
+    chipsEl.querySelectorAll('[data-delete-cat]').forEach(function(x){
+      x.addEventListener('click', function(e){
+        e.stopPropagation();
+        deleteCategory(x.getAttribute('data-delete-cat'));
+      });
+    });
+    var addBtn = document.getElementById('chip-add-btn');
+    if (addBtn){
+      addBtn.addEventListener('click', function(){ showInlineCategoryInput(); });
+    }
+  }
+
+  function showInlineCategoryInput(){
+    var addBtn = document.getElementById('chip-add-btn');
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'chip-add-input';
+    input.placeholder = 'Nom de la catégorie';
+    addBtn.replaceWith(input);
+    input.focus();
+    var done = false;
+    function commit(){
+      if (done) return;
+      done = true;
+      var val = input.value.trim();
+      if (val){
+        addCategory(val).then(function(){ renderChips(); });
+      } else {
+        renderChips();
+      }
+    }
+    input.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){ commit(); }
+      if (e.key === 'Escape'){ done = true; renderChips(); }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  async function addCategory(name){
+    if (!db){ alert('Pas encore connecté à la base de données.'); return false; }
+    if (state.categories.some(function(c){ return c.name === name; })) return true;
+    try{
+      await db.collection('categories').add({ name: name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }catch(e){
+      alert('Erreur lors de la création de la catégorie : ' + e.message);
+      return false;
+    }
+  }
+
+  async function deleteCategory(name){
+    if (!db) return;
+    var catObj = state.categories.find(function(c){ return c.name === name; });
+    if (!catObj) return;
+    var affected = state.recipes.filter(function(r){ return r.category === name; });
+    var msg = affected.length > 0
+      ? 'Supprimer "' + name + '" ? ' + affected.length + ' recette(s) passeront en "Sans catégorie".'
+      : 'Supprimer la catégorie "' + name + '" ?';
+    if (!confirm(msg)) return;
+    try{
+      var batch = db.batch();
+      affected.forEach(function(r){
+        batch.update(db.collection('recipes').doc(r.id), { category: null });
+      });
+      batch.delete(db.collection('categories').doc(catObj.id));
+      await batch.commit();
+      if (filterCategory === name) filterCategory = null;
+    }catch(e){
+      alert('Erreur lors de la suppression : ' + e.message);
+    }
+  }
+
+  function computeSig(r){
+    return [r.title, r.url, r.notes || '', r.category || ''].join('|');
+  }
+
+  function buildCardElement(r){
+    var el = document.createElement('div');
+    el.className = 'card';
+    el.dataset.id = r.id;
+    el.dataset.sig = computeSig(r);
+    var catLabel = r.category || 'Sans catégorie';
+    var style = r.category ? tagStyles[colorFor(r.category)] : { bg:'#E3DDCE', fg:'#6B6153' };
+    var dateStr = new Date(r.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
+    var embedHtml = '';
+    if (isInstagramUrl(r.url)){
+      embedHtml = '<div class="embed-wrap"><blockquote class="instagram-media" data-instgrm-permalink="' + escapeHtml(r.url) + '" data-instgrm-captioned data-instgrm-version="14" style="background:#FFF;border:0;border-radius:3px;margin:0;max-width:540px;min-width:300px;padding:0;width:100%;"></blockquote></div>';
+    }
+    el.innerHTML =
+      '<span class="card-date">' + dateStr + '</span>' +
+      '<span class="tab" style="background:' + style.bg + ';color:' + style.fg + '">' + escapeHtml(catLabel) + '</span>' +
+      '<h3>' + escapeHtml(r.title) + '</h3>' +
+      '<hr class="divider">' +
+      embedHtml +
+      (r.notes ? '<p class="notes">' + escapeHtml(r.notes) + '</p>' : '<p class="notes" style="opacity:0.5">Pas de note</p>') +
+      '<div class="card-footer">' +
+      '<a class="ig-link" href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer">Voir sur Instagram ↗</a>' +
+      '<div class="card-actions">' +
+      '<button class="icon-btn" data-action="edit" title="Modifier">✎</button>' +
+      '<button class="icon-btn" data-action="delete" title="Supprimer">🗑</button>' +
+      '</div></div>';
+    return el;
+  }
+
+  function ensureGridDiv(){
+    if (!gridDiv){
+      gridDiv = document.getElementById('cards-grid');
+      gridDiv.addEventListener('click', function(e){
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var cardEl = e.target.closest('.card');
+        var id = cardEl && cardEl.dataset.id;
+        if (!id) return;
+        if (btn.getAttribute('data-action') === 'delete') deleteRecipe(id);
+        if (btn.getAttribute('data-action') === 'edit') openEditRecipeModal(id);
+      });
+    }
+    return gridDiv;
+  }
+
+  function reconcileCards(){
+    var sortedAll = state.recipes.slice().sort(function(a,b){ return b.createdAt - a.createdAt; });
+    var validIds = {};
+    sortedAll.forEach(function(r){ validIds[r.id] = true; });
+
+    Object.keys(cardCache).forEach(function(id){
+      if (!validIds[id]){
+        var oldEl = cardCache[id];
+        if (oldEl.parentNode) oldEl.parentNode.removeChild(oldEl);
+        delete cardCache[id];
+      }
+    });
+
+    var grid = ensureGridDiv();
+    var cursor = grid.firstChild;
+    var needsProcess = false;
+
+    sortedAll.forEach(function(r){
+      var sig = computeSig(r);
+      var el = cardCache[r.id];
+      if (!el){
+        el = buildCardElement(r);
+        cardCache[r.id] = el;
+        if (isInstagramUrl(r.url)) needsProcess = true;
+      } else if (el.dataset.sig !== sig){
+        var freshEl = buildCardElement(r);
+        if (el.parentNode) el.parentNode.replaceChild(freshEl, el);
+        cardCache[r.id] = freshEl;
+        el = freshEl;
+        if (isInstagramUrl(r.url)) needsProcess = true;
+      }
+      if (cursor !== el){
+        grid.insertBefore(el, cursor);
+      } else {
+        cursor = cursor.nextSibling;
+      }
+    });
+
+    if (needsProcess) processInstagramEmbeds();
+    applyVisibility();
+  }
+
+  function applyVisibility(){
+    var anyVisible = false;
+    Object.keys(cardCache).forEach(function(id){
+      var r = state.recipes.find(function(x){ return x.id === id; });
+      if (!r){ cardCache[id].style.display = 'none'; return; }
+      var visible = true;
+      if (filterCategory !== null && r.category !== filterCategory) visible = false;
+      if (visible && searchTerm){
+        var t = (r.title + ' ' + (r.notes||'')).toLowerCase();
+        if (t.indexOf(searchTerm.toLowerCase()) === -1) visible = false;
+      }
+      cardCache[id].style.display = visible ? '' : 'none';
+      if (visible) anyVisible = true;
+    });
+
+    var emptyEl = document.getElementById('empty-state');
+    var titleEl = document.getElementById('empty-title');
+    var descEl = document.getElementById('empty-desc');
+    var addBtn = document.getElementById('empty-add-btn');
+
+    if (!anyVisible){
+      emptyEl.hidden = false;
+      if (state.recipes.length === 0){
+        titleEl.textContent = 'Le carnet est vide';
+        descEl.textContent = 'Ajoute ta première recette Instagram pour commencer.';
+        addBtn.hidden = false;
+      } else {
+        titleEl.textContent = 'Rien ici';
+        descEl.textContent = 'Aucune recette ne correspond à ce filtre.';
+        addBtn.hidden = true;
+      }
+    } else {
+      emptyEl.hidden = true;
+    }
+  }
+
+  async function deleteRecipe(id){
+    if (!db) return;
+    if (!confirm('Supprimer cette recette ?')) return;
+    try{
+      await db.collection('recipes').doc(id).delete();
+    }catch(e){
+      alert('Erreur lors de la suppression : ' + e.message);
+    }
+  }
+
+  function openAddRecipeModal(){ openRecipeModal(null); }
+  function openEditRecipeModal(id){
+    var recipe = state.recipes.find(function(r){ return r.id === id; });
+    if (recipe) openRecipeModal(recipe);
+  }
+
+  function openRecipeModal(existing){
+    var isEdit = !!existing;
+    var catOptions = state.categories.map(function(c){
+      var sel = existing && existing.category === c.name ? 'selected' : '';
+      return '<option value="' + escapeHtml(c.name) + '" ' + sel + '>' + escapeHtml(c.name) + '</option>';
+    }).join('');
+
+    modalEl.innerHTML =
+      '<h2>' + (isEdit ? 'Modifier la recette' : 'Nouvelle recette') + '</h2>' +
+      '<div class="field"><label for="f-title">Titre</label>' +
+      '<input type="text" id="f-title" placeholder="Ex. Bowl de saumon post-training" value="' + (existing ? escapeHtml(existing.title) : '') + '"></div>' +
+      '<div class="field"><label for="f-url">Lien Instagram</label>' +
+      '<input type="text" id="f-url" placeholder="https://www.instagram.com/reel/…" value="' + (existing ? escapeHtml(existing.url) : '') + '">' +
+      '<div class="hint" id="url-hint"></div></div>' +
+      '<div class="field" id="cat-field-wrap">' +
+      '<label for="f-cat">Catégorie</label>' +
+      (state.categories.length > 0
+        ? '<select id="f-cat"><option value="">— choisir —</option>' + catOptions + '<option value="__new__">+ Nouvelle catégorie…</option></select>'
+        : '<div class="hint">Aucune catégorie pour l\'instant, crée-en une ci-dessous.</div>') +
+      '<input type="text" id="f-new-cat" placeholder="Nom de la nouvelle catégorie" style="margin-top:0.5rem;' + (state.categories.length > 0 ? 'display:none;' : '') + '">' +
+      '</div>' +
+      '<div class="field"><label for="f-notes">Notes (ingrédients, astuces…) — optionnel</label>' +
+      '<textarea id="f-notes" placeholder="Ce que tu veux te rappeler de cette recette">' + (existing && existing.notes ? escapeHtml(existing.notes) : '') + '</textarea></div>' +
+      '<div class="modal-actions">' +
+      '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
+      '<button class="btn-primary" id="save-btn">Enregistrer</button>' +
+      '</div>';
+
+    overlayEl.classList.add('visible');
+    document.getElementById('f-title').focus();
+
+    var catSelect = document.getElementById('f-cat');
+    var newCatInput = document.getElementById('f-new-cat');
+    if (catSelect){
+      catSelect.addEventListener('change', function(){
+        newCatInput.style.display = catSelect.value === '__new__' ? 'block' : 'none';
+      });
+    }
+
+    var urlInput = document.getElementById('f-url');
+    var urlHint = document.getElementById('url-hint');
+    urlInput.addEventListener('input', function(){
+      var v = urlInput.value.trim();
+      if (v && v.indexOf('instagram.com') === -1){
+        urlHint.className = 'warn';
+        urlHint.textContent = 'Ce lien ne semble pas venir d\'Instagram — tu peux quand même l\'enregistrer, mais il n\'aura pas d\'aperçu.';
+      } else {
+        urlHint.textContent = '';
+      }
+    });
+
+    document.getElementById('cancel-btn').addEventListener('click', closeModal);
+    overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closeModal(); });
+    document.addEventListener('keydown', escCloseOnce);
+
+    document.getElementById('save-btn').addEventListener('click', async function(){
+      if (!db){ alert('Pas encore connecté à la base de données.'); return; }
+      var title = document.getElementById('f-title').value.trim();
+      var url = document.getElementById('f-url').value.trim();
+      var notes = document.getElementById('f-notes').value.trim();
+      var category = null;
+
+      if (!title){ alert('Le titre est obligatoire.'); return; }
+      if (!url){ alert('Le lien Instagram est obligatoire.'); return; }
+      try{ new URL(url); }catch(e){ alert('Ce lien ne semble pas valide.'); return; }
+
+      if (state.categories.length === 0){
+        var newName = newCatInput.value.trim();
+        if (!newName){ alert('Crée au moins une catégorie.'); return; }
+        var okNew = await addCategory(newName);
+        if (!okNew) return;
+        category = newName;
+      } else {
+        var selectVal = catSelect.value;
+        if (selectVal === '__new__'){
+          var nn = newCatInput.value.trim();
+          if (!nn){ alert('Indique un nom pour la nouvelle catégorie.'); return; }
+          var okNn = await addCategory(nn);
+          if (!okNn) return;
+          category = nn;
+        } else if (selectVal){
+          category = selectVal;
+        }
+      }
+
+      var saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Enregistrement…';
+
+      try{
+        if (isEdit){
+          await db.collection('recipes').doc(existing.id).update({ title: title, url: url, notes: notes, category: category });
+        } else {
+          await db.collection('recipes').add({ title: title, url: url, notes: notes, category: category, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+        closeModal();
+      }catch(e){
+        alert('Erreur lors de l\'enregistrement : ' + e.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Enregistrer';
+      }
+    });
+  }
+
+  function escCloseOnce(e){
+    if (e.key === 'Escape') closeModal();
+  }
+
+  function closeModal(){
+    overlayEl.classList.remove('visible');
+    modalEl.innerHTML = '';
+    document.removeEventListener('keydown', escCloseOnce);
+  }
+
+  document.getElementById('add-recipe-btn').addEventListener('click', openAddRecipeModal);
+  document.getElementById('empty-add-btn').addEventListener('click', openAddRecipeModal);
+  document.getElementById('reset-btn').addEventListener('click', async function(){
+    if (!db){ alert('Pas encore connecté à la base de données.'); return; }
+    if (!confirm('Vider tout le carnet ? Cette action est irréversible.')) return;
+    try{
+      var batch = db.batch();
+      var recipesSnap = await db.collection('recipes').get();
+      recipesSnap.forEach(function(d){ batch.delete(d.ref); });
+      var catsSnap = await db.collection('categories').get();
+      catsSnap.forEach(function(d){ batch.delete(d.ref); });
+      await batch.commit();
+      filterCategory = null;
+    }catch(e){
+      alert('Erreur lors de la réinitialisation : ' + e.message);
+    }
+  });
+
+  var searchDebounce = null;
+  searchInput.addEventListener('input', function(){
+    searchTerm = searchInput.value;
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(applyVisibility, 250);
+  });
+
+  initFirebase();
+})();
+</script>
+</body>
+</html>
