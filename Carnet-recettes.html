@@ -841,7 +841,8 @@
         if (isInstagramUrl(r.url)) needsProcess = true;
       } else if (el.dataset.sig !== sig){
         var freshEl = buildCardElement(r);
-        if (el.parentNode) el.parentNode.replaceChild(freshEl, el);
+        if (cursor === el) cursor = el.nextSibling;
+        if (el.parentNode) el.parentNode.removeChild(el);
         cardCache[r.id] = freshEl;
         el = freshEl;
         if (isInstagramUrl(r.url)) needsProcess = true;
