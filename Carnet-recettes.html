@@ -475,7 +475,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v2</div>
+<div class="version-badge">v3</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
@@ -565,12 +565,12 @@
   };
 
   var db = null;
-  var state = { types: [], recipes: [] };
+  var state = { types: [], recipes: [], accounts: [] };
   var filterType = null;
   var filterAccount = null;
   var searchTerm = '';
   var tagColors = ['sage','mustard','clay','navy','rust'];
-  var loadedTypes = false, loadedRecipes = false;
+  var loadedTypes = false, loadedRecipes = false, loadedAccounts = false;
   var cardCache = {};
   var gridDiv = null;
 
@@ -623,7 +623,7 @@
   };
 
   function checkLoaded(){
-    if (loadedTypes && loadedRecipes){
+    if (loadedTypes && loadedRecipes && loadedAccounts){
       loadingEl.hidden = true;
       appEl.hidden = false;
     }
@@ -643,6 +643,19 @@
         return { id:d.id, name:data.name, icon: data.icon || 'plat' };
       });
       loadedTypes = true;
+      checkLoaded();
+      render();
+    }, function(err){
+      loadingEl.hidden = false;
+      appEl.hidden = true;
+      loadingEl.textContent = 'Erreur de connexion : ' + err.message;
+    });
+    db.collection('accounts').onSnapshot(function(snapshot){
+      state.accounts = snapshot.docs.map(function(d){
+        var data = d.data();
+        return { id:d.id, name:data.name };
+      });
+      loadedAccounts = true;
       checkLoaded();
       render();
     }, function(err){
@@ -722,22 +735,52 @@
   }
 
   function getKnownAccounts(){
-    var accounts = [];
-    state.recipes.forEach(function(r){
-      if (r.account && accounts.indexOf(r.account) === -1) accounts.push(r.account);
+    var set = {};
+    state.accounts.forEach(function(a){ set[a.name] = true; });
+    state.recipes.forEach(function(r){ if (r.account) set[r.account] = true; });
+    return Object.keys(set).sort();
+  }
+
+  async function addAccountEntry(name){
+    if (!db){ alert('Pas encore connecté à la base de données.'); return false; }
+    if (getKnownAccounts().indexOf(name) !== -1) return true;
+    try{
+      await db.collection('accounts').add({ name: name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return true;
+    }catch(e){
+      alert('Erreur lors de la création du compte : ' + e.message);
+      return false;
+    }
+  }
+
+  function openAccountCreateModal(){
+    modalEl.innerHTML =
+      '<h2>Nouveau compte Instagram</h2>' +
+      '<div class="field"><label for="f-standalone-account-name">Nom</label>' +
+      '<input type="text" id="f-standalone-account-name" placeholder="@nom_du_compte"></div>' +
+      '<div class="modal-actions">' +
+      '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
+      '<button class="btn-primary" id="save-account-btn">Créer</button>' +
+      '</div>';
+    overlayEl.classList.add('visible');
+    document.getElementById('f-standalone-account-name').focus();
+    document.getElementById('cancel-btn').addEventListener('click', closeModal);
+    overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closeModal(); });
+    document.addEventListener('keydown', escCloseOnce);
+    document.getElementById('save-account-btn').addEventListener('click', async function(){
+      var name = document.getElementById('f-standalone-account-name').value.trim();
+      if (!name){ alert('Indique un nom.'); return; }
+      var btn = document.getElementById('save-account-btn');
+      btn.disabled = true; btn.textContent = 'Création…';
+      var ok = await addAccountEntry(name);
+      if (ok) closeModal();
+      else { btn.disabled = false; btn.textContent = 'Créer'; }
     });
-    accounts.sort();
-    return accounts;
   }
 
   function renderAccountChips(){
     var accounts = getKnownAccounts();
     var wrap = document.getElementById('account-chips');
-    if (accounts.length === 0){
-      wrap.hidden = true;
-      wrap.innerHTML = '';
-      return;
-    }
     wrap.hidden = false;
     var totalWithAccount = state.recipes.filter(function(r){ return !!r.account; }).length;
     var html = '<button class="chip ' + (filterAccount === null ? 'active' : '') + '" data-afilter="__all__">Tous les comptes (' + totalWithAccount + ')</button>';
@@ -746,13 +789,15 @@
       html += '<button class="chip ' + (filterAccount === acc ? 'active' : '') + '" data-afilter="' + escapeHtml(acc) + '">' +
         escapeHtml(acc) + ' (' + count + ')' +
         '<span class="chip-edit" data-edit-account="' + escapeHtml(acc) + '" title="Modifier ce compte">✎</span>' +
-        '<span class="chip-x" data-delete-account="' + escapeHtml(acc) + '" title="Dissocier ce compte">✕</span></button>';
+        '<span class="chip-x" data-delete-account="' + escapeHtml(acc) + '" title="Supprimer ce compte">✕</span></button>';
     });
+    html += '<button class="chip chip-add" id="chip-add-account-btn">+ Compte</button>';
     wrap.innerHTML = html;
     wrap.querySelectorAll('.chip').forEach(function(chip){
       chip.addEventListener('click', function(e){
         if (e.target.hasAttribute('data-edit-account') || e.target.hasAttribute('data-delete-account')) return;
         var f = chip.getAttribute('data-afilter');
+        if (f === undefined || f === null) return;
         filterAccount = (f === '__all__') ? null : f;
         renderAccountChips();
         applyVisibility();
@@ -770,6 +815,8 @@
         deleteAccountValue(x.getAttribute('data-delete-account'));
       });
     });
+    var addAccBtn = document.getElementById('chip-add-account-btn');
+    if (addAccBtn){ addAccBtn.addEventListener('click', openAccountCreateModal); }
   }
 
   async function deleteAccountValue(name){
@@ -781,6 +828,8 @@
       affected.forEach(function(r){
         batch.update(db.collection('recipes').doc(r.id), { account: null });
       });
+      var accObj = state.accounts.find(function(a){ return a.name === name; });
+      if (accObj) batch.delete(db.collection('accounts').doc(accObj.id));
       await batch.commit();
       if (filterAccount === name) filterAccount = null;
     }catch(e){
@@ -819,6 +868,12 @@
           affected.forEach(function(r){
             batch.update(db.collection('recipes').doc(r.id), { account: newName });
           });
+          var accObj = state.accounts.find(function(a){ return a.name === oldName; });
+          if (accObj){
+            batch.update(db.collection('accounts').doc(accObj.id), { name: newName });
+          } else {
+            batch.set(db.collection('accounts').doc(), { name: newName, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+          }
           await batch.commit();
           if (filterAccount === oldName) filterAccount = newName;
         }
