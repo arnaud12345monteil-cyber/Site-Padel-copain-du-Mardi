@@ -171,21 +171,17 @@
     border-color:var(--rust);
   }
   .chip .chip-x{
-    opacity:0;
-    pointer-events:none;
+    opacity:0.55;
     font-size:0.85rem;
     line-height:1;
     margin-left:2px;
   }
-  .chip:hover .chip-x{ opacity:0.6; pointer-events:auto; }
   .chip .chip-x:hover{ opacity:1; color:var(--danger); }
   .chip .chip-edit{
-    opacity:0;
-    pointer-events:none;
+    opacity:0.55;
     font-size:0.78rem;
     line-height:1;
   }
-  .chip:hover .chip-edit{ opacity:0.6; pointer-events:auto; }
   .chip .chip-edit:hover{ opacity:1; color:var(--rust-dark); }
   .chip-add{
     border-style:dashed;
@@ -475,7 +471,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v3</div>
+<div class="version-badge">v4</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
