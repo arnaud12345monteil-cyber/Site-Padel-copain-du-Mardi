@@ -384,6 +384,7 @@
     width:100%;
     max-height:90vh;
     overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
     padding:1.75rem;
   }
   .modal h2{
@@ -498,7 +499,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v5</div>
+<div class="version-badge">v6</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
@@ -790,7 +791,7 @@
       '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
       '<button class="btn-primary" id="save-account-btn">Créer</button>' +
       '</div>';
-    overlayEl.classList.add('visible');
+    showOverlay();
     document.getElementById('f-standalone-account-name').focus();
     document.getElementById('cancel-btn').addEventListener('click', closeModal);
     overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closeModal(); });
@@ -866,7 +867,7 @@
       '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
       '<button class="btn-primary" id="save-account-edit-btn">Enregistrer</button>' +
       '</div>';
-    overlayEl.classList.add('visible');
+    showOverlay();
     document.getElementById('f-edit-account-name').focus();
     document.getElementById('cancel-btn').addEventListener('click', closeModal);
     overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closeModal(); });
@@ -970,7 +971,7 @@
       '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
       '<button class="btn-primary" id="save-type-edit-btn">Enregistrer</button>' +
       '</div>';
-    overlayEl.classList.add('visible');
+    showOverlay();
     bindIconPicker();
     document.getElementById('f-edit-type-name').focus();
     document.getElementById('cancel-btn').addEventListener('click', closeModal);
@@ -1196,7 +1197,7 @@
       '<button class="btn-ghost" id="cancel-btn">Annuler</button>' +
       '<button class="btn-primary" id="save-type-btn">Créer</button>' +
       '</div>';
-    overlayEl.classList.add('visible');
+    showOverlay();
     bindIconPicker();
     document.getElementById('f-standalone-type-name').focus();
     document.getElementById('cancel-btn').addEventListener('click', closeModal);
@@ -1261,7 +1262,7 @@
       '<button class="btn-primary" id="do-import-btn">Analyser et importer</button>' +
       '</div>';
 
-    overlayEl.classList.add('visible');
+    showOverlay();
     document.getElementById('cancel-btn').addEventListener('click', closeModal);
     overlayEl.addEventListener('click', function(e){ if (e.target === overlayEl) closeModal(); });
     document.addEventListener('keydown', escCloseOnce);
@@ -1404,7 +1405,7 @@
       '<button class="btn-primary" id="save-btn">Enregistrer</button>' +
       '</div>';
 
-    overlayEl.classList.add('visible');
+    showOverlay();
     bindIconPicker();
     document.getElementById('f-title').focus();
 
@@ -1500,10 +1501,24 @@
     if (e.key === 'Escape') closeModal();
   }
 
+  function showOverlay(){
+    var scrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.dataset.scrollY = scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = '-' + scrollY + 'px';
+    document.body.style.width = '100%';
+    overlayEl.classList.add('visible');
+  }
+
   function closeModal(){
     overlayEl.classList.remove('visible');
     modalEl.innerHTML = '';
     document.removeEventListener('keydown', escCloseOnce);
+    var scrollY = parseInt(document.body.dataset.scrollY || '0', 10);
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    window.scrollTo(0, scrollY);
   }
 
   document.getElementById('add-recipe-btn').addEventListener('click', openAddRecipeModal);
