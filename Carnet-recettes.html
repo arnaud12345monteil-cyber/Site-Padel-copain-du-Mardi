@@ -188,6 +188,33 @@
     background:transparent;
     color:var(--ink-soft);
   }
+  .account-filter-row{
+    display:flex;
+    align-items:center;
+    gap:0.6rem;
+    margin-bottom:2rem;
+    flex-wrap:wrap;
+  }
+  .account-filter-row select{
+    padding:0.5rem 0.7rem;
+    border:1.5px solid var(--line);
+    border-radius:6px;
+    background:var(--card);
+    font-family:'Inter',sans-serif;
+    font-size:0.85rem;
+    color:var(--ink);
+    min-width:200px;
+  }
+  .account-filter-row .icon-btn{
+    border:1.5px solid var(--line);
+    border-radius:6px;
+    padding:0.45rem 0.6rem;
+  }
+  .account-filter-row .icon-btn:disabled{
+    opacity:0.35;
+    cursor:default;
+  }
+  .account-filter-row .icon-btn:disabled:hover{ color:var(--ink-soft); }
   .grid{
     display:grid;
     grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
@@ -471,7 +498,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v4</div>
+<div class="version-badge">v5</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
@@ -529,7 +556,12 @@
       <input type="text" class="search-input" id="search-input" placeholder="Rechercher un titre ou une note…">
     </div>
     <div class="chips" id="chips"></div>
-    <div class="chips" id="account-chips" hidden></div>
+    <div class="account-filter-row" id="account-filter-row">
+      <select id="account-filter-select"></select>
+      <button class="icon-btn" id="account-filter-edit" title="Modifier ce compte">✎</button>
+      <button class="icon-btn" id="account-filter-delete" title="Supprimer ce compte">🗑</button>
+      <button class="btn-ghost" id="account-filter-add">+ Compte</button>
+    </div>
     <div id="grid-container">
       <div class="grid" id="cards-grid"></div>
       <div class="empty" id="empty-state" hidden>
@@ -726,7 +758,7 @@
 
   function render(){
     renderChips();
-    renderAccountChips();
+    renderAccountFilter();
     reconcileCards();
   }
 
@@ -774,45 +806,37 @@
     });
   }
 
-  function renderAccountChips(){
+  function renderAccountFilter(){
     var accounts = getKnownAccounts();
-    var wrap = document.getElementById('account-chips');
-    wrap.hidden = false;
+    var select = document.getElementById('account-filter-select');
     var totalWithAccount = state.recipes.filter(function(r){ return !!r.account; }).length;
-    var html = '<button class="chip ' + (filterAccount === null ? 'active' : '') + '" data-afilter="__all__">Tous les comptes (' + totalWithAccount + ')</button>';
+    var html = '<option value="__all__">Tous les comptes (' + totalWithAccount + ')</option>';
     accounts.forEach(function(acc){
       var count = state.recipes.filter(function(r){ return r.account === acc; }).length;
-      html += '<button class="chip ' + (filterAccount === acc ? 'active' : '') + '" data-afilter="' + escapeHtml(acc) + '">' +
-        escapeHtml(acc) + ' (' + count + ')' +
-        '<span class="chip-edit" data-edit-account="' + escapeHtml(acc) + '" title="Modifier ce compte">✎</span>' +
-        '<span class="chip-x" data-delete-account="' + escapeHtml(acc) + '" title="Supprimer ce compte">✕</span></button>';
+      html += '<option value="' + escapeHtml(acc) + '">' + escapeHtml(acc) + ' (' + count + ')</option>';
     });
-    html += '<button class="chip chip-add" id="chip-add-account-btn">+ Compte</button>';
-    wrap.innerHTML = html;
-    wrap.querySelectorAll('.chip').forEach(function(chip){
-      chip.addEventListener('click', function(e){
-        if (e.target.hasAttribute('data-edit-account') || e.target.hasAttribute('data-delete-account')) return;
-        var f = chip.getAttribute('data-afilter');
-        if (f === undefined || f === null) return;
-        filterAccount = (f === '__all__') ? null : f;
-        renderAccountChips();
-        applyVisibility();
-      });
+    select.innerHTML = html;
+    select.value = filterAccount === null ? '__all__' : filterAccount;
+
+    var editBtn = document.getElementById('account-filter-edit');
+    var deleteBtn = document.getElementById('account-filter-delete');
+    editBtn.disabled = (filterAccount === null);
+    deleteBtn.disabled = (filterAccount === null);
+  }
+
+  function initAccountFilterControls(){
+    document.getElementById('account-filter-select').addEventListener('change', function(){
+      filterAccount = (this.value === '__all__') ? null : this.value;
+      renderAccountFilter();
+      applyVisibility();
     });
-    wrap.querySelectorAll('[data-edit-account]').forEach(function(x){
-      x.addEventListener('click', function(e){
-        e.stopPropagation();
-        openAccountEditModal(x.getAttribute('data-edit-account'));
-      });
+    document.getElementById('account-filter-edit').addEventListener('click', function(){
+      if (filterAccount) openAccountEditModal(filterAccount);
     });
-    wrap.querySelectorAll('[data-delete-account]').forEach(function(x){
-      x.addEventListener('click', function(e){
-        e.stopPropagation();
-        deleteAccountValue(x.getAttribute('data-delete-account'));
-      });
+    document.getElementById('account-filter-delete').addEventListener('click', function(){
+      if (filterAccount) deleteAccountValue(filterAccount);
     });
-    var addAccBtn = document.getElementById('chip-add-account-btn');
-    if (addAccBtn){ addAccBtn.addEventListener('click', openAccountCreateModal); }
+    document.getElementById('account-filter-add').addEventListener('click', openAccountCreateModal);
   }
 
   async function deleteAccountValue(name){
@@ -1483,6 +1507,7 @@
   }
 
   document.getElementById('add-recipe-btn').addEventListener('click', openAddRecipeModal);
+  initAccountFilterControls();
   document.getElementById('import-btn-open').addEventListener('click', openImportModal);
   document.getElementById('empty-add-btn').addEventListener('click', openAddRecipeModal);
 
