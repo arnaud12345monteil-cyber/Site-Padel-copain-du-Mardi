@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Étagère — Bibliothèque CD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#15130f;
+    --wood:#c9ac7c;
+    --wood-dark:#8a6a44;
+    --shelf-shadow:#0c0a08;
+    --ink:#f4eee0;
+    --muted:#a89a80;
+    --amber:#d9a441;
+    --teal:#3c6e6b;
+    --rust:#b1532f;
+    --line:rgba(244,238,224,0.12);
+    --radius:6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Bebas Neue',sans-serif; letter-spacing:0.03em;}
+
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 70%, transparent);
+    padding:20px 20px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .title-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+  h1{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:2.4rem;
+    letter-spacing:0.04em;
+    margin:0;
+    color:var(--amber);
+  }
+  .count{font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--muted);}
+
+  .toolbar{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; align-items:center;}
+  .toolbar input[type=text], .toolbar select{
+    background:#1e1a13; border:1px solid var(--line); color:var(--ink);
+    padding:9px 12px; border-radius:var(--radius); font-family:'Inter',sans-serif; font-size:0.85rem;
+  }
+  .toolbar input[type=text]{flex:1; min-width:140px;}
+  .btn{
+    background:var(--amber); color:#1a1508; border:none; padding:9px 16px;
+    border-radius:var(--radius); font-family:'Inter',sans-serif; font-weight:600; font-size:0.85rem;
+    cursor:pointer; transition:transform .12s ease, background .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px); background:#e8b458;}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--ink);}
+  .btn.ghost:hover{border-color:var(--amber); background:transparent;}
+  .btn.small{padding:5px 10px; font-size:0.75rem;}
+  .btn.teal{background:var(--teal); color:var(--ink);}
+  .view-toggle{display:flex; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+  .view-toggle button{
+    background:transparent; border:none; color:var(--muted); padding:8px 14px;
+    font-family:'IBM Plex Mono',monospace; font-size:0.75rem; cursor:pointer;
+  }
+  .view-toggle button.active{background:var(--amber); color:#1a1508;}
+
+  main{padding:24px 20px 80px;}
+
+  /* ---------- SHELF VIEW ---------- */
+  .shelf{
+    background:linear-gradient(180deg, var(--wood) 0%, var(--wood) 88%, var(--wood-dark) 100%);
+    border-radius:4px;
+    padding:18px 16px 8px;
+    margin-bottom:22px;
+    box-shadow: 0 14px 18px -14px var(--shelf-shadow), inset 0 -6px 10px -6px rgba(0,0,0,0.35);
+    display:flex;
+    align-items:flex-end;
+    gap:2px;
+    overflow-x:auto;
+    min-height:200px;
+  }
+  .spine{
+    flex:0 0 auto;
+    width:26px;
+    height:190px;
+    border-radius:2px 2px 0 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    position:relative;
+    box-shadow: inset 1px 0 0 rgba(255,255,255,0.08), inset -1px 0 0 rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.3);
+    transition:transform .15s ease, width .15s ease;
+  }
+  .spine:hover{transform:translateY(-6px);}
+  .spine .label{
+    writing-mode:vertical-rl;
+    transform:rotate(180deg);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.68rem;
+    font-weight:600;
+    white-space:nowrap;
+    max-height:180px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    letter-spacing:0.01em;
+  }
+  .spine .unverified-dot{
+    position:absolute; top:6px; left:50%; transform:translateX(-50%);
+    width:6px; height:6px; border-radius:50%; background:var(--rust);
+  }
+  .shelf-empty{color:#5b4a2e; font-family:'IBM Plex Mono',monospace; font-size:0.85rem; padding:20px;}
+
+  /* ---------- LIBRARY GRID ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(150px,1fr));
+    gap:16px;
+  }
+  .card{
+    background:#1e1a13; border:1px solid var(--line); border-radius:var(--radius);
+    overflow:hidden; cursor:pointer; transition:transform .12s ease;
+  }
+  .card:hover{transform:translateY(-3px);}
+  .cover{
+    width:100%; aspect-ratio:1/1; background:var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Bebas Neue',sans-serif; font-size:1rem; color:var(--ink); text-align:center; padding:8px;
+    background-size:cover; background-position:center;
+  }
+  .card-meta{padding:10px 10px 12px;}
+  .card-meta .album{font-weight:600; font-size:0.85rem; line-height:1.25; margin:0 0 3px;}
+  .card-meta .artist{font-size:0.78rem; color:var(--muted); margin:0;}
+  .card-meta .year{font-family:'IBM Plex Mono',monospace; font-size:0.7rem; color:var(--muted); margin-top:4px;}
+
+  /* ---------- MODAL / JEWEL CASE ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(10,8,5,0.75); backdrop-filter:blur(2px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:16px;
+  }
+  .overlay.show{display:flex;}
+  .case{
+    background:#1a160f; border:1px solid var(--line); border-radius:10px;
+    width:100%; max-width:560px; max-height:88vh; overflow-y:auto;
+    animation:open .22s ease;
+  }
+  @keyframes open{from{opacity:0; transform:scale(.96) translateY(6px);} to{opacity:1; transform:none;}}
+  .case-head{display:flex; gap:16px; padding:20px; border-bottom:1px solid var(--line);}
+  .case-cover{width:120px; height:120px; flex:0 0 120px; border-radius:4px; background:var(--teal); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue',sans-serif; text-align:center; padding:6px; font-size:1rem;}
+  .case-info h2{font-family:'Bebas Neue',sans-serif; font-size:1.6rem; margin:0 0 4px; letter-spacing:0.02em;}
+  .case-info .artist{color:var(--amber); font-weight:600; margin:0 0 6px;}
+  .case-info .year{font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--muted);}
+  .case-body{padding:16px 20px 20px;}
+  .tracklist{list-style:none; margin:0; padding:0;}
+  .tracklist li{
+    display:flex; justify-content:space-between; gap:10px;
+    padding:7px 0; border-bottom:1px dashed var(--line);
+    font-family:'IBM Plex Mono',monospace; font-size:0.8rem;
+  }
+  .tracklist li span.num{color:var(--muted); width:24px; flex:0 0 24px;}
+  .tracklist li span.t{flex:1;}
+  .tracklist li span.dur{color:var(--muted);}
+  .case-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;}
+  .empty-note{color:var(--muted); font-size:0.85rem; font-style:italic;}
+  .close-x{position:sticky; top:10px; float:right; margin:10px 14px 0 0; background:none; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer;}
+
+  .edit-form label{display:block; font-size:0.72rem; color:var(--muted); margin:10px 0 4px; text-transform:uppercase; letter-spacing:0.04em;}
+  .edit-form input{
+    width:100%; background:#211c14; border:1px solid var(--line); color:var(--ink);
+    padding:8px 10px; border-radius:4px; font-family:'Inter',sans-serif; font-size:0.85rem;
+  }
+
+  /* ---------- IMPORT PANEL ---------- */
+  .import-panel{
+    background:#1e1a13; border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px; margin-bottom:22px; display:none;
+  }
+  .import-panel.show{display:block;}
+  .import-panel h3{margin:0 0 6px; font-family:'Bebas Neue',sans-serif; letter-spacing:0.03em; font-size:1.3rem; color:var(--amber);}
+  .import-panel p{color:var(--muted); font-size:0.82rem; margin:0 0 10px;}
+  .import-panel textarea{
+    width:100%; min-height:160px; background:#141109; border:1px solid var(--line); color:var(--ink);
+    font-family:'IBM Plex Mono',monospace; font-size:0.8rem; padding:12px; border-radius:4px; resize:vertical;
+  }
+  .import-actions{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .status-line{font-family:'IBM Plex Mono',monospace; font-size:0.75rem; color:var(--muted); margin-top:8px;}
+
+  .setup-banner{
+    background:#2a1c14; border:1px solid var(--rust); color:#f0d9c6; padding:14px 16px;
+    border-radius:var(--radius); font-size:0.82rem; margin-bottom:20px; line-height:1.5;
+  }
+  .setup-banner code{background:#1a120c; padding:1px 5px; border-radius:3px; font-family:'IBM Plex Mono',monospace;}
+
+  ::-webkit-scrollbar{height:8px; width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--wood-dark); border-radius:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-row">
+    <h1>ÉTAGÈRE</h1>
+    <span class="count mono" id="count-label">0 CD</span>
+  </div>
+  <div class="toolbar">
+    <div class="view-toggle">
+      <button id="btn-shelf" class="active">ÉTAGÈRE</button>
+      <button id="btn-library">BIBLIOTHÈQUE</button>
+    </div>
+    <input type="text" id="search" placeholder="Chercher un artiste ou un album…">
+    <select id="year-filter"><option value="">Toutes années</option></select>
+    <button class="btn ghost small" id="btn-toggle-import">+ Importer</button>
+  </div>
+</header>
+
+<main>
+  <div id="setup-banner" class="setup-banner"></div>
+
+  <div class="import-panel" id="import-panel">
+    <h3>Importer des CD</h3>
+    <p>Une ligne par CD, format <code class="mono">Artiste - Album</code> (année entre parenthèses si connue). Le champ ci-dessous est pré-rempli avec la lecture de ta première photo d'étagère — vérifie et corrige avant d'importer, plusieurs titres sont incertains (marqués <code class="mono">?</code>).</p>
+    <textarea id="import-text"></textarea>
+    <div class="import-actions">
+      <button class="btn" id="btn-import">Ajouter à l'étagère</button>
+      <button class="btn ghost" id="btn-enrich-all">Enrichir tout (auto, ~1 CD/sec)</button>
+    </div>
+    <div class="status-line" id="import-status"></div>
+  </div>
+
+  <div id="shelf-container"></div>
+  <div id="library-container" style="display:none;"></div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="case" id="case-content"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ============================================================
+   1) CONFIGURATION FIREBASE — à remplir avant utilisation
+   ------------------------------------------------------------
+   - Va sur console.firebase.google.com, crée un projet (ou
+     réutilise un projet existant), active Firestore.
+   - Copie ta config web ci-dessous.
+   - Règles Firestore pour un usage perso (à adapter, ceci reste
+     ouvert à quiconque connaît l'URL — correct pour un usage
+     perso non partagé, pas pour de la donnée sensible) :
+       match /cds/{doc} { allow read, write: if true; }
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "REMPLACE_MOI",
+  authDomain: "REMPLACE_MOI.firebaseapp.com",
+  projectId: "REMPLACE_MOI",
+  storageBucket: "REMPLACE_MOI.appspot.com",
+  messagingSenderId: "REMPLACE_MOI",
+  appId: "REMPLACE_MOI"
+};
+
+let db = null;
+let firebaseReady = false;
+try {
+  if (firebaseConfig.apiKey !== "REMPLACE_MOI") {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+  }
+} catch (e) { console.error(e); }
+
+const banner = document.getElementById('setup-banner');
+if (!firebaseReady) {
+  banner.innerHTML = "Firebase non configuré — la collection reste en mémoire locale (perdue au rechargement). Renseigne <code>firebaseConfig</code> en haut du fichier pour persister tes CD entre sessions et appareils.";
+} else {
+  banner.style.display = 'none';
+}
+
+/* ============================================================
+   2) ÉTAT + LISTE INITIALE (lecture de la première photo)
+   ============================================================ */
+let items = []; // {id, artist, album, year, mbid, coverUrl, tracks, verified}
+let localIdCounter = 1;
+
+const seedList = `Divers artistes - Le Meilleur de la Musique Africaine (Planète Afrique) ?
+Spandau Ballet - The Singles Collection
+Divers artistes - Aventura Volume 2 ?
+Divers artistes - Sunshine Dance ?
+Divers artistes - Les Hits du Monde
+Deep Forest - Boheme ?
+Collectif Métissé - Ya Plus Qu'à Danser
+Lloyd Cole and the Commotions - 1984-1989
+Era - The Very Best Of
+Billy Idol - Rebel Yell
+Enya - A Day Without Rain ?
+Danielle Brisebois - Arrive All Over You
+John Lennon - Collection
+Divers artistes - Synthétiseur 3, Les Plus Grands Thèmes
+Divers artistes - Synthétiseur Volume 4
+Jean-Sébastien Bach - Concertos Brandebourgeois n°4, 5 & 6 ?
+Divers artistes - 9½ Weeks (Bande originale)
+Vonda Shepard - Songs From Ally McBeal (For Once In My Life)
+Jimmy Cliff - Best Of
+Divers artistes - Synthétiseur 2, Les Plus Grands Thèmes
+Divers artistes - Synthétiseur, Les Plus Grands Thèmes
+Cock Robin - The Best Of Cock Robin
+Florent Pagny - Baby(lon) ?
+Joe Dassin - Collection`;
+
+document.getElementById('import-text').value = seedList;
+
+const palette = ['#d9a441','#3c6e6b','#b1532f','#8a6a44','#6b7fa3','#a3623c','#5c8a6b','#c9ac7c'];
+function colorFor(str){
+  let h = 0;
+  for (let i=0;i<str.length;i++) h = str.charCodeAt(i) + ((h<<5)-h);
+  return palette[Math.abs(h) % palette.length];
+}
+
+/* ============================================================
+   3) SYNC FIRESTORE (temps réel) — ou mode local si non configuré
+   ============================================================ */
+function subscribe(){
+  if (!firebaseReady){ render(); return; }
+  db.collection('cds').orderBy('artist').onSnapshot(snap=>{
+    items = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+  }, err=>console.error(err));
+}
+
+async function addItem(data){
+  if (firebaseReady){
+    await db.collection('cds').add(data);
+  } else {
+    items.push({id:'local-'+(localIdCounter++), ...data});
+    render();
+  }
+}
+async function updateItem(id, data){
+  if (firebaseReady){
+    await db.collection('cds').doc(id).update(data);
+  } else {
+    const it = items.find(i=>i.id===id);
+    Object.assign(it, data);
+    render();
+  }
+}
+async function deleteItem(id){
+  if (firebaseReady){
+    await db.collection('cds').doc(id).delete();
+  } else {
+    items = items.filter(i=>i.id!==id);
+    render();
+  }
+}
+
+/* ============================================================
+   4) IMPORT — parsing "Artiste - Album (Année)"
+   ============================================================ */
+function parseLine(line){
+  line = line.trim();
+  if (!line) return null;
+  const verified = !line.includes('?');
+  line = line.replace(/\?\s*$/,'').trim();
+  let year = null;
+  const yearMatch = line.match(/\((\d{4})\)\s*$/);
+  if (yearMatch){ year = parseInt(yearMatch[1]); line = line.replace(/\(\d{4}\)\s*$/,'').trim(); }
+  const parts = line.split(' - ');
+  if (parts.length < 2) return null;
+  const artist = parts[0].trim();
+  const album = parts.slice(1).join(' - ').trim();
+  return { artist, album, year, verified, mbid:null, coverUrl:null, tracks:[] };
+}
+
+document.getElementById('btn-import').addEventListener('click', async ()=>{
+  const lines = document.getElementById('import-text').value.split('\n');
+  let n = 0;
+  for (const line of lines){
+    const parsed = parseLine(line);
+    if (parsed){ await addItem(parsed); n++; }
+  }
+  document.getElementById('import-status').textContent = n + ' CD ajoutés. Clique sur une pochette puis "Enrichir" pour récupérer année, morceaux et pochette — ou utilise "Enrichir tout".';
+});
+
+/* ============================================================
+   5) ENRICHISSEMENT — MusicBrainz + Cover Art Archive
+   ------------------------------------------------------------
+   Attention : la correspondance automatique est fiable pour les
+   albums d'artiste classiques, beaucoup moins pour les
+   compilations génériques (Synthétiseur, Les Hits du Monde…) —
+   celles-ci demanderont probablement une correction manuelle.
+   ============================================================ */
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+
+async function enrich(item){
+  try {
+    const q = encodeURIComponent(`artist:"${item.artist}" AND release:"${item.album}"`);
+    const res = await fetch(`https://musicbrainz.org/ws/2/release/?query=${q}&fmt=json&limit=5`);
+    const data = await res.json();
+    if (!data.releases || !data.releases.length) return { ok:false, reason:'Aucune correspondance trouvée' };
+    const best = data.releases[0];
+    const mbid = best.id;
+    let year = best.date ? parseInt(best.date.slice(0,4)) : null;
+    if (!year && best['release-group'] && best['release-group']['first-release-date']){
+      year = parseInt(best['release-group']['first-release-date'].slice(0,4));
+    }
+    const res2 = await fetch(`https://musicbrainz.org/ws/2/release/${mbid}?inc=recordings&fmt=json`);
+    const data2 = await res2.json();
+    const media = (data2.media && data2.media[0]) || {};
+    const tracks = (media.tracks || []).map(t=>({
+      position: t.number,
+      title: t.title,
+      duration: t.length ? formatDuration(t.length) : ''
+    }));
+    const coverUrl = `https://coverartarchive.org/release/${mbid}/front-250`;
+    return { ok:true, mbid, year, tracks, coverUrl };
+  } catch(e){
+    return { ok:false, reason: e.message };
+  }
+}
+function formatDuration(ms){
+  const s = Math.round(ms/1000);
+  const m = Math.floor(s/60);
+  const rem = s%60;
+  return m + ':' + String(rem).padStart(2,'0');
+}
+
+document.getElementById('btn-enrich-all').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('import-status');
+  const targets = items.filter(i => !i.mbid);
+  let done = 0;
+  for (const it of targets){
+    statusEl.textContent = `Enrichissement ${done+1}/${targets.length} — ${it.artist} · ${it.album}`;
+    const result = await enrich(it);
+    if (result.ok){
+      await updateItem(it.id, { mbid: result.mbid, year: result.year || it.year, tracks: result.tracks, coverUrl: result.coverUrl });
+    }
+    done++;
+    await sleep(1100); // étiquette MusicBrainz : ~1 req/sec sans clé API
+  }
+  statusEl.textContent = `Terminé — ${done} CD traités. Vérifie les résultats, les compilations sans correspondance restent à compléter à la main.`;
+});
+
+/* ============================================================
+   6) RENDU
+   ============================================================ */
+let currentView = 'shelf';
+
+function applyFilters(list){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const year = document.getElementById('year-filter').value;
+  return list.filter(it=>{
+    const matchQ = !q || (it.artist||'').toLowerCase().includes(q) || (it.album||'').toLowerCase().includes(q);
+    const matchY = !year || String(it.year||'') === year;
+    return matchQ && matchY;
+  });
+}
+
+function updateYearFilter(){
+  const sel = document.getElementById('year-filter');
+  const current = sel.value;
+  const years = [...new Set(items.map(i=>i.year).filter(Boolean))].sort((a,b)=>b-a);
+  sel.innerHTML = '<option value="">Toutes années</option>' + years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  sel.value = current;
+}
+
+function render(){
+  updateYearFilter();
+  const filtered = applyFilters(items);
+  document.getElementById('count-label').textContent = filtered.length + ' CD' + (filtered.length!==items.length ? ` (sur ${items.length})` : '');
+  if (currentView === 'shelf') renderShelf(filtered); else renderLibrary(filtered);
+}
+
+function renderShelf(list){
+  const c = document.getElementById('shelf-container');
+  if (!list.length){ c.innerHTML = '<div class="shelf"><div class="shelf-empty">Étagère vide — importe tes CD ci-dessus.</div></div>'; return; }
+  c.innerHTML = `<div class="shelf">${list.map(it=>`
+    <div class="spine" style="background:${colorFor(it.artist+it.album)}" data-id="${it.id}">
+      ${!it.verified ? '<span class="unverified-dot" title="Lecture à vérifier"></span>' : ''}
+      <span class="label">${escapeHtml(it.artist)} — ${escapeHtml(it.album)}</span>
+    </div>`).join('')}</div>`;
+  c.querySelectorAll('.spine').forEach(el=>el.addEventListener('click', ()=>openCase(el.dataset.id)));
+}
+
+function renderLibrary(list){
+  const c = document.getElementById('library-container');
+  if (!list.length){ c.innerHTML = '<p class="empty-note">Aucun résultat.</p>'; return; }
+  c.innerHTML = `<div class="grid">${list.map(it=>`
+    <div class="card" data-id="${it.id}">
+      <div class="cover" ${it.coverUrl ? `style="background-image:url('${it.coverUrl}')"` : ''}>${it.coverUrl ? '' : escapeHtml(it.album)}</div>
+      <div class="card-meta">
+        <p class="album">${escapeHtml(it.album)}</p>
+        <p class="artist">${escapeHtml(it.artist)}</p>
+        ${it.year ? `<p class="year mono">${it.year}</p>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
+  c.querySelectorAll('.card').forEach(el=>el.addEventListener('click', ()=>openCase(el.dataset.id)));
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------- jewel case modal ---------- */
+function openCase(id){
+  const it = items.find(i=>i.id===id);
+  if (!it) return;
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('case-content');
+  content.innerHTML = `
+    <button class="close-x" id="close-case">&times;</button>
+    <div class="case-head">
+      <div class="case-cover" ${it.coverUrl ? `style="background-image:url('${it.coverUrl}')"` : ''}>${it.coverUrl ? '' : escapeHtml(it.album)}</div>
+      <div class="case-info">
+        <p class="artist mono">${escapeHtml(it.artist)}</p>
+        <h2>${escapeHtml(it.album)}</h2>
+        <p class="year">${it.year ? it.year : 'année inconnue'} ${it.mbid ? '· lié à MusicBrainz' : ''}</p>
+      </div>
+    </div>
+    <div class="case-body">
+      ${it.tracks && it.tracks.length ? `
+        <ul class="tracklist">${it.tracks.map(t=>`<li><span class="num">${t.position||''}</span><span class="t">${escapeHtml(t.title)}</span><span class="dur">${t.duration||''}</span></li>`).join('')}</ul>
+      ` : `<p class="empty-note">Pas encore de liste de morceaux — clique sur "Enrichir" pour la récupérer automatiquement, ou saisis-la à la main ci-dessous.</p>`}
+      <div class="edit-form">
+        <label>Artiste</label><input type="text" id="edit-artist" value="${escapeHtml(it.artist)}">
+        <label>Album</label><input type="text" id="edit-album" value="${escapeHtml(it.album)}">
+        <label>Année</label><input type="text" id="edit-year" value="${it.year||''}">
+      </div>
+      <div class="case-actions">
+        <button class="btn small" id="case-save">Enregistrer</button>
+        <button class="btn teal small" id="case-enrich">Enrichir</button>
+        <button class="btn ghost small" id="case-delete">Supprimer</button>
+      </div>
+    </div>
+  `;
+  overlay.classList.add('show');
+  document.getElementById('close-case').addEventListener('click', closeCase);
+  overlay.addEventListener('click', e=>{ if (e.target===overlay) closeCase(); });
+  document.getElementById('case-save').addEventListener('click', async ()=>{
+    await updateItem(id, {
+      artist: document.getElementById('edit-artist').value.trim(),
+      album: document.getElementById('edit-album').value.trim(),
+      year: parseInt(document.getElementById('edit-year').value) || null,
+      verified: true
+    });
+    closeCase();
+  });
+  document.getElementById('case-enrich').addEventListener('click', async (e)=>{
+    e.target.textContent = 'Recherche…';
+    const result = await enrich(it);
+    if (result.ok){
+      await updateItem(id, { mbid: result.mbid, year: result.year || it.year, tracks: result.tracks, coverUrl: result.coverUrl });
+      closeCase(); openCase(id);
+    } else {
+      e.target.textContent = 'Non trouvé — corrige à la main';
+    }
+  });
+  document.getElementById('case-delete').addEventListener('click', async ()=>{
+    if (confirm('Supprimer ce CD de la bibliothèque ?')){ await deleteItem(id); closeCase(); }
+  });
+}
+function closeCase(){ document.getElementById('overlay').classList.remove('show'); }
+
+/* ---------- view toggle + filters ---------- */
+document.getElementById('btn-shelf').addEventListener('click', ()=>switchView('shelf'));
+document.getElementById('btn-library').addEventListener('click', ()=>switchView('library'));
+function switchView(v){
+  currentView = v;
+  document.getElementById('btn-shelf').classList.toggle('active', v==='shelf');
+  document.getElementById('btn-library').classList.toggle('active', v==='library');
+  document.getElementById('shelf-container').style.display = v==='shelf' ? 'block':'none';
+  document.getElementById('library-container').style.display = v==='library' ? 'block':'none';
+  render();
+}
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('year-filter').addEventListener('change', render);
+document.getElementById('btn-toggle-import').addEventListener('click', ()=>{
+  document.getElementById('import-panel').classList.toggle('show');
+});
+
+subscribe();
+</script>
+</body>
+</html>
