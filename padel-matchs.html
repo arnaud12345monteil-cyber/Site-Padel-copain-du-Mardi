@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel Mardi — Saisie des matchs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #0d0f0e; --surface: #131612; --surface2: #1a1e1b; --border: #2a2f2b;
+    --accent: #b8f53c; --accent2: #3cffa0; --text: #e8ede9; --muted: #687068;
+    --danger: #ff4f4f; --orange: #ff8c1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; min-height: 100vh; padding: 24px 16px 80px; }
+  body.locked .admin-only { opacity: 0.3; pointer-events: none; user-select: none; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 3px; color: var(--accent); line-height: 1; }
+  header p { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .admin-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; letter-spacing: 1px; }
+  .admin-btn.unlocked { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.06); }
+
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .section-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .section-title .n { background: var(--surface2); border: 1px solid var(--border); color: var(--accent); width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }
+
+  select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; padding: 12px 14px; border-radius: 4px; outline: none; }
+  select:focus { border-color: var(--accent); }
+
+  .players-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .player-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 7px 14px; font-size: 12px; cursor: pointer; user-select: none; transition: all 0.15s; }
+  .player-chip.checked { border-color: var(--accent2); color: var(--accent2); background: rgba(60,255,160,0.06); }
+
+  .avail-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 8px 16px; font-size: 13px; cursor: pointer; user-select: none; transition: all 0.15s; }
+  .avail-chip:hover { border-color: var(--accent); }
+  .avail-chip.selected { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.08); }
+
+  .team-row { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+  .team-row .team-label { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--muted); min-width: 70px; }
+  .team-row .team-players { flex: 1; font-size: 13px; }
+  .team-row .remove-team { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 8px; }
+  .team-row .remove-team:hover { color: var(--danger); }
+
+  .btn { background: var(--accent); color: var(--bg); border: none; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 11px 20px; border-radius: 4px; cursor: pointer; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); font-size: 12px; font-family: 'DM Mono', monospace; letter-spacing: 0; }
+  .btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+
+  .hint { font-size: 10px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+
+  .match-row { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .match-row .side { flex: 1; min-width: 130px; font-size: 12px; }
+  .match-row .side.a { text-align: right; color: var(--accent); }
+  .match-row .side.b { text-align: left; color: var(--accent2); }
+  .match-row .vs { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+  .match-row input[type="number"] { width: 48px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: 'Bebas Neue', sans-serif; font-size: 18px; text-align: center; padding: 6px 2px; border-radius: 4px; outline: none; }
+  .match-row input[type="number"]:focus { border-color: var(--accent); }
+  .match-row.saved { opacity: 0.45; }
+
+  .existing-list { font-size: 11px; color: var(--muted); line-height: 1.9; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); padding: 12px 20px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }
+  .toast.show { opacity: 1; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 26px; width: 100%; max-width: 340px; }
+  .modal h2 { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); margin-bottom: 16px; }
+  .modal input[type="password"] { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; padding: 10px 14px; border-radius: 4px; outline: none; margin-bottom: 10px; }
+  .modal .err { color: var(--danger); font-size: 11px; display: none; margin-bottom: 10px; }
+
+  @media (max-width: 480px) {
+    .match-row .side.a, .match-row .side.b { text-align: left; flex-basis: 100%; }
+    .match-row .vs { display: none; }
+  }
+</style>
+</head>
+<body class="locked">
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>SAISIE DES MATCHS</h1>
+      <p>Padel Mardi — équipes &amp; résultats</p>
+    </div>
+    <button class="admin-btn" id="lock-btn" onclick="toggleAdmin()">🔒 Admin</button>
+  </header>
+
+  <div class="admin-only">
+
+    <div class="section">
+      <div class="section-title"><span class="n">1</span> Date de la séance</div>
+      <select id="session-select" onchange="onSessionChange()"></select>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="n">2</span> Joueurs présents</div>
+      <div class="players-grid" id="players-grid"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="n">3</span> Équipes</div>
+      <div id="teams-list"></div>
+      <div class="hint" id="avail-hint">Clique sur deux joueurs disponibles pour former une équipe.</div>
+      <div class="players-grid" id="available-grid"></div>
+      <div class="btn-row">
+        <button class="btn secondary" onclick="autoFormTeams()">🎲 Former les équipes restantes au hasard</button>
+        <button class="btn secondary" onclick="resetTeams()">↺ Tout réinitialiser</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="n">4</span> Confrontations &amp; résultats</div>
+      <div id="existing-matches"></div>
+      <div class="btn-row">
+        <button class="btn" id="generate-btn" onclick="generateMatches()" disabled>Générer toutes les confrontations possibles</button>
+      </div>
+      <div id="matches-list" style="margin-top:14px"></div>
+      <div class="btn-row" id="save-row" style="display:none">
+        <button class="btn" onclick="saveAllMatches()">Enregistrer les matchs remplis</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" id="admin-modal">
+  <div class="modal">
+    <h2>Accès admin</h2>
+    <input type="password" id="admin-pwd-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')checkPassword()">
+    <div class="err" id="admin-error">Mot de passe incorrect.</div>
+    <button class="btn" style="width:100%" onclick="checkPassword()">Valider</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1GKvFGYwgyu7qxSSXlyMG06A0wHnHJoU",
+  authDomain: "padel-tracker-ecd0f.firebaseapp.com",
+  projectId: "padel-tracker-ecd0f",
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+const docRef = db.collection("padel").doc("tracker");
+
+const ADMIN_PWD = 'padel2025'; // même mot de passe que le tracker principal
+
+let state = { players: [], sessions: [], matches: [] };
+let presentPlayers = [];      // joueurs cochés pour la séance
+let teams = [];               // [{ id, players: [a,b] }, ...]
+let pendingSelection = [];    // sélection en cours pour former une équipe manuellement
+let generatedMatches = [];    // [{ teamA, teamB, s1, s2, saved }]
+
+// ── Chargement Firestore en direct ──────────────────────────────────────────
+docRef.onSnapshot(snap => {
+  const data = snap.data() || {};
+  state.players = data.players || [];
+  state.sessions = (data.sessions || []).map(s => ({ ...s, attendees: Array.isArray(s.attendees) ? s.attendees : [...(s.attendees||[])] }));
+  state.matches = data.matches || [];
+  populateSessionSelect();
+}, err => {
+  toast('Erreur Firebase : ' + err.message);
+});
+
+function populateSessionSelect() {
+  const sel = document.getElementById('session-select');
+  const prev = sel.value;
+  const sorted = [...state.sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
+  sel.innerHTML = sorted.map(s => '<option value="' + s.date + '">' + s.date + (s.label ? ' — ' + s.label : '') + '</option>').join('');
+  if (prev && sorted.some(s => s.date === prev)) sel.value = prev;
+  onSessionChange();
+}
+
+function onSessionChange() {
+  const date = document.getElementById('session-select').value;
+  const session = state.sessions.find(s => s.date === date);
+  presentPlayers = session ? [...session.attendees] : [];
+  teams = [];
+  pendingSelection = [];
+  generatedMatches = [];
+  renderPlayersGrid();
+  renderTeams();
+  renderExistingMatches();
+  renderMatchesList();
+}
+
+// ── Étape 2 : joueurs présents ───────────────────────────────────────────
+function renderPlayersGrid() {
+  const grid = document.getElementById('players-grid');
+  grid.innerHTML = state.players.map(p => {
+    const checked = presentPlayers.includes(p);
+    return '<span class="player-chip' + (checked ? ' checked' : '') + '" onclick="togglePresent(\'' + p.replace(/'/g,"\\'") + '\')">' + p + '</span>';
+  }).join('');
+}
+function togglePresent(p) {
+  if (presentPlayers.includes(p)) {
+    presentPlayers = presentPlayers.filter(x => x !== p);
+    // Retirer aussi des équipes s'il y était
+    teams.forEach(t => { t.players = t.players.filter(x => x !== p); });
+    teams = teams.filter(t => t.players.length > 0);
+    pendingSelection = pendingSelection.filter(x => x !== p);
+  } else {
+    presentPlayers.push(p);
+  }
+  renderPlayersGrid();
+  renderTeams();
+}
+
+// ── Étape 3 : équipes ────────────────────────────────────────────────────
+function assignedPlayers() {
+  return new Set(teams.flatMap(t => t.players));
+}
+function availablePlayers() {
+  const assigned = assignedPlayers();
+  return presentPlayers.filter(p => !assigned.has(p));
+}
+
+function renderTeams() {
+  const list = document.getElementById('teams-list');
+  list.innerHTML = teams.map((t, i) =>
+    '<div class="team-row"><div class="team-label">Équipe ' + (i+1) + '</div>'
+    + '<div class="team-players">' + t.players.join(' + ') + '</div>'
+    + '<button class="remove-team" onclick="removeTeam(' + i + ')" title="Dissoudre">✕</button></div>'
+  ).join('');
+  renderAvailableGrid();
+  document.getElementById('generate-btn').disabled = teams.length < 2;
+}
+
+function renderAvailableGrid() {
+  const grid = document.getElementById('available-grid');
+  const avail = availablePlayers();
+  document.getElementById('avail-hint').style.display = avail.length ? '' : 'none';
+  grid.innerHTML = avail.map(p =>
+    '<span class="avail-chip' + (pendingSelection.includes(p) ? ' selected' : '') + '" onclick="pickForTeam(\'' + p.replace(/'/g,"\\'") + '\')">' + p + '</span>'
+  ).join('') || '<span style="color:var(--muted);font-size:11px">Tous les joueurs présents ont une équipe.</span>';
+}
+
+function pickForTeam(p) {
+  if (pendingSelection.includes(p)) { pendingSelection = pendingSelection.filter(x => x !== p); renderAvailableGrid(); return; }
+  pendingSelection.push(p);
+  if (pendingSelection.length === 2) {
+    teams.push({ id: Date.now()+Math.random(), players: [...pendingSelection] });
+    pendingSelection = [];
+    renderTeams();
+  } else {
+    renderAvailableGrid();
+  }
+}
+
+function removeTeam(i) {
+  teams.splice(i, 1);
+  renderTeams();
+}
+
+function autoFormTeams() {
+  let avail = availablePlayers();
+  // Mélange (Fisher-Yates)
+  for (let i = avail.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [avail[i], avail[j]] = [avail[j], avail[i]];
+  }
+  while (avail.length >= 2) {
+    teams.push({ id: Date.now()+Math.random(), players: [avail.pop(), avail.pop()] });
+  }
+  pendingSelection = [];
+  renderTeams();
+  if (avail.length === 1) toast('⚠️ ' + avail[0] + ' reste sans équipe (nombre impair)');
+}
+
+function resetTeams() {
+  teams = [];
+  pendingSelection = [];
+  generatedMatches = [];
+  renderTeams();
+  renderMatchesList();
+}
+
+// ── Étape 4 : générer toutes les confrontations possibles ──────────────
+function generateMatches() {
+  generatedMatches = [];
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i+1; j < teams.length; j++) {
+      generatedMatches.push({ teamA: teams[i].players, teamB: teams[j].players, s1: '', s2: '', saved: false });
+    }
+  }
+  renderMatchesList();
+  toast(generatedMatches.length + ' confrontation(s) générée(s)');
+}
+
+function renderExistingMatches() {
+  const date = document.getElementById('session-select').value;
+  const existing = state.matches.filter(m => m.sessionDate === date);
+  const el = document.getElementById('existing-matches');
+  if (existing.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="existing-list">Déjà enregistrés pour cette date (' + existing.length + ') :<br>'
+    + existing.map(m => '• ' + m.team1.join('/') + ' ' + m.score[0] + '-' + m.score[1] + ' ' + m.team2.join('/')).join('<br>')
+    + '</div>';
+}
+
+function renderMatchesList() {
+  const el = document.getElementById('matches-list');
+  document.getElementById('save-row').style.display = generatedMatches.length ? '' : 'none';
+  el.innerHTML = generatedMatches.map((m, i) =>
+    '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
+    + '<div class="side a">' + m.teamA.join(' + ') + '</div>'
+    + '<input type="number" min="0" value="' + m.s1 + '" ' + (m.saved?'disabled':'') + ' oninput="updateScore(' + i + ',0,this.value)">'
+    + '<div class="vs">VS</div>'
+    + '<input type="number" min="0" value="' + m.s2 + '" ' + (m.saved?'disabled':'') + ' oninput="updateScore(' + i + ',1,this.value)">'
+    + '<div class="side b">' + m.teamB.join(' + ') + '</div>'
+    + '</div>'
+  ).join('');
+}
+
+function updateScore(i, side, val) {
+  generatedMatches[i][side === 0 ? 's1' : 's2'] = val;
+}
+
+// ── Étape 5 : enregistrement groupé ──────────────────────────────────────
+function saveAllMatches() {
+  const date = document.getElementById('session-select').value;
+  const toSave = generatedMatches.filter(m => !m.saved && m.s1 !== '' && m.s2 !== '');
+  if (toSave.length === 0) { toast('Aucun score rempli à enregistrer'); return; }
+
+  if (!state.matches) state.matches = [];
+  toSave.forEach(m => {
+    state.matches.push({
+      sessionDate: date,
+      team1: m.teamA,
+      team2: m.teamB,
+      scoreMode: 'total',
+      score: [parseInt(m.s1) || 0, parseInt(m.s2) || 0],
+    });
+    m.saved = true;
+  });
+
+  docRef.update({ matches: state.matches }).then(() => {
+    toast('✓ ' + toSave.length + ' match(s) enregistré(s)');
+    renderMatchesList();
+    renderExistingMatches();
+  }).catch(e => toast('Erreur : ' + e.message));
+}
+
+// ── Admin lock (même mécanisme que le tracker principal) ────────────────
+function toggleAdmin() {
+  if (!document.body.classList.contains('locked')) {
+    document.body.classList.add('locked');
+    sessionStorage.removeItem('padel-admin');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔒 Admin'; btn.classList.remove('unlocked');
+  } else {
+    document.getElementById('admin-pwd-input').value = '';
+    document.getElementById('admin-error').style.display = 'none';
+    document.getElementById('admin-modal').classList.add('open');
+    setTimeout(() => document.getElementById('admin-pwd-input').focus(), 100);
+  }
+}
+function checkPassword() {
+  const input = document.getElementById('admin-pwd-input').value;
+  if (input === ADMIN_PWD) {
+    document.body.classList.remove('locked');
+    sessionStorage.setItem('padel-admin', '1');
+    document.getElementById('admin-modal').classList.remove('open');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
+  } else {
+    document.getElementById('admin-error').style.display = 'block';
+  }
+}
+function initAdmin() {
+  document.body.classList.add('locked');
+  if (sessionStorage.getItem('padel-admin') === '1') {
+    document.body.classList.remove('locked');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
+  }
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+initAdmin();
+</script>
+
+</body>
+</html>

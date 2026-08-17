@@ -111,7 +111,41 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-  @media (max-width: 768px) { header, main { padding: 20px; } .header-stats { gap: 12px; } }
+  .ranking-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .ranking-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .ranking-filter label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .ranking-filter input[type="date"] { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 10px; border-radius: 4px; outline: none; }
+  .ranking-filter button { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-family: 'DM Mono', monospace; }
+  .ranking-filter button:hover { color: var(--danger); border-color: var(--danger); }
+  .ranking-period { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  @media (max-width: 640px) {
+    header { padding: 20px 16px 18px; flex-direction: column; align-items: flex-start; gap: 14px; }
+    .logo-area h1 { font-size: 44px; }
+    .header-stats { width: 100%; gap: 8px; }
+    .stat-pill { flex: 1 1 calc(50% - 8px); min-width: 0; padding: 10px 8px; }
+    .stat-pill .val { font-size: 24px; }
+    main { padding: 20px 14px; max-width: 100%; }
+    .section-title { font-size: 15px; }
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .toolbar .btn, .toolbar a.btn { width: 100%; text-align: center; padding: 12px; }
+    .toolbar .spacer { display: none; }
+    .modal-overlay { padding: 12px; }
+    .modal { padding: 20px 18px; max-height: 92vh; }
+    .modal h2 { font-size: 22px; }
+    .modal-actions { flex-direction: column; }
+    .modal-actions .btn { width: 100%; }
+    .ranking-header { flex-direction: column; align-items: flex-start; }
+    .ranking-filter input[type="date"] { flex: 1 1 120px; min-width: 0; }
+    .ranking-columns { gap: 20px !important; }
+    .next-session-card { padding: 16px !important; }
+    .next-session-card .ns-date { font-size: 26px !important; }
+    th, td { padding: 6px 4px; font-size: 9px; }
+    th.sticky-col, td.sticky-col { min-width: 84px; }
+    .player-metrics { flex-wrap: wrap; gap: 10px; }
+    .stats-grid, .matches-grid { grid-template-columns: 1fr; }
+    .players-grid { grid-template-columns: 1fr 1fr; }
+    #toast { left: 16px; right: 16px; bottom: 16px; text-align: center; }
+  }
   /* ── Matchs ── */
   .matches-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-bottom: 16px; }
   .match-card { border-radius: 6px; padding: 10px 14px; border-left: 3px solid var(--border); background: var(--surface); }
@@ -178,6 +212,7 @@
     <button class="btn admin-only" onclick="openModal()">+ Nouvelle séance</button>
     <button class="btn secondary admin-only" onclick="openAddPlayerModal()">+ Joueur</button>
     <a class="btn secondary" href="padel-inscription.html" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">📝 S'inscrire à une séance</a>
+    <a class="btn secondary admin-only" href="padel-matchs.html" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">🎾 Saisir des matchs</a>
     <div class="spacer"></div>
     <button class="btn secondary admin-only" onclick="exportData()">↓ Export HTML</button>
     <button class="btn secondary admin-only" onclick="document.getElementById('import-file').click()">↑ Import JSON</button>
