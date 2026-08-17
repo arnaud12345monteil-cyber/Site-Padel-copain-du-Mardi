@@ -506,10 +506,19 @@ function saveSession() {
   const checked = [...document.querySelectorAll('#players-checklist .player-check.checked')].map(d => d.dataset.player);
   if (checked.length === 0) { toast('Aucun joueur coché'); return; }
   const spots = parseInt(document.getElementById('session-spots').value) || 8;
-  state.sessions.push({ id: Date.now(), date, label: 'Mardi au Padel', attendees: new Set(checked), spots });
-  state.sessions.sort((a, b) => new Date(b.date) - new Date(a.date));
-  saveState(); render(); closeModal();
-  toast('Séance du ' + formatDate(date) + ' enregistrée — ' + checked.length + '/' + spots + ' places');
+  const newSession = { id: Date.now(), date, label: 'Mardi au Padel', attendees: checked, spots };
+
+  db.runTransaction(tx => tx.get(DOC_REF).then(snap => {
+    const freshSessions = (snap.data() || {}).sessions || [];
+    freshSessions.push(newSession);
+    freshSessions.sort((a,b) => new Date(b.date) - new Date(a.date));
+    tx.update(DOC_REF, { sessions: freshSessions });
+    return freshSessions;
+  })).then(freshSessions => {
+    state.sessions = freshSessions.map(s => ({ ...s, attendees: new Set(s.attendees || []) }));
+    render(); closeModal();
+    toast('Séance du ' + formatDate(date) + ' enregistrée — ' + checked.length + '/' + spots + ' places');
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 function openAddPlayerModal() {
@@ -531,8 +540,15 @@ document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('cli
 
 function deleteSession(id) {
   if (!confirm('Supprimer cette séance ?')) return;
-  state.sessions = state.sessions.filter(s => String(s.id) !== String(id));
-  saveState(); render(); toast('Séance supprimée');
+  db.runTransaction(tx => tx.get(DOC_REF).then(snap => {
+    const freshSessions = ((snap.data() || {}).sessions || []).filter(s => String(s.id) !== String(id));
+    tx.update(DOC_REF, { sessions: freshSessions });
+    return freshSessions;
+  })).then(freshSessions => {
+    state.sessions = freshSessions.map(s => ({ ...s, attendees: new Set(s.attendees || []) }));
+    render();
+    toast('Séance supprimée');
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 let editingSessionId = null;
@@ -576,14 +592,23 @@ function saveEditSession() {
   const checked = [...document.querySelectorAll('#edit-players-checklist .player-check.checked')].map(d => d.dataset.player);
   if (checked.length === 0) { toast('Aucun joueur coché'); return; }
 
-  session.date = date;
-  session.attendees = new Set(checked);
-  session.spots = parseInt(document.getElementById('edit-session-spots').value) || 8;
+  const spots = parseInt(document.getElementById('edit-session-spots').value) || 8;
+  const id = editingSessionId;
 
-  state.sessions.sort((a,b) => new Date(b.date)-new Date(a.date));
-  saveState(); render();
-  document.getElementById('edit-modal').classList.remove('open');
-  toast('Séance mise à jour');
+  db.runTransaction(tx => tx.get(DOC_REF).then(snap => {
+    const freshSessions = (snap.data() || {}).sessions || [];
+    const idx = freshSessions.findIndex(s => String(s.id) === String(id));
+    if (idx === -1) throw new Error('Séance introuvable côté serveur (supprimée entre-temps ?)');
+    freshSessions[idx] = { ...freshSessions[idx], date, attendees: checked, spots };
+    freshSessions.sort((a,b) => new Date(b.date) - new Date(a.date));
+    tx.update(DOC_REF, { sessions: freshSessions });
+    return freshSessions;
+  })).then(freshSessions => {
+    state.sessions = freshSessions.map(s => ({ ...s, attendees: new Set(s.attendees || []) }));
+    render();
+    document.getElementById('edit-modal').classList.remove('open');
+    toast('Séance mise à jour');
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 function adminBtns(i) {
