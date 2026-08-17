@@ -152,6 +152,7 @@
   .match-card.win-a { border-left-color: var(--accent); }
   .match-card.win-b { border-left-color: #ff8c42; }
   .match-card.draw { border-left-color: var(--muted); }
+  .match-card.pending { border-left-color: var(--muted); border-left-style: dashed; }
   .match-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .match-num { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
   .match-body { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
@@ -1116,8 +1117,8 @@ function openMatchModal(matchId) {
         if (t2s[i]) t2s[i].value = set[1];
       });
     } else {
-      document.getElementById('score-t1-total').value = m.score[0];
-      document.getElementById('score-t2-total').value = m.score[1];
+      document.getElementById('score-t1-total').value = m.score ? m.score[0] : '';
+      document.getElementById('score-t2-total').value = m.score ? m.score[1] : '';
     }
   }
 
@@ -1175,9 +1176,9 @@ function saveMatch() {
   let match = { sessionDate: session.date, team1: t1, team2: t2, scoreMode: _matchScoreMode };
 
   if (_matchScoreMode === 'total') {
-    const s1 = parseInt(document.getElementById('score-t1-total').value) || 0;
-    const s2 = parseInt(document.getElementById('score-t2-total').value) || 0;
-    match.score = [s1, s2];
+    const raw1 = document.getElementById('score-t1-total').value;
+    const raw2 = document.getElementById('score-t2-total').value;
+    match.score = (raw1 !== '' && raw2 !== '') ? [parseInt(raw1) || 0, parseInt(raw2) || 0] : null;
   } else {
     const t1inputs = document.querySelectorAll('.set-t1');
     const t2inputs = document.querySelectorAll('.set-t2');
@@ -1215,9 +1216,13 @@ function deleteMatch(idx) {
 }
 
 function matchCard(m, showDate, matchNum) {
-  const winner = m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0;
-  const cardClass = winner===1 ? 'win-a' : winner===2 ? 'win-b' : 'draw';
+  const hasScore = Array.isArray(m.score);
+  const winner = hasScore ? (m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0) : -1;
+  const cardClass = !hasScore ? 'pending' : winner===1 ? 'win-a' : winner===2 ? 'win-b' : 'draw';
   const setsDetail = m.scoreMode === 'sets' && m.sets ? m.sets.map(s => s[0]+'-'+s[1]).join(' ') : '';
+  const scoreHtml = hasScore
+    ? '<span class="s-a">' + m.score[0] + '</span><span class="sep">—</span><span class="s-b">' + m.score[1] + '</span>'
+    : '<span style="font-size:10px;color:var(--muted);letter-spacing:1px">SCORE À SAISIR</span>';
   return '<div class="match-card ' + cardClass + '">'
     + '<div class="match-header">'
     + '<span class="match-num">' + (matchNum ? 'Match '+matchNum : '') + (showDate ? ' · '+m.sessionDate : '') + '</span>'
@@ -1226,7 +1231,7 @@ function matchCard(m, showDate, matchNum) {
     + '<div class="match-body">'
     + '<div class="match-team-a"><div class="match-team-label a">Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
     + '<div class="match-center">'
-    + '<div class="match-score"><span class="s-a">' + m.score[0] + '</span><span class="sep">—</span><span class="s-b">' + m.score[1] + '</span></div>'
+    + '<div class="match-score">' + scoreHtml + '</div>'
     + '<div class="match-trophy">' + (winner===1?'🏆':'') + (winner===0?'🤝':'') + (winner===2?'🏆':'') + '</div>'
     + (setsDetail ? '<div class="match-score-detail">'+setsDetail+'</div>' : '')
     + '</div>'
@@ -1377,6 +1382,7 @@ function renderRanking() {
   const fromDate = document.getElementById('ranking-from-date')?.value || '';
   const toDate = document.getElementById('ranking-to-date')?.value || '';
   const filteredMatches = state.matches.filter(m => {
+    if (!Array.isArray(m.score)) return false; // pas encore de score saisi
     if (fromDate && m.sessionDate < fromDate) return false;
     if (toDate && m.sessionDate > toDate) return false;
     return true;
@@ -1478,6 +1484,7 @@ function renderPresenceRanking() {
   }
 
   const filteredMatches = state.matches.filter(m => {
+    if (!Array.isArray(m.score)) return false; // pas encore de score saisi
     if (fromDate && m.sessionDate < fromDate) return false;
     if (toDate && m.sessionDate > toDate) return false;
     return true;

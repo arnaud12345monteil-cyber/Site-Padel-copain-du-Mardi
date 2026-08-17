@@ -122,7 +122,7 @@
       </div>
       <div id="matches-list" style="margin-top:14px"></div>
       <div class="btn-row" id="save-row" style="display:none">
-        <button class="btn" onclick="saveAllMatches()">Enregistrer les matchs remplis</button>
+        <button class="btn" onclick="saveAllMatches()">Enregistrer les matchs</button>
       </div>
     </div>
 
@@ -164,6 +164,7 @@ docRef.onSnapshot(snap => {
   state.players = data.players || [];
   state.sessions = (data.sessions || []).map(s => ({ ...s, attendees: Array.isArray(s.attendees) ? s.attendees : [...(s.attendees||[])] }));
   state.matches = data.matches || [];
+  state.team_setups = data.team_setups || {};
   populateSessionSelect();
 }, err => {
   toast('Erreur Firebase : ' + err.message);
@@ -182,12 +183,59 @@ function onSessionChange() {
   const date = document.getElementById('session-select').value;
   const session = state.sessions.find(s => s.date === date);
   presentPlayers = session ? [...session.attendees] : [];
-  teams = [];
   pendingSelection = [];
+
+  const saved = state.team_setups && state.team_setups[date];
+  if (saved && saved.length) {
+    // Reprend les équipes proposées la première fois pour cette date
+    teams = saved.map(t => ({ id: Date.now()+Math.random(), players: [...t.players] }));
+    renderPlayersGrid();
+    renderTeams();
+    renderExistingMatches();
+    rebuildMatchesFromTeams(date);
+  } else {
+    teams = [];
+    generatedMatches = [];
+    renderPlayersGrid();
+    renderTeams();
+    renderExistingMatches();
+    renderMatchesList();
+  }
+}
+
+// Reconstruit la liste des confrontations à partir des équipes restaurées,
+// en marquant comme déjà enregistrées celles qui existent dans state.matches
+// (peu importe l'ordre des équipes ou des joueurs dans chaque équipe).
+function sameTeam(a, b) {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort().join('|'), sb = [...b].sort().join('|');
+  return sa === sb;
+}
+function findSavedMatch(date, teamA, teamB) {
+  return (state.matches || []).find(m =>
+    m.sessionDate === date &&
+    ((sameTeam(m.team1, teamA) && sameTeam(m.team2, teamB)) || (sameTeam(m.team1, teamB) && sameTeam(m.team2, teamA)))
+  );
+}
+function rebuildMatchesFromTeams(date) {
   generatedMatches = [];
-  renderPlayersGrid();
-  renderTeams();
-  renderExistingMatches();
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i+1; j < teams.length; j++) {
+      const teamA = teams[i].players, teamB = teams[j].players;
+      const existing = findSavedMatch(date, teamA, teamB);
+      if (existing) {
+        const hasScore = Array.isArray(existing.score);
+        generatedMatches.push({
+          teamA, teamB,
+          s1: hasScore ? existing.score[0] : '',
+          s2: hasScore ? existing.score[1] : '',
+          saved: true,
+        });
+      } else {
+        generatedMatches.push({ teamA, teamB, s1: '', s2: '', saved: false });
+      }
+    }
+  }
   renderMatchesList();
 }
 
@@ -275,23 +323,28 @@ function autoFormTeams() {
 }
 
 function resetTeams() {
+  const date = document.getElementById('session-select').value;
   teams = [];
   pendingSelection = [];
   generatedMatches = [];
   renderTeams();
   renderMatchesList();
+  if (state.team_setups && state.team_setups[date]) {
+    delete state.team_setups[date];
+    docRef.update({ team_setups: state.team_setups }).catch(() => {});
+  }
 }
 
 // ── Étape 4 : générer toutes les confrontations possibles ──────────────
 function generateMatches() {
-  generatedMatches = [];
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i+1; j < teams.length; j++) {
-      generatedMatches.push({ teamA: teams[i].players, teamB: teams[j].players, s1: '', s2: '', saved: false });
-    }
-  }
-  renderMatchesList();
+  const date = document.getElementById('session-select').value;
+  rebuildMatchesFromTeams(date);
   toast(generatedMatches.length + ' confrontation(s) générée(s)');
+
+  // Mémorise ces équipes pour cette date — reproposées automatiquement la prochaine fois
+  if (!state.team_setups) state.team_setups = {};
+  state.team_setups[date] = teams.map(t => ({ players: t.players }));
+  docRef.update({ team_setups: state.team_setups }).catch(e => toast('Erreur sauvegarde équipes : ' + e.message));
 }
 
 function renderExistingMatches() {
@@ -325,23 +378,26 @@ function updateScore(i, side, val) {
 // ── Étape 5 : enregistrement groupé ──────────────────────────────────────
 function saveAllMatches() {
   const date = document.getElementById('session-select').value;
-  const toSave = generatedMatches.filter(m => !m.saved && m.s1 !== '' && m.s2 !== '');
-  if (toSave.length === 0) { toast('Aucun score rempli à enregistrer'); return; }
+  const toSave = generatedMatches.filter(m => !m.saved);
+  if (toSave.length === 0) { toast('Rien à enregistrer'); return; }
 
   if (!state.matches) state.matches = [];
+  let withScore = 0;
   toSave.forEach(m => {
+    const hasScore = m.s1 !== '' && m.s2 !== '';
+    if (hasScore) withScore++;
     state.matches.push({
       sessionDate: date,
       team1: m.teamA,
       team2: m.teamB,
       scoreMode: 'total',
-      score: [parseInt(m.s1) || 0, parseInt(m.s2) || 0],
+      score: hasScore ? [parseInt(m.s1) || 0, parseInt(m.s2) || 0] : null,
     });
     m.saved = true;
   });
 
   docRef.update({ matches: state.matches }).then(() => {
-    toast('✓ ' + toSave.length + ' match(s) enregistré(s)');
+    toast('✓ ' + toSave.length + ' match(s) enregistré(s)' + (withScore < toSave.length ? ' (' + (toSave.length-withScore) + ' sans score)' : ''));
     renderMatchesList();
     renderExistingMatches();
   }).catch(e => toast('Erreur : ' + e.message));
