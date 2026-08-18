@@ -298,6 +298,20 @@
   .embed-wrap blockquote.instagram-media{
     margin:0 !important;
   }
+  .fb-placeholder{
+    display:flex;
+    align-items:center;
+    gap:0.6rem;
+    background:#F0F4FA;
+    border:1.5px solid #D5E1F5;
+    border-radius:6px;
+    padding:0.8rem 0.9rem;
+    margin:0 0 0.9rem;
+    font-size:0.8rem;
+    color:var(--ink-soft);
+    line-height:1.4;
+  }
+  .fb-placeholder svg{ flex-shrink:0; }
   .card .notes{
     font-size:0.85rem;
     color:var(--ink-soft);
@@ -499,9 +513,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v8</div>
-<div id="fb-root"></div>
-<script async defer crossorigin="anonymous" src="https://connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v21.0"></script>
+<div class="version-badge">v9</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
@@ -645,8 +657,6 @@
     return !!url && url.toLowerCase().indexOf('instagram.com') !== -1;
   }
 
-  var FACEBOOK_APP_ID = '4552185215063540';
-
   function isFacebookUrl(url){
     if (!url) return false;
     var u = url.toLowerCase();
@@ -724,16 +734,6 @@
     } else {
       setTimeout(function(){
         if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
-      }, 600);
-    }
-  }
-
-  function processFacebookEmbeds(){
-    if (window.FB && window.FB.XFBML){
-      window.FB.XFBML.parse();
-    } else {
-      setTimeout(function(){
-        if (window.FB && window.FB.XFBML) window.FB.XFBML.parse();
       }, 600);
     }
   }
@@ -1066,9 +1066,9 @@
     if (isInstagramUrl(r.url)){
       embedHtml = '<div class="embed-wrap"><blockquote class="instagram-media" data-instgrm-permalink="' + escapeHtml(r.url) + '" data-instgrm-captioned data-instgrm-version="14" style="background:#FFF;border:0;border-radius:3px;margin:0;max-width:540px;min-width:300px;padding:0;width:100%;"></blockquote></div>';
     } else if (isFacebookUrl(r.url)){
-      var isVideoLike = /\/videos?\/|\/watch|\/reel\//i.test(r.url);
-      var fbClass = isVideoLike ? 'fb-video' : 'fb-post';
-      embedHtml = '<div class="embed-wrap"><div class="' + fbClass + '" data-href="' + escapeHtml(r.url) + '" data-width="350" data-app-id="' + FACEBOOK_APP_ID + '"></div></div>';
+      embedHtml = '<div class="fb-placeholder">' +
+        '<svg viewBox="0 0 24 24" width="22" height="22" fill="#1877F2"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12Z"/></svg>' +
+        '<span>Aperçu indisponible côté Facebook — utilise le lien ci-dessous</span></div>';
     }
     el.innerHTML =
       '<div class="card-actions">' +
@@ -1129,7 +1129,6 @@
     var grid = ensureGridDiv();
     var cursor = grid.firstChild;
     var needsProcess = false;
-    var needsFbProcess = false;
 
     sortedAll.forEach(function(r){
       var sig = computeSig(r);
@@ -1138,7 +1137,6 @@
         el = buildCardElement(r);
         cardCache[r.id] = el;
         if (isInstagramUrl(r.url)) needsProcess = true;
-        if (isFacebookUrl(r.url)) needsFbProcess = true;
       } else if (el.dataset.sig !== sig){
         var freshEl = buildCardElement(r);
         if (cursor === el) cursor = el.nextSibling;
@@ -1146,7 +1144,6 @@
         cardCache[r.id] = freshEl;
         el = freshEl;
         if (isInstagramUrl(r.url)) needsProcess = true;
-        if (isFacebookUrl(r.url)) needsFbProcess = true;
       }
       if (cursor !== el){
         grid.insertBefore(el, cursor);
@@ -1156,7 +1153,6 @@
     });
 
     if (needsProcess) processInstagramEmbeds();
-    if (needsFbProcess) processFacebookEmbeds();
     applyVisibility();
   }
 
