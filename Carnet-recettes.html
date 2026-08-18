@@ -513,7 +513,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v9</div>
+<div class="version-badge">v12</div>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M32 6C20 6 12 20 12 34c0 14 9 24 20 24s20-10 20-24C52 20 44 6 32 6Z"/>
   <path d="M20 30c0-8 6-16 12-16" stroke-opacity="0.5"/>
@@ -562,9 +562,19 @@
       <div class="toolbar-left">
         <button class="btn-primary" id="add-recipe-btn">+ Nouvelle recette</button>
         <button class="btn-ghost" id="import-btn-open">Importer en masse</button>
+        <button class="btn-ghost" id="admin-toggle-btn">Mode admin</button>
+        <span id="admin-tools" hidden>
+          <button class="btn-ghost" id="backup-btn">Sauvegarder</button>
+          <button class="btn-ghost" id="restore-btn-open">Restaurer</button>
+          <input type="file" id="restore-file-input" accept=".json" style="display:none;">
+        </span>
         <div class="view-toggle">
           <button class="view-btn" data-view="grid" title="Vue grille">Grille</button>
           <button class="view-btn" data-view="stack" title="Vue empilée">Pile</button>
+        </div>
+        <div class="view-toggle">
+          <button class="view-btn" data-sort="desc" title="Plus récent d'abord">Récent</button>
+          <button class="view-btn" data-sort="asc" title="Plus ancien d'abord">Ancien</button>
         </div>
         <span class="sync-badge"><span class="sync-dot"></span>Synchronisé sur Firestore</span>
       </div>
@@ -612,6 +622,11 @@
   var filterType = null;
   var filterAccount = null;
   var searchTerm = '';
+  var sortOrder = 'desc';
+  try{
+    var savedSort = localStorage.getItem('recipe-catalog-sort');
+    if (savedSort === 'asc' || savedSort === 'desc') sortOrder = savedSort;
+  }catch(e){}
   var tagColors = ['sage','mustard','clay','navy','rust'];
   var loadedTypes = false, loadedRecipes = false, loadedAccounts = false;
   var cardCache = {};
@@ -1114,7 +1129,9 @@
   }
 
   function reconcileCards(){
-    var sortedAll = state.recipes.slice().sort(function(a,b){ return b.createdAt - a.createdAt; });
+    var sortedAll = state.recipes.slice().sort(function(a,b){
+      return sortOrder === 'asc' ? (a.createdAt - b.createdAt) : (b.createdAt - a.createdAt);
+    });
     var validIds = {};
     sortedAll.forEach(function(r){ validIds[r.id] = true; });
 
@@ -1546,7 +1563,136 @@
   }
 
   document.getElementById('add-recipe-btn').addEventListener('click', openAddRecipeModal);
+  async function exportBackup(){
+    if (!db){ alert('Pas encore connecté à la base de données.'); return; }
+    var btn = document.getElementById('backup-btn');
+    btn.disabled = true; btn.textContent = 'Préparation…';
+    try{
+      var recipesSnap = await db.collection('recipes').get();
+      var typesSnap = await db.collection('types').get();
+      var accountsSnap = await db.collection('accounts').get();
+
+      var recipes = recipesSnap.docs.map(function(d){
+        var data = d.data();
+        var createdAtMs = (data.createdAt && data.createdAt.toMillis) ? data.createdAt.toMillis() : null;
+        return {
+          id: d.id,
+          title: data.title || '',
+          url: data.url || '',
+          notes: data.notes || '',
+          type: data.type || null,
+          account: data.account || null,
+          createdAtMs: createdAtMs
+        };
+      });
+      var types = typesSnap.docs.map(function(d){
+        var data = d.data();
+        return { id: d.id, name: data.name || '', icon: data.icon || 'plat' };
+      });
+      var accounts = accountsSnap.docs.map(function(d){
+        var data = d.data();
+        return { id: d.id, name: data.name || '' };
+      });
+
+      var backup = {
+        exportedAt: new Date().toISOString(),
+        recipes: recipes,
+        types: types,
+        accounts: accounts
+      };
+
+      var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      var blobUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var dateStr = new Date().toISOString().slice(0, 10);
+      a.href = blobUrl;
+      a.download = 'carnet-recettes-backup-' + dateStr + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    }catch(e){
+      alert('Erreur lors de la sauvegarde : ' + e.message);
+    }
+    btn.disabled = false; btn.textContent = 'Sauvegarder';
+  }
+
+  function initBackupRestoreControls(){
+    document.getElementById('backup-btn').addEventListener('click', exportBackup);
+
+    document.getElementById('restore-btn-open').addEventListener('click', function(){
+      document.getElementById('restore-file-input').click();
+    });
+
+    document.getElementById('restore-file-input').addEventListener('change', function(e){
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = async function(evt){
+        var data;
+        try{
+          data = JSON.parse(evt.target.result);
+        }catch(err){
+          alert('Fichier JSON invalide.');
+          e.target.value = '';
+          return;
+        }
+
+        var recipeCount = (data.recipes || []).length;
+        var typeCount = (data.types || []).length;
+        var accountCount = (data.accounts || []).length;
+        var msg = 'Restaurer cette sauvegarde ? ' + recipeCount + ' recette(s), ' + typeCount + ' type(s), ' + accountCount + ' compte(s).\n' +
+          'Les éléments ayant le même identifiant que dans le fichier seront écrasés. Les autres ne sont pas touchés.';
+        if (!confirm(msg)){ e.target.value = ''; return; }
+
+        if (!db){ alert('Pas encore connecté à la base de données.'); e.target.value = ''; return; }
+
+        try{
+          var allItems = [];
+          (data.types || []).forEach(function(t){
+            allItems.push({ col: 'types', id: t.id, payload: { name: t.name || '', icon: t.icon || 'plat' } });
+          });
+          (data.accounts || []).forEach(function(a){
+            allItems.push({ col: 'accounts', id: a.id, payload: { name: a.name || '' } });
+          });
+          (data.recipes || []).forEach(function(r){
+            allItems.push({
+              col: 'recipes',
+              id: r.id,
+              payload: {
+                title: r.title || '',
+                url: r.url || '',
+                notes: r.notes || '',
+                type: r.type || null,
+                account: r.account || null,
+                createdAt: r.createdAtMs ? firebase.firestore.Timestamp.fromMillis(r.createdAtMs) : firebase.firestore.FieldValue.serverTimestamp()
+              }
+            });
+          });
+
+          var chunkSize = 400;
+          for (var i = 0; i < allItems.length; i += chunkSize){
+            var chunk = allItems.slice(i, i + chunkSize);
+            var batch = db.batch();
+            chunk.forEach(function(item){
+              var ref = item.id ? db.collection(item.col).doc(item.id) : db.collection(item.col).doc();
+              batch.set(ref, item.payload, { merge: true });
+            });
+            await batch.commit();
+          }
+
+          alert('Restauration terminée : ' + recipeCount + ' recette(s), ' + typeCount + ' type(s), ' + accountCount + ' compte(s).');
+        }catch(err){
+          alert('Erreur lors de la restauration : ' + err.message);
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+  }
+
   initAccountFilterControls();
+  initBackupRestoreControls();
   document.getElementById('import-btn-open').addEventListener('click', openImportModal);
   document.getElementById('empty-add-btn').addEventListener('click', openAddRecipeModal);
 
@@ -1566,12 +1712,12 @@
   function applyViewMode(){
     var grid = ensureGridDiv();
     grid.classList.toggle('view-stack', viewMode === 'stack');
-    document.querySelectorAll('.view-btn').forEach(function(b){
+    document.querySelectorAll('.view-btn[data-view]').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-view') === viewMode);
     });
   }
 
-  document.querySelectorAll('.view-btn').forEach(function(b){
+  document.querySelectorAll('.view-btn[data-view]').forEach(function(b){
     b.addEventListener('click', function(){
       viewMode = b.getAttribute('data-view');
       try{ localStorage.setItem('recipe-catalog-view', viewMode); }catch(e){}
@@ -1579,6 +1725,56 @@
     });
   });
   applyViewMode();
+
+  // ⚠️ Verrou simple, pas une vraie sécurité : ce mot de passe est visible
+  // dans le code source par quiconque l'inspecte. Remplace-le par ta propre
+  // phrase avant de déployer — il sert juste à éviter un clic accidentel
+  // sur Sauvegarder/Restaurer, pas à protéger la base contre quelqu'un de
+  // déterminé (les règles Firestore restent ouvertes en dessous).
+  var ADMIN_PASSPHRASE = 'change-moi';
+  var adminUnlocked = false;
+  try{ adminUnlocked = localStorage.getItem('recipe-catalog-admin') === 'true'; }catch(e){}
+
+  function applyAdminState(){
+    document.getElementById('admin-tools').hidden = !adminUnlocked;
+    document.getElementById('admin-toggle-btn').textContent = adminUnlocked ? 'Verrouiller' : 'Mode admin';
+  }
+
+  document.getElementById('admin-toggle-btn').addEventListener('click', function(){
+    if (adminUnlocked){
+      adminUnlocked = false;
+      try{ localStorage.setItem('recipe-catalog-admin', 'false'); }catch(e){}
+      applyAdminState();
+      return;
+    }
+    var input = prompt('Phrase de passe admin :');
+    if (input === null) return;
+    if (input === ADMIN_PASSPHRASE){
+      adminUnlocked = true;
+      try{ localStorage.setItem('recipe-catalog-admin', 'true'); }catch(e){}
+      applyAdminState();
+    } else {
+      alert('Phrase de passe incorrecte.');
+    }
+  });
+
+  applyAdminState();
+
+  function applySortButtons(){
+    document.querySelectorAll('.view-btn[data-sort]').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-sort') === sortOrder);
+    });
+  }
+
+  document.querySelectorAll('.view-btn[data-sort]').forEach(function(b){
+    b.addEventListener('click', function(){
+      sortOrder = b.getAttribute('data-sort');
+      try{ localStorage.setItem('recipe-catalog-sort', sortOrder); }catch(e){}
+      applySortButtons();
+      reconcileCards();
+    });
+  });
+  applySortButtons();
 
   initFirebase();
 })();
