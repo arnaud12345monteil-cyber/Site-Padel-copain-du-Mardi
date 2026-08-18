@@ -109,9 +109,12 @@
       <div class="hint" id="avail-hint">Clique sur deux joueurs disponibles pour former une équipe.</div>
       <div class="players-grid" id="available-grid"></div>
       <div class="btn-row">
-        <button class="btn secondary" onclick="autoFormTeams()">🎲 Former les équipes restantes au hasard</button>
+        <button class="btn secondary" onclick="autoFormTeams()">🎲 Au hasard</button>
+        <button class="btn secondary" onclick="formTeamsBalanced()">⚖️ Équilibrer le niveau</button>
+        <button class="btn secondary" onclick="formTeamsVariedPartners()">🔀 Varier les partenaires</button>
         <button class="btn secondary" onclick="resetTeams()">↺ Tout réinitialiser</button>
       </div>
+      <div class="hint" id="strategy-hint"></div>
     </div>
 
     <div class="section">
@@ -320,6 +323,82 @@ function autoFormTeams() {
   pendingSelection = [];
   renderTeams();
   if (avail.length === 1) toast('⚠️ ' + avail[0] + ' reste sans équipe (nombre impair)');
+  document.getElementById('strategy-hint').textContent = '';
+}
+
+// ── Historique : niveau moyen par joueur (jeux gagnés par match, tous matchs
+// avec score connu) — sert de base à l'équilibrage.
+function playerSkill(p) {
+  let jeux = 0, matchs = 0;
+  (state.matches || []).forEach(m => {
+    if (!Array.isArray(m.score)) return;
+    if (m.team1.includes(p)) { jeux += m.score[0]; matchs++; }
+    else if (m.team2.includes(p)) { jeux += m.score[1]; matchs++; }
+  });
+  return matchs > 0 ? jeux / matchs : null; // null = pas d'historique
+}
+
+// ── Historique : nombre de fois où deux joueurs ont déjà fait équipe ensemble
+function partnerCount(a, b) {
+  let count = 0;
+  (state.matches || []).forEach(m => {
+    if ((m.team1.includes(a) && m.team1.includes(b)) || (m.team2.includes(a) && m.team2.includes(b))) count++;
+  });
+  return count;
+}
+
+function formTeamsBalanced() {
+  let avail = availablePlayers();
+  if (avail.length < 2) return;
+
+  const skills = avail.map(p => ({ p, s: playerSkill(p) }));
+  const known = skills.filter(x => x.s !== null).map(x => x.s);
+  const avgSkill = known.length ? known.reduce((a,b)=>a+b,0) / known.length : 0;
+  skills.forEach(x => { if (x.s === null) x.s = avgSkill; }); // pas d'historique = niveau moyen supposé
+  skills.sort((a,b) => b.s - a.s); // du meilleur au moins bon
+
+  // Appariement "serpent" : le meilleur avec le moins bon, etc. — équilibre les
+  // équipes entre elles plutôt que de regrouper les meilleurs ensemble.
+  let lo = 0, hi = skills.length - 1;
+  const noHistory = skills.some(x => playerSkill(x.p) === null);
+  while (lo < hi) {
+    teams.push({ id: Date.now()+Math.random(), players: [skills[lo].p, skills[hi].p] });
+    lo++; hi--;
+  }
+  pendingSelection = [];
+  renderTeams();
+  if (lo === hi) toast('⚠️ ' + skills[lo].p + ' reste sans équipe (nombre impair)');
+  document.getElementById('strategy-hint').textContent = noHistory
+    ? 'Équilibrage basé sur les jeux gagnés/match — certains joueurs sans historique ont été supposés de niveau moyen.'
+    : 'Équilibrage basé sur les jeux gagnés/match, tous matchs confondus.';
+}
+
+function formTeamsVariedPartners() {
+  let avail = availablePlayers();
+  if (avail.length < 2) return;
+
+  const noHistory = !(state.matches && state.matches.length);
+  // Glouton : à chaque étape, associe le joueur restant avec celui avec qui il
+  // a le moins souvent fait équipe par le passé (aléatoire en cas d'égalité).
+  while (avail.length >= 2) {
+    const p1 = avail[Math.floor(Math.random() * avail.length)];
+    const rest = avail.filter(p => p !== p1);
+    let best = null, bestCount = Infinity;
+    rest.forEach(p2 => {
+      const c = partnerCount(p1, p2);
+      if (c < bestCount) { bestCount = c; best = [p2]; }
+      else if (c === bestCount) { best.push(p2); }
+    });
+    const p2 = best[Math.floor(Math.random() * best.length)];
+    teams.push({ id: Date.now()+Math.random(), players: [p1, p2] });
+    avail = avail.filter(p => p !== p1 && p !== p2);
+  }
+  pendingSelection = [];
+  renderTeams();
+  if (avail.length === 1) toast('⚠️ ' + avail[0] + ' reste sans équipe (nombre impair)');
+  document.getElementById('strategy-hint').textContent = noHistory
+    ? 'Aucun historique de matchs trouvé — équivaut à un tirage au hasard pour cette fois.'
+    : 'Priorité aux duos qui ont le moins souvent joué ensemble par le passé.';
 }
 
 function resetTeams() {
@@ -329,6 +408,7 @@ function resetTeams() {
   generatedMatches = [];
   renderTeams();
   renderMatchesList();
+  document.getElementById('strategy-hint').textContent = '';
   if (state.team_setups && state.team_setups[date]) {
     delete state.team_setups[date];
     docRef.update({ team_setups: state.team_setups }).catch(() => {});
