@@ -499,7 +499,7 @@
 </style>
 </head>
 <body>
-<div class="version-badge">v7</div>
+<div class="version-badge">v8</div>
 <div id="fb-root"></div>
 <script async defer crossorigin="anonymous" src="https://connect.facebook.net/fr_FR/sdk.js#xfbml=1&version=v21.0"></script>
 <svg class="doodle" style="top:110px; left:2.2vw; color:var(--sage); transform:rotate(-14deg);" width="60" height="60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1085,7 +1085,7 @@
       embedHtml +
       (r.notes ? '<p class="notes">' + escapeHtml(r.notes) + '</p>' : '<p class="notes" style="opacity:0.5">Pas de note</p>') +
       '<div class="card-footer">' +
-      '<a class="ig-link" href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer">Voir sur Instagram ↗</a>' +
+      '<a class="ig-link" href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer">' + (isFacebookUrl(r.url) ? 'Voir sur Facebook' : 'Voir sur Instagram') + ' ↗</a>' +
       '</div></div>';
     return el;
   }
