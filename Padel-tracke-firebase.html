@@ -2,6 +2,34 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.23 — 2026-09-07
+    Refonte du flux d'exclusion : le tirage reste une proposition locale tant
+    que "Désinscrire ces joueurs" n'est pas cliqué (avec confirm() comme
+    validation explicite) — jusque-là, "Refaire le tirage" permet de retirer
+    et retenter sans rien avoir enregistré. La désinscription retire
+    désormais réellement les joueurs des présences de la séance (en plus de
+    l'historique), en une seule transaction Firestore. Chaque entrée
+    d'historique créée par ce nouveau flux a un bouton ↩ pour annuler : ça
+    réinscrit les joueurs ET retire l'entrée de l'historique, comme si
+    l'exclusion n'avait jamais eu lieu (pour ne pas pénaliser injustement
+    leurs futurs tirages). Les entrées créées par l'ancienne version (v1.22,
+    sans id) restent affichées mais sans bouton d'annulation, puisqu'elles ne
+    correspondent à aucune vraie désinscription.
+
+  v1.22 — 2026-09-07
+    Nouvel onglet "Exclusions" (admin) : tirage au sort pour exclure des
+    joueurs d'une séance quand le nombre d'inscrits n'est pas un multiple de
+    4 (padel = équipes de 2). Le tirage priorise les joueurs le moins souvent
+    exclus par le passé (lu depuis exclusion_history), départage aléatoire en
+    cas d'égalité — pour ne jamais exclure systématiquement les mêmes.
+    Tirage affiché en proposition avant validation explicite, écrit en base
+    par transaction Firestore (lecture fraîche avant écriture, comme les
+    autres corrections de ce type dans ce fichier). Historique des exclusions
+    (date + joueurs) affiché en dessous, le plus récent en premier.
+    Important : l'exclusion ne retire PAS le joueur des présences de la
+    séance (state.sessions) — seulement de l'historique de tirage, pour ne
+    pas fausser les statistiques de présence.
+
   v1.21 — 2026-09-07
     Bouton "📋 Toutes les séances" dans l'onglet Prochaine séance (même
     principe que "Tous les matchs") — affiche les séances à venir au-delà
@@ -382,6 +410,7 @@
     <button class="tab-btn" data-tab="tab-table" onclick="switchTab('tab-table')">Tableau présences</button>
     <button class="tab-btn" data-tab="tab-stats" onclick="switchTab('tab-stats')">Statistiques joueurs</button>
     <button class="tab-btn" data-tab="tab-ranking" onclick="switchTab('tab-ranking')">Classement</button>
+    <button class="tab-btn" data-tab="tab-exclusions" onclick="switchTab('tab-exclusions')">Exclusions</button>
   </div>
 
   <div class="tab-panel active" id="tab-next">
@@ -475,6 +504,26 @@
     </div>
   </div>
   <div style="text-align:center;padding:20px 0 0"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-exclusions">
+  <div class="section-title">Tirage au sort d'exclusion</div>
+  <div class="admin-only" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:24px">
+    <div class="modal-row">
+      <label>Séance concernée</label>
+      <select id="exclusion-session-select" onchange="onExclusionSessionChange()"></select>
+    </div>
+    <div id="exclusion-summary" style="font-size:12px;color:var(--muted);margin:12px 0"></div>
+    <div id="exclusion-draw-result" style="margin:12px 0"></div>
+    <div class="btn-row" style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="exclusion-draw-btn" onclick="runExclusionDraw()">🎲 Tirer au sort</button>
+      <button class="btn secondary" id="exclusion-redraw-btn" onclick="runExclusionDraw()" style="display:none">🔄 Refaire le tirage</button>
+      <button class="btn" id="exclusion-unregister-btn" onclick="unregisterExcludedPlayers()" style="display:none;background:var(--danger);color:#fff">🚫 Désinscrire ces joueurs</button>
+    </div>
+  </div>
+
+  <div class="section-title">Historique des exclusions</div>
+  <div id="exclusion-history-list" style="font-size:12px"></div>
   </div>
 </main>
 
@@ -659,7 +708,7 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {} };
-const APP_VERSION = 'v1.21';
+const APP_VERSION = 'v1.23';
 const APP_VERSION_DATE = '2026-08-17';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
@@ -2300,6 +2349,193 @@ function restoreTheme() {
   }
 }
 
+// ── Tirage au sort d'exclusion ──────────────────────────────────────────────
+let _pendingExclusionDraw = null; // { sessionId, sessionDate, excludedPlayers } tant que non validé
+
+function renderExclusionTab() {
+  const sel = document.getElementById('exclusion-session-select');
+  if (!sel) return; // pas encore chargé au tout premier rendu
+  const prev = sel.value;
+  const sorted = [...state.sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  sel.innerHTML = sorted.map(s => '<option value="' + s.id + '">' + s.date + (s.label ? ' — ' + s.label : '') + '</option>').join('');
+  if (prev && sorted.some(s => String(s.id) === prev)) sel.value = prev;
+  onExclusionSessionChange();
+  renderExclusionHistory();
+}
+
+function computeExclusionCount(attendeeCount) {
+  return attendeeCount % 4;
+}
+
+function onExclusionSessionChange() {
+  _pendingExclusionDraw = null;
+  document.getElementById('exclusion-draw-result').innerHTML = '';
+  document.getElementById('exclusion-redraw-btn').style.display = 'none';
+  document.getElementById('exclusion-unregister-btn').style.display = 'none';
+  document.getElementById('exclusion-draw-btn').style.display = '';
+
+  const sel = document.getElementById('exclusion-session-select');
+  const summary = document.getElementById('exclusion-summary');
+  const drawBtn = document.getElementById('exclusion-draw-btn');
+  const session = state.sessions.find(s => String(s.id) === sel.value);
+  if (!session) { summary.textContent = ''; drawBtn.disabled = true; return; }
+
+  const count = session.attendees.size;
+  const toExclude = computeExclusionCount(count);
+
+  if (count < 4) {
+    summary.innerHTML = count + ' joueur(s) inscrit(s) — pas assez pour former un groupe complet, aucune exclusion applicable.';
+    drawBtn.disabled = true;
+  } else if (toExclude === 0) {
+    summary.innerHTML = count + ' joueurs inscrits — déjà un multiple de 4, aucune exclusion nécessaire.';
+    drawBtn.disabled = true;
+  } else {
+    summary.innerHTML = count + ' joueurs inscrits — <strong>' + toExclude + '</strong> à exclure pour retomber à ' + (count - toExclude) + '.';
+    drawBtn.disabled = false;
+  }
+}
+
+// Tirage pondéré par l'historique : les joueurs le moins souvent exclus par le
+// passé sont prioritaires pour être tirés cette fois (équilibre sur la durée),
+// départage aléatoire entre joueurs à égalité de compte.
+function drawExclusions(attendees, excludeCount, history) {
+  const exclusionCounts = {};
+  attendees.forEach(p => { exclusionCounts[p] = 0; });
+  (history || []).forEach(entry => {
+    (entry.excludedPlayers || []).forEach(p => {
+      if (exclusionCounts[p] !== undefined) exclusionCounts[p]++;
+    });
+  });
+
+  const sortedByCount = [...attendees].sort((a, b) => exclusionCounts[a] - exclusionCounts[b]);
+  const selected = [];
+  let i = 0;
+  while (selected.length < excludeCount && i < sortedByCount.length) {
+    const currentCount = exclusionCounts[sortedByCount[i]];
+    const group = sortedByCount.filter(p => exclusionCounts[p] === currentCount && !selected.includes(p));
+    for (let j = group.length - 1; j > 0; j--) {
+      const k = Math.floor(Math.random() * (j + 1));
+      [group[j], group[k]] = [group[k], group[j]];
+    }
+    const needed = excludeCount - selected.length;
+    selected.push(...group.slice(0, needed));
+    i += group.length;
+  }
+  return selected;
+}
+
+function runExclusionDraw() {
+  const sel = document.getElementById('exclusion-session-select');
+  const session = state.sessions.find(s => String(s.id) === sel.value);
+  if (!session) return;
+
+  const attendees = [...session.attendees];
+  const toExclude = computeExclusionCount(attendees.length);
+  if (toExclude === 0) return;
+
+  const excluded = drawExclusions(attendees, toExclude, state.exclusion_history);
+  _pendingExclusionDraw = { sessionId: session.id, sessionDate: session.date, excludedPlayers: excluded };
+
+  document.getElementById('exclusion-draw-result').innerHTML =
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px">'
+    + '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Tirés au sort (proposition, pas encore enregistrée)</div>'
+    + excluded.map(p => '<span class="ns-chip" style="border-color:var(--danger);color:var(--danger)">' + p + '</span>').join('')
+    + '</div>';
+  document.getElementById('exclusion-draw-btn').style.display = 'none';
+  document.getElementById('exclusion-redraw-btn').style.display = '';
+  document.getElementById('exclusion-unregister-btn').style.display = '';
+}
+
+function unregisterExcludedPlayers() {
+  if (!_pendingExclusionDraw) return;
+  const { sessionId, sessionDate, excludedPlayers } = _pendingExclusionDraw;
+
+  if (!confirm('Désinscrire ' + excludedPlayers.join(', ') + ' de la séance du ' + formatDate(sessionDate) + ' ?\n\nCette action peut être annulée ensuite depuis l\'historique si besoin.')) {
+    return;
+  }
+
+  db.runTransaction(tx => tx.get(DOC_REF).then(snap => {
+    const data = snap.data() || {};
+    const freshSessions = data.sessions || [];
+    const idx = freshSessions.findIndex(s => String(s.id) === String(sessionId));
+    if (idx === -1) throw new Error('Séance introuvable côté serveur (supprimée entre-temps ?)');
+    const att = freshSessions[idx].attendees || [];
+    freshSessions[idx] = { ...freshSessions[idx], attendees: att.filter(p => !excludedPlayers.includes(p)) };
+
+    const freshHistory = data.exclusion_history || [];
+    freshHistory.push({
+      id: Date.now(),
+      date: sessionDate,
+      sessionId: sessionId,
+      excludedPlayers: excludedPlayers,
+      createdAt: new Date().toISOString(),
+    });
+
+    tx.update(DOC_REF, { sessions: freshSessions, exclusion_history: freshHistory });
+    return { freshSessions, freshHistory };
+  })).then(({ freshSessions, freshHistory }) => {
+    state.sessions = freshSessions.map(s => ({ ...s, attendees: new Set(s.attendees || []) }));
+    state.exclusion_history = freshHistory;
+    _pendingExclusionDraw = null;
+    document.getElementById('exclusion-draw-result').innerHTML = '';
+    document.getElementById('exclusion-draw-btn').style.display = '';
+    document.getElementById('exclusion-redraw-btn').style.display = 'none';
+    document.getElementById('exclusion-unregister-btn').style.display = 'none';
+    render(); // rafraîchit tout ce qui dépend des présences (prochaine séance, tableau, stats, classements...)
+    renderExclusionTab();
+    toast('✓ Joueurs désinscrits');
+  }).catch(e => toast('Erreur : ' + e.message));
+}
+
+function undoExclusion(entryId) {
+  const entry = (state.exclusion_history || []).find(e => e.id === entryId);
+  if (!entry) return;
+
+  if (!confirm('Annuler cette désinscription et réinscrire ' + entry.excludedPlayers.join(', ') + ' à la séance du ' + formatDate(entry.date) + ' ?')) {
+    return;
+  }
+
+  db.runTransaction(tx => tx.get(DOC_REF).then(snap => {
+    const data = snap.data() || {};
+    const freshSessions = data.sessions || [];
+    const idx = freshSessions.findIndex(s => String(s.id) === String(entry.sessionId));
+    if (idx !== -1) {
+      const att = new Set(freshSessions[idx].attendees || []);
+      entry.excludedPlayers.forEach(p => att.add(p));
+      freshSessions[idx] = { ...freshSessions[idx], attendees: [...att] };
+    }
+    const freshHistory = (data.exclusion_history || []).filter(e => e.id !== entryId);
+    tx.update(DOC_REF, { sessions: freshSessions, exclusion_history: freshHistory });
+    return { freshSessions, freshHistory };
+  })).then(({ freshSessions, freshHistory }) => {
+    state.sessions = freshSessions.map(s => ({ ...s, attendees: new Set(s.attendees || []) }));
+    state.exclusion_history = freshHistory;
+    render();
+    renderExclusionTab();
+    toast('✓ Désinscription annulée');
+  }).catch(e => toast('Erreur : ' + e.message));
+}
+
+function renderExclusionHistory() {
+  const list = document.getElementById('exclusion-history-list');
+  if (!list) return;
+  const history = [...(state.exclusion_history || [])].reverse(); // le plus récent d'abord
+  if (history.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px">Aucune exclusion enregistrée pour le moment.</div>';
+    return;
+  }
+  list.innerHTML = history.map(entry => {
+    const undoBtn = entry.id
+      ? '<button class="del-btn admin-only" onclick="undoExclusion(' + entry.id + ')" title="Annuler cette désinscription" style="font-size:15px">↩</button>'
+      : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding:8px 0">'
+      + '<span style="color:var(--muted);white-space:nowrap">' + formatDate(entry.date) + '</span>'
+      + '<span style="flex:1">' + (entry.excludedPlayers || []).join(', ') + '</span>'
+      + undoBtn
+      + '</div>';
+  }).join('');
+}
+
 function toggleAdmin() {
   if (!document.body.classList.contains('locked')) {
     // Currently unlocked → lock
@@ -2365,8 +2601,9 @@ DOC_REF.onSnapshot(function(snap) {
     state.pc_status = data.pc_status || null;
     state.pc_status_log = data.pc_status_log || [];
     state.task_status = data.task_status || {};
+    state.exclusion_history = data.exclusion_history || [];
     state.task_status_updated = data.task_status_updated || null;
-    setTimeout(function() { restoreDateFilters(); render(); renderPcStatus(); renderTasksStatus(); }, 50);
+    setTimeout(function() { restoreDateFilters(); render(); renderPcStatus(); renderTasksStatus(); renderExclusionTab(); }, 50);
   } else {
     pushToFirebase();
   }
