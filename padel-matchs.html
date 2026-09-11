@@ -173,12 +173,27 @@ docRef.onSnapshot(snap => {
   toast('Erreur Firebase : ' + err.message);
 });
 
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Marge en jours pour rattraper une saisie oubliée — ajuste ce nombre si besoin.
+const PAST_DAYS_MARGIN = 7;
+
+function earliestSelectableDate() {
+  const d = new Date();
+  d.setDate(d.getDate() - PAST_DAYS_MARGIN);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 function populateSessionSelect() {
   const sel = document.getElementById('session-select');
   const prev = sel.value;
-  const sorted = [...state.sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
-  sel.innerHTML = sorted.map(s => '<option value="' + s.date + '">' + s.date + (s.label ? ' — ' + s.label : '') + '</option>').join('');
-  if (prev && sorted.some(s => s.date === prev)) sel.value = prev;
+  const minDate = earliestSelectableDate();
+  const upcoming = state.sessions.filter(s => s.date >= minDate).sort((a,b) => new Date(a.date) - new Date(b.date));
+  sel.innerHTML = upcoming.map(s => '<option value="' + s.date + '">' + s.date + (s.label ? ' — ' + s.label : '') + '</option>').join('');
+  if (prev && upcoming.some(s => s.date === prev)) sel.value = prev;
   onSessionChange();
 }
 
