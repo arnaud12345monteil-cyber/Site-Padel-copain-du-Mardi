@@ -2,6 +2,20 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.25 — 2026-09-07
+    Mot de passe admin changé (padel2025 -> 0350).
+    Bouton "🗑️ Effacer l'historique" (admin) dans la modale PC allumé —
+    vide pc_status_log, laisse pc_status (dernier statut) intact.
+    L'affichage des tâches planifiées quitte le badge+modale et devient un
+    onglet "Tâches planifiées" après Exclusions, entièrement invisible pour
+    les non-admins (nouvelle classe CSS admin-hidden : display:none, pas
+    juste grisé comme admin-only) — bouton et panneau basculent
+    automatiquement vers un autre onglet si on se verrouille dessus. Cartes
+    plus lisibles (état/dernière exécution+résultat/prochaine exécution
+    côte à côte) avec un bouton masquer/afficher par tâche
+    (hidden_tasks, partagé via Firebase) et une section séparée pour
+    retrouver les tâches masquées.
+
   v1.24 — 2026-09-07
     Le menu déroulant de sélection de séance dans l'onglet Exclusions
     n'affiche plus que les séances à venir (date >= aujourd'hui), triées par
@@ -285,6 +299,7 @@
   .admin-btn.unlocked { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.06); }
   .admin-only { transition: opacity 0.2s; }
   body.locked .admin-only { opacity: 0.25; pointer-events: none; user-select: none; }
+  body.locked .admin-hidden { display: none !important; }
   /* Spots counter in modal */
   .spots-counter { display: flex; align-items: center; gap: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; margin-top: 12px; }
   .spots-counter .spots-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); flex: 1; }
@@ -387,7 +402,6 @@
 </head>
 <body class="">
 <span id="pc-status-badge" onclick="openPcLogModal()" style="position:fixed;top:24px;right:10px;max-width:180px;text-align:right;font-size:9px;letter-spacing:1px;z-index:50;cursor:pointer;text-decoration:underline dotted" title="Voir l'historique"></span>
-<span id="tasks-status-badge" onclick="openTasksStatusModal()" style="position:fixed;top:58px;right:10px;max-width:180px;text-align:right;font-size:9px;letter-spacing:1px;z-index:50;cursor:pointer;text-decoration:underline dotted;color:var(--muted)" title="Voir le détail des tâches planifiées"></span>
 <span id="app-version" style="position:fixed;top:8px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
 <header>
   <div class="logo-area">
@@ -417,6 +431,7 @@
     <button class="tab-btn" data-tab="tab-stats" onclick="switchTab('tab-stats')">Statistiques joueurs</button>
     <button class="tab-btn" data-tab="tab-ranking" onclick="switchTab('tab-ranking')">Classement</button>
     <button class="tab-btn" data-tab="tab-exclusions" onclick="switchTab('tab-exclusions')">Exclusions</button>
+    <button class="tab-btn admin-hidden" data-tab="tab-tasks" onclick="switchTab('tab-tasks')">Tâches planifiées</button>
   </div>
 
   <div class="tab-panel active" id="tab-next">
@@ -531,6 +546,12 @@
   <div class="section-title">Historique des exclusions</div>
   <div id="exclusion-history-list" style="font-size:12px"></div>
   </div>
+
+  <div class="tab-panel admin-hidden" id="tab-tasks">
+  <div class="section-title">Tâches planifiées</div>
+  <div id="tasks-tab-list"></div>
+  <div id="tasks-hidden-section" style="margin-top:24px"></div>
+  </div>
 </main>
 
 <!-- Modal: Renommer joueur -->
@@ -539,17 +560,8 @@
     <h2>Historique PC allumé</h2>
     <div id="pc-log-list" style="font-size:11px;color:var(--text);line-height:2"></div>
     <div class="modal-actions">
+      <button class="btn secondary admin-only" onclick="clearPcLog()" style="color:var(--danger);border-color:var(--danger)">🗑️ Effacer l'historique</button>
       <button class="btn secondary" onclick="document.getElementById('pc-log-modal').classList.remove('open')">Fermer</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="tasks-status-modal">
-  <div class="modal" style="max-width:520px;max-height:80vh;overflow-y:auto">
-    <h2>Tâches planifiées</h2>
-    <div id="tasks-status-list" style="font-size:11px;color:var(--text)"></div>
-    <div class="modal-actions">
-      <button class="btn secondary" onclick="document.getElementById('tasks-status-modal').classList.remove('open')">Fermer</button>
     </div>
   </div>
 </div>
@@ -714,7 +726,7 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {} };
-const APP_VERSION = 'v1.24';
+const APP_VERSION = 'v1.25';
 const APP_VERSION_DATE = '2026-08-17';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
@@ -1045,7 +1057,16 @@ function renderPcStatus() {
   badge.style.color = fresh ? 'var(--accent2)' : 'var(--danger)';
 }
 setInterval(renderPcStatus, 60000);
-setInterval(renderTasksStatus, 60000);
+setInterval(renderTasksTab, 60000);
+
+function clearPcLog() {
+  if (!confirm('Effacer tout l\'historique PC allumé ? Cette action est irréversible.')) return;
+  DOC_REF.update({ pc_status_log: [] }).then(() => {
+    state.pc_status_log = [];
+    document.getElementById('pc-log-list').innerHTML = '<div style="color:var(--muted);font-size:11px">Aucun historique disponible pour le moment.</div>';
+    toast('✓ Historique effacé');
+  }).catch(e => toast('Erreur : ' + e.message));
+}
 
 function openPcLogModal() {
   const list = document.getElementById('pc-log-list');
@@ -1066,49 +1087,70 @@ function openPcLogModal() {
 }
 
 // ── Statut des tâches planifiées — écrit par task_status_report.py ─────────
-function renderTasksStatus() {
-  const badge = document.getElementById('tasks-status-badge');
-  if (!badge) return;
-  const tasks = state.task_status || {};
-  const names = Object.keys(tasks);
-  if (names.length === 0) { badge.innerHTML = ''; return; }
-
-  const anyFailed = names.some(n => tasks[n].last_result_code !== 0);
-  const updated = state.task_status_updated ? new Date(state.task_status_updated) : null;
-  const ageMin = updated ? Math.round((Date.now() - updated.getTime()) / 60000) : null;
-  const ageLabel = ageMin === null ? '' : ageMin < 1 ? "à l'instant" : ageMin < 60 ? 'il y a ' + ageMin + ' min' : 'il y a ' + Math.round(ageMin/60) + 'h';
-
-  badge.innerHTML = (anyFailed ? '🔴 ' : '🟢 ') + names.length + ' tâche(s)'
-    + '<div style="font-size:8px;margin-top:2px">' + ageLabel + '</div>';
+function taskCardHtml(name, t, isHidden) {
+  const ok = t.last_result_code === 0;
+  const statusColor = ok ? 'var(--accent2)' : 'var(--danger)';
+  const lastRun = t.last_run ? formatExactDateTimeSec(new Date(t.last_run)) : 'jamais';
+  const nextRun = t.next_run ? formatExactDateTimeSec(new Date(t.next_run)) : '—';
+  const toggleBtn = isHidden
+    ? '<button class="btn secondary" onclick="setTaskHidden(\'' + name.replace(/'/g,"\\'") + '\', false)" style="font-size:10px;padding:4px 10px">👁️ Afficher</button>'
+    : '<button class="btn secondary" onclick="setTaskHidden(\'' + name.replace(/'/g,"\\'") + '\', true)" style="font-size:10px;padding:4px 10px">🙈 Masquer</button>';
+  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+    + '<strong style="font-size:14px">' + name + '</strong>'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<span style="color:var(--muted);font-size:10px;letter-spacing:1px;text-transform:uppercase">' + (t.state || '') + '</span>'
+    + toggleBtn
+    + '</div></div>'
+    + '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;font-size:11px">'
+    + '<div><div style="color:var(--muted);font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Dernière exécution</div>' + lastRun + '</div>'
+    + '<div><div style="color:var(--muted);font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Résultat</div><span style="color:' + statusColor + '">' + (t.last_result_label || '') + '</span></div>'
+    + '<div><div style="color:var(--muted);font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Prochaine exécution</div>' + nextRun + '</div>'
+    + '</div>'
+    + '</div>';
 }
 
-function openTasksStatusModal() {
-  const list = document.getElementById('tasks-status-list');
+function renderTasksTab() {
+  const list = document.getElementById('tasks-tab-list');
+  const hiddenSection = document.getElementById('tasks-hidden-section');
+  if (!list) return;
+
   const tasks = state.task_status || {};
+  const hidden = state.hidden_tasks || [];
   const names = Object.keys(tasks).sort();
 
   if (names.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:11px">Aucune donnée disponible pour le moment.</div>';
-  } else {
-    list.innerHTML = names.map(name => {
-      const t = tasks[name];
-      const ok = t.last_result_code === 0;
-      const statusColor = ok ? 'var(--accent2)' : 'var(--danger)';
-      const lastRun = t.last_run ? formatExactDateTimeSec(new Date(t.last_run)) : 'jamais';
-      const nextRun = t.next_run ? formatExactDateTimeSec(new Date(t.next_run)) : '—';
-      return '<div style="border-bottom:1px solid var(--border);padding:8px 0">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center">'
-        + '<strong>' + name + '</strong>'
-        + '<span style="color:var(--muted);font-size:10px">' + (t.state || '') + '</span>'
-        + '</div>'
-        + '<div style="font-size:10px;color:var(--muted);margin-top:4px">'
-        + 'Dernière : ' + lastRun + ' — <span style="color:' + statusColor + '">' + (t.last_result_label || '') + '</span><br>'
-        + 'Prochaine : ' + nextRun
-        + '</div>'
-        + '</div>';
-    }).join('');
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px">Aucune donnée disponible pour le moment.</div>';
+    hiddenSection.innerHTML = '';
+    return;
   }
-  document.getElementById('tasks-status-modal').classList.add('open');
+
+  const visibleNames = names.filter(n => !hidden.includes(n));
+  const hiddenNames = names.filter(n => hidden.includes(n));
+
+  list.innerHTML = visibleNames.length
+    ? visibleNames.map(n => taskCardHtml(n, tasks[n], false)).join('')
+    : '<div style="color:var(--muted);font-size:12px">Toutes les tâches sont masquées.</div>';
+
+  hiddenSection.innerHTML = hiddenNames.length
+    ? '<div class="section-title" style="font-size:15px">Tâches masquées</div>' + hiddenNames.map(n => taskCardHtml(n, tasks[n], true)).join('')
+    : '';
+}
+
+function setTaskHidden(taskName, hide) {
+  DOC_REF.get().then(snap => {
+    const data = snap.data() || {};
+    let fresh = data.hidden_tasks || [];
+    if (hide) {
+      if (!fresh.includes(taskName)) fresh = [...fresh, taskName];
+    } else {
+      fresh = fresh.filter(n => n !== taskName);
+    }
+    return DOC_REF.update({ hidden_tasks: fresh }).then(() => fresh);
+  }).then(fresh => {
+    state.hidden_tasks = fresh;
+    renderTasksTab();
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 function todayISO() {
@@ -2319,7 +2361,7 @@ function deletePlayer(playerName) {
 // ── Admin password ────────────────────────────────────────────────────────────
 // Change 'padel2025' to whatever password you want
 const ADMIN_HASH = '7f1a2b9c3e4d5f6a8b0c1d2e3f4a5b6c'; // placeholder — replaced below
-const ADMIN_PWD  = 'padel2025'; // <-- change this to your password
+const ADMIN_PWD  = '0350'; // <-- change this to your password
 
 // ── Onglets ──────────────────────────────────────────────────────────────
 function switchTab(tabId) {
@@ -2335,6 +2377,7 @@ function switchTab(tabId) {
 }
 function restoreActiveTab() {
   const saved = localStorage.getItem('padel_active_tab');
+  if (saved === 'tab-tasks' && document.body.classList.contains('locked')) return; // reste sur l'onglet par défaut
   if (saved && document.getElementById(saved)) switchTab(saved);
 }
 
@@ -2553,6 +2596,7 @@ function toggleAdmin() {
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔒 Admin';
     btn.classList.remove('unlocked');
+    if (document.getElementById('tab-tasks')?.classList.contains('active')) switchTab('tab-next');
     toast('Mode lecture seule activé');
   } else {
     // Currently locked → ask password
@@ -2610,9 +2654,10 @@ DOC_REF.onSnapshot(function(snap) {
     state.pc_status = data.pc_status || null;
     state.pc_status_log = data.pc_status_log || [];
     state.task_status = data.task_status || {};
+    state.hidden_tasks = data.hidden_tasks || [];
     state.exclusion_history = data.exclusion_history || [];
     state.task_status_updated = data.task_status_updated || null;
-    setTimeout(function() { restoreDateFilters(); render(); renderPcStatus(); renderTasksStatus(); renderExclusionTab(); }, 50);
+    setTimeout(function() { restoreDateFilters(); render(); renderPcStatus(); renderTasksTab(); renderExclusionTab(); }, 50);
   } else {
     pushToFirebase();
   }
