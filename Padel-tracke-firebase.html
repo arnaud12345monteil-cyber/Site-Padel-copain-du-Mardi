@@ -432,7 +432,7 @@
   .bot-resa-terrain { font-size: 10px; color: var(--text); margin-top: 2px; font-weight: bold; }
 
   /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
-  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; }
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; align-items: center; height: 40px; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; }
   .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
   .app-nav a:hover { color: var(--text); }
   .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
@@ -447,8 +447,8 @@
   <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
   <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
 </nav>
-<span id="pc-status-badge" onclick="openPcLogModal()" style="position:fixed;top:24px;right:10px;max-width:180px;text-align:right;font-size:9px;letter-spacing:1px;z-index:50;cursor:pointer;text-decoration:underline dotted" title="Voir l'historique"></span>
-<span id="app-version" style="position:fixed;top:8px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
+<span id="pc-status-badge" onclick="openPcLogModal()" style="position:fixed;top:68px;right:10px;max-width:180px;text-align:right;font-size:9px;letter-spacing:1px;z-index:50;cursor:pointer;text-decoration:underline dotted" title="Voir l'historique"></span>
+<span id="app-version" style="position:fixed;top:50px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
 <header>
   <div class="logo-area">
     <h1>PADEL<br>MARDI</h1>

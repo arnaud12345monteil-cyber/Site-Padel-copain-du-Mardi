@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!--
+  PADEL INSCRIPTION — Historique des versions
+  ─────────────────────────────────────────
+  v1.0 — 2026-09-17
+    Début du suivi de version (comme le tracker principal). Appli unifiée :
+    barre de navigation partagée (Suivi / Inscription / Matchs / Bots),
+    installable en PWA (manifest.json + service worker + icônes).
+-->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padel Mardi — Mon inscription</title>
@@ -75,7 +83,7 @@
   }
 
   /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
-  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; align-items: center; height: 40px; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
   .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
   .app-nav a:hover { color: var(--text); }
   .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
@@ -91,6 +99,7 @@
   <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
   <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
 </nav>
+<span id="app-version" style="position:fixed;top:50px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
 <div class="wrap">
   <header>
     <h1>PADEL MARDI</h1>
@@ -136,6 +145,10 @@ const FIREBASE_CONFIG = {
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
+
+const APP_VERSION = 'v1.0';
+const APP_VERSION_DATE = '2026-09-17';
+document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
 let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {} };
 let currentPlayer = localStorage.getItem('padel_current_player') || '';
