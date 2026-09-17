@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel Mardi — Planification des bots</title>
+<!-- PWA : appli installable (icône unique, lancement plein écran) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Padel Mardi">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #0d0f0e; --surface: #131612; --surface2: #1a1e1b; --border: #2a2f2b;
+    --accent: #b8f53c; --accent2: #3cffa0; --text: #e8ede9; --muted: #687068;
+    --danger: #ff4f4f; --orange: #ff8c1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; min-height: 100vh; padding: 24px 16px 80px; }
+  body.locked .admin-only { opacity: 0.3; pointer-events: none; user-select: none; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 3px; color: var(--accent); line-height: 1; }
+  header p { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .admin-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; letter-spacing: 1px; }
+  .admin-btn.unlocked { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.06); }
+
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .section-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+  select, input[type="time"] { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 4px; outline: none; }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  .btn { background: var(--accent); color: var(--bg); border: none; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 11px 20px; border-radius: 4px; cursor: pointer; transition: opacity 0.15s; }
+  .btn:hover { opacity: 0.85; }
+  .btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); font-size: 11px; font-family: 'DM Mono', monospace; letter-spacing: 0.5px; padding: 10px 14px; white-space: nowrap; }
+  .btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .hint { font-size: 10px; color: var(--muted); margin-top: 10px; line-height: 1.7; }
+
+  .watcher-badge { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 10px 14px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); margin-bottom: 8px; }
+  .watcher-dot { width: 8px; height: 8px; min-width: 8px; border-radius: 50%; background: var(--muted); }
+  .watcher-dot.ok { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .watcher-dot.stale { background: var(--danger); }
+
+  .account-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: opacity .15s; }
+  .account-card.disabled { opacity: 0.55; }
+  .account-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .account-name { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 1px; color: var(--accent); }
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-slider { position: absolute; cursor: pointer; inset: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 22px; transition: .15s; }
+  .switch-slider::before { content: ''; position: absolute; height: 16px; width: 16px; left: 2px; top: 2px; background: var(--muted); border-radius: 50%; transition: .15s; }
+  .switch input:checked + .switch-slider { border-color: var(--accent); background: rgba(184,245,60,0.1); }
+  .switch input:checked + .switch-slider::before { transform: translateX(18px); background: var(--accent); }
+  .account-fields { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .account-field { flex: 1; min-width: 130px; }
+  .account-field label { display: block; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .account-status { font-size: 10px; color: var(--muted); margin-top: 12px; line-height: 1.6; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface2); border: 1px solid var(--accent); color: var(--text); padding: 12px 20px; border-radius: 6px; font-size: 12px; opacity: 0; pointer-events: none; transition: .2s; z-index: 300; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 24px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 26px; width: 100%; max-width: 340px; }
+  .modal h2 { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); margin-bottom: 16px; }
+  .modal input[type="password"] { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; padding: 10px 14px; border-radius: 4px; outline: none; margin-bottom: 10px; }
+  .modal .err { color: var(--danger); font-size: 11px; display: none; margin-bottom: 10px; }
+
+  /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
+  .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
+  .app-nav a:hover { color: var(--text); }
+  .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
+  .app-nav a.app-nav-admin { display: none; }
+  .app-nav a.app-nav-admin.show { display: flex; }
+</style>
+</head>
+<body class="locked">
+
+<nav class="app-nav">
+  <a href="Padel-tracke-firebase.html">🏠 Suivi</a>
+  <a href="padel-inscription.html">📝 Inscription</a>
+  <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
+  <a href="padel-bots.html" class="app-nav-admin show current">🤖 Bots</a>
+</nav>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>PLANIFICATION DES BOTS</h1>
+      <p>Padel Mardi — réservations automatiques</p>
+    </div>
+    <button class="admin-btn" id="lock-btn" onclick="toggleAdmin()">🔒 Admin</button>
+  </header>
+
+  <div class="admin-only">
+
+    <div class="section">
+      <div class="section-title">Veilleur (mini PC)</div>
+      <div class="watcher-badge" id="watcher-badge"><span class="watcher-dot"></span> Chargement…</div>
+      <div class="hint">
+        Le veilleur est un script qui tourne en tâche planifiée sur le mini PC toutes les
+        quelques minutes. Il lit ce qui est réglé ci-dessous et lance lui-même le bon bot
+        au bon moment — plus besoin de reprogrammer le planificateur Windows à la main.
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Comptes</div>
+      <div id="accounts-container"></div>
+      <div class="hint">
+        Pour chaque compte : jour et heure auxquels le veilleur doit lancer le bot
+        (le bot cherche ensuite lui-même le bon créneau à réserver). « Lancer maintenant »
+        déclenche un lancement immédiat au prochain passage du veilleur, sans attendre
+        l'heure programmée — pratique pour tester.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" id="admin-modal">
+  <div class="modal">
+    <h2>Accès admin</h2>
+    <input type="password" id="admin-pwd-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')checkPassword()">
+    <div class="err" id="admin-error">Mot de passe incorrect.</div>
+    <button class="btn" style="width:100%" onclick="checkPassword()">Valider</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1GKvFGYwgyu7qxSSXlyMG06A0wHnHJoU",
+  authDomain: "padel-tracker-ecd0f.firebaseapp.com",
+  projectId: "padel-tracker-ecd0f",
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+const DOC_REF = db.collection("padel").doc("tracker");
+const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
+
+const DEFAULT_ACCOUNTS = ['Arnaud', 'Nicolas', 'Thibault'];
+const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+let state = { bot_schedule: { accounts: {}, watcher_status: {} } };
+
+function accountDefaults() {
+  return { enabled: false, weekday: 0, time: '22:00', runNow: false, lastFiredAt: null, lastFiredStatus: '' };
+}
+
+function allAccountNames() {
+  const fromData = Object.keys(state.bot_schedule.accounts || {});
+  return Array.from(new Set([...DEFAULT_ACCOUNTS, ...fromData]));
+}
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' à '
+    + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function render() {
+  renderWatcherStatus();
+  renderAccounts();
+}
+
+function renderWatcherStatus() {
+  const ws = state.bot_schedule.watcher_status || {};
+  const el = document.getElementById('watcher-badge');
+  if (!ws.lastCheckAt) {
+    el.innerHTML = '<span class="watcher-dot"></span> Veilleur jamais vu pour le moment — vérifie qu\'il est bien installé et planifié sur le mini PC.';
+    return;
+  }
+  const last = new Date(ws.lastCheckAt);
+  const diffMin = Math.max(0, Math.round((Date.now() - last.getTime()) / 60000));
+  const ok = diffMin < 15;
+  el.innerHTML = '<span class="watcher-dot ' + (ok ? 'ok' : 'stale') + '"></span> Veilleur' + (ws.hostname ? ' (' + ws.hostname + ')' : '')
+    + ' — dernière vérification ' + (diffMin <= 0 ? "à l'instant" : 'il y a ' + diffMin + ' min')
+    + (ok ? '' : ' <span style="color:var(--danger)">— semble arrêté, vérifie le mini PC</span>');
+}
+
+function renderAccounts() {
+  const container = document.getElementById('accounts-container');
+  container.innerHTML = allAccountNames().map(name => {
+    const cfg = Object.assign(accountDefaults(), (state.bot_schedule.accounts || {})[name] || {});
+    return accountCardHtml(name, cfg);
+  }).join('');
+}
+
+function accountCardHtml(name, cfg) {
+  const statusLine = cfg.lastFiredAt
+    ? 'Dernier lancement : ' + formatDateTime(cfg.lastFiredAt) + (cfg.lastFiredStatus ? ' — ' + cfg.lastFiredStatus : '')
+    : 'Jamais encore lancé par le veilleur.';
+  const pending = cfg.runNow ? ' <span style="color:var(--accent)">— lancement manuel en attente du prochain passage du veilleur…</span>' : '';
+  return '<div class="account-card' + (cfg.enabled ? '' : ' disabled') + '">'
+    + '<div class="account-head">'
+    +   '<div class="account-name">' + name + '</div>'
+    +   '<label class="switch"><input type="checkbox" ' + (cfg.enabled ? 'checked' : '') + ' onchange="onFieldChange(\'' + name + '\',\'enabled\',this.checked)"><span class="switch-slider"></span></label>'
+    + '</div>'
+    + '<div class="account-fields">'
+    +   '<div class="account-field"><label>Jour de lancement</label><select onchange="onFieldChange(\'' + name + '\',\'weekday\',parseInt(this.value,10))">'
+    +     WEEKDAYS.map((w, i) => '<option value="' + i + '"' + (i === cfg.weekday ? ' selected' : '') + '>' + w + '</option>').join('')
+    +   '</select></div>'
+    +   '<div class="account-field"><label>Heure de lancement</label><input type="time" value="' + (cfg.time || '22:00') + '" onchange="onFieldChange(\'' + name + '\',\'time\',this.value)"></div>'
+    +   '<div class="account-field" style="flex:0 0 auto"><button class="btn secondary" onclick="runNow(\'' + name + '\')">▶ Lancer maintenant</button></div>'
+    + '</div>'
+    + '<div class="account-status">' + statusLine + pending + '</div>'
+    + '</div>';
+}
+
+function onFieldChange(name, field, value) {
+  const update = {};
+  update['bot_schedule.accounts.' + name + '.' + field] = value;
+  DOC_REF.set({}, { merge: true })
+    .then(() => DOC_REF.update(update))
+    .catch(e => alert('Erreur : ' + e.message));
+}
+
+function runNow(name) {
+  const update = {};
+  update['bot_schedule.accounts.' + name + '.runNow'] = true;
+  DOC_REF.set({}, { merge: true })
+    .then(() => DOC_REF.update(update))
+    .then(() => toast('Lancement demandé pour ' + name + ' — pris en compte au prochain passage du veilleur.'))
+    .catch(e => alert('Erreur : ' + e.message));
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ── Admin lock (même mécanisme que les autres pages ; localStorage pour
+// persister entre les pages et entre les relances de l'appli installée) ──
+function toggleAdmin() {
+  if (!document.body.classList.contains('locked')) {
+    document.body.classList.add('locked');
+    localStorage.removeItem('padel-admin');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔒 Admin'; btn.classList.remove('unlocked');
+    updateNavAdmin();
+  } else {
+    document.getElementById('admin-pwd-input').value = '';
+    document.getElementById('admin-error').style.display = 'none';
+    document.getElementById('admin-modal').classList.add('open');
+    setTimeout(() => document.getElementById('admin-pwd-input').focus(), 100);
+  }
+}
+function checkPassword() {
+  const input = document.getElementById('admin-pwd-input').value;
+  if (input === ADMIN_PWD) {
+    document.body.classList.remove('locked');
+    localStorage.setItem('padel-admin', '1');
+    document.getElementById('admin-modal').classList.remove('open');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
+    updateNavAdmin();
+  } else {
+    document.getElementById('admin-error').style.display = 'block';
+  }
+}
+function initAdmin() {
+  document.body.classList.add('locked');
+  if (localStorage.getItem('padel-admin') === '1') {
+    document.body.classList.remove('locked');
+    const btn = document.getElementById('lock-btn');
+    btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
+  }
+  updateNavAdmin();
+}
+function updateNavAdmin() {
+  const isAdmin = localStorage.getItem('padel-admin') === '1';
+  document.querySelectorAll('.app-nav-admin').forEach(el => {
+    if (!el.classList.contains('current')) el.classList.toggle('show', isAdmin);
+  });
+}
+window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateNavAdmin(); });
+
+// ── Connexion Firestore en direct ──────────────────────────────────────
+DOC_REF.onSnapshot(function(snap) {
+  const data = snap.exists ? snap.data() : {};
+  state.bot_schedule = Object.assign({ accounts: {}, watcher_status: {} }, data.bot_schedule || {});
+  render();
+}, function(err) {
+  document.getElementById('accounts-container').innerHTML =
+    '<div class="hint">Impossible de charger les données Firebase.<br>' + err.message + '</div>';
+});
+
+setInterval(renderWatcherStatus, 60000);
+initAdmin();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+
+</body>
+</html>

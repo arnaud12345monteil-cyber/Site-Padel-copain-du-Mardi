@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padel Mardi — Mon inscription</title>
+<!-- PWA : appli installable (icône unique, lancement plein écran) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Padel Mardi">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
@@ -61,10 +68,29 @@
   .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
   .empty-state { text-align: center; color: var(--muted); font-size: 12px; padding: 40px 20px; }
   .loading-state { text-align: center; color: var(--muted); font-size: 12px; padding: 40px 20px; }
+  @media (max-width: 360px) {
+    header h1 { font-size: 28px; letter-spacing: 2px; }
+    .card { padding: 18px; }
+    .session-card { padding: 16px; }
+  }
+
+  /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
+  .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
+  .app-nav a:hover { color: var(--text); }
+  .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
+  .app-nav a.app-nav-admin { display: none; }
+  .app-nav a.app-nav-admin.show { display: flex; }
 </style>
 </head>
 <body>
 
+<nav class="app-nav">
+  <a href="Padel-tracke-firebase.html">🏠 Suivi</a>
+  <a href="padel-inscription.html" class="current">📝 Inscription</a>
+  <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
+  <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
+</nav>
 <div class="wrap">
   <header>
     <h1>PADEL MARDI</h1>
@@ -311,6 +337,21 @@ window.toggleAttendance = async function(sessionId) {
 };
 window.doLogin = doLogin;
 window.logout = logout;
+
+// Affiche/masque les entrées de nav réservées à l'admin (Matchs, Bots) —
+// cette page n'a pas son propre accès admin, elle lit juste l'état partagé.
+function updateNavAdmin() {
+  const isAdmin = localStorage.getItem('padel-admin') === '1';
+  document.querySelectorAll('.app-nav-admin').forEach(el => el.classList.toggle('show', isAdmin));
+}
+updateNavAdmin();
+window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateNavAdmin(); });
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 
 </body>

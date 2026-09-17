@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padel Mardi — Saisie des matchs</title>
+<!-- PWA : appli installable (icône unique, lancement plein écran) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Padel Mardi">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -78,10 +85,24 @@
     .match-row .side.a, .match-row .side.b { text-align: left; flex-basis: 100%; }
     .match-row .vs { display: none; }
   }
+
+  /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
+  .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
+  .app-nav a:hover { color: var(--text); }
+  .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
+  .app-nav a.app-nav-admin { display: none; }
+  .app-nav a.app-nav-admin.show { display: flex; }
 </style>
 </head>
 <body class="locked">
 
+<nav class="app-nav">
+  <a href="Padel-tracke-firebase.html">🏠 Suivi</a>
+  <a href="padel-inscription.html">📝 Inscription</a>
+  <a href="padel-matchs.html" class="app-nav-admin show current">🎾 Matchs</a>
+  <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
+</nav>
 <div class="wrap">
   <header>
     <div>
@@ -153,7 +174,7 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 const docRef = db.collection("padel").doc("tracker");
 
-const ADMIN_PWD = 'padel2025'; // même mot de passe que le tracker principal
+const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 
 let state = { players: [], sessions: [], matches: [] };
 let presentPlayers = [];      // joueurs cochés pour la séance
@@ -498,13 +519,15 @@ function saveAllMatches() {
   }).catch(e => toast('Erreur : ' + e.message));
 }
 
-// ── Admin lock (même mécanisme que le tracker principal) ────────────────
+// ── Admin lock (même mécanisme que le tracker principal ; localStorage pour
+// persister entre les pages et entre les relances de l'appli installée) ──
 function toggleAdmin() {
   if (!document.body.classList.contains('locked')) {
     document.body.classList.add('locked');
-    sessionStorage.removeItem('padel-admin');
+    localStorage.removeItem('padel-admin');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔒 Admin'; btn.classList.remove('unlocked');
+    updateNavAdmin();
   } else {
     document.getElementById('admin-pwd-input').value = '';
     document.getElementById('admin-error').style.display = 'none';
@@ -516,22 +539,31 @@ function checkPassword() {
   const input = document.getElementById('admin-pwd-input').value;
   if (input === ADMIN_PWD) {
     document.body.classList.remove('locked');
-    sessionStorage.setItem('padel-admin', '1');
+    localStorage.setItem('padel-admin', '1');
     document.getElementById('admin-modal').classList.remove('open');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
+    updateNavAdmin();
   } else {
     document.getElementById('admin-error').style.display = 'block';
   }
 }
 function initAdmin() {
   document.body.classList.add('locked');
-  if (sessionStorage.getItem('padel-admin') === '1') {
+  if (localStorage.getItem('padel-admin') === '1') {
     document.body.classList.remove('locked');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔓 Admin'; btn.classList.add('unlocked');
   }
+  updateNavAdmin();
 }
+function updateNavAdmin() {
+  const isAdmin = localStorage.getItem('padel-admin') === '1';
+  document.querySelectorAll('.app-nav-admin').forEach(el => {
+    if (!el.classList.contains('current')) el.classList.toggle('show', isAdmin);
+  });
+}
+window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateNavAdmin(); });
 
 let toastTimer;
 function toast(msg) {
@@ -543,6 +575,12 @@ function toast(msg) {
 }
 
 initAdmin();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 
 </body>

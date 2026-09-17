@@ -2,6 +2,20 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.27 — 2026-09-17
+    Appli unifiée installable (PWA) : manifest.json + service worker + icônes,
+    installable sur mobile/tablette avec une seule icône. Nouvelle barre de
+    navigation partagée en haut de page (Suivi / Inscription / Matchs / Bots)
+    présente sur les 4 pages, pour naviguer entre elles comme des onglets
+    d'une même appli. L'accès admin passe de sessionStorage à localStorage :
+    il persiste maintenant entre les pages ET entre les relances de l'appli
+    installée (avant, il fallait se reconnecter à chaque nouvel onglet).
+    Nouvel onglet de navigation "Bots" (admin) : planification des bots de
+    réservation depuis le site (jour + heure de lancement par compte,
+    lancement manuel immédiat), lue par un nouveau script "veilleur" sur le
+    mini PC qui lance directement les bots — remplace le pilotage du
+    planificateur Windows par compte, qui n'a plus besoin d'être reprogrammé.
+
   v1.26 — 2026-09-07
     Réordonnancement des onglets : Prochaine séance, Classement (2e),
     Matchs séance (3e), Réservations auto, Tableau présences, Statistiques
@@ -216,6 +230,13 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Padel Mardi — Suivi Présences</title>
+<!-- PWA : appli installable (icône unique, lancement plein écran) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Padel Mardi">
 <!-- Firebase SDK compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -409,9 +430,23 @@
   .bot-resa-bot { font-size: 9px; color: var(--muted); margin-top: 2px; }
   .bot-resa-email { font-size: 9px; color: var(--muted); margin-top: 2px; }
   .bot-resa-terrain { font-size: 10px; color: var(--text); margin-top: 2px; font-weight: bold; }
+
+  /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
+  .app-nav { position: sticky; top: 0; z-index: 200; display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; }
+  .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
+  .app-nav a:hover { color: var(--text); }
+  .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
+  .app-nav a.app-nav-admin { display: none; }
+  .app-nav a.app-nav-admin.show { display: flex; }
 </style>
 </head>
 <body class="">
+<nav class="app-nav">
+  <a href="Padel-tracke-firebase.html" class="current">🏠 Suivi</a>
+  <a href="padel-inscription.html">📝 Inscription</a>
+  <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
+  <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
+</nav>
 <span id="pc-status-badge" onclick="openPcLogModal()" style="position:fixed;top:24px;right:10px;max-width:180px;text-align:right;font-size:9px;letter-spacing:1px;z-index:50;cursor:pointer;text-decoration:underline dotted" title="Voir l'historique"></span>
 <span id="app-version" style="position:fixed;top:8px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
 <header>
@@ -424,8 +459,8 @@
   <div class="toolbar">
     <button class="btn admin-only" onclick="openModal()">+ Nouvelle séance</button>
     <button class="btn secondary admin-only" onclick="openAddPlayerModal()">+ Joueur</button>
-    <a class="btn secondary" href="padel-inscription.html" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">📝 S'inscrire à une séance</a>
-    <a class="btn secondary admin-only" href="padel-matchs.html" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">🎾 Saisir des matchs</a>
+    <a class="btn secondary" href="padel-inscription.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">📝 S'inscrire à une séance</a>
+    <a class="btn secondary admin-only" href="padel-matchs.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">🎾 Saisir des matchs</a>
     <div class="spacer"></div>
     <button class="btn secondary admin-only" onclick="exportData()" id="backup-btn">↓ Sauvegarde JSON</button>
     <button class="btn secondary admin-only" onclick="document.getElementById('import-file').click()">↑ Import JSON</button>
@@ -737,8 +772,8 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {} };
-const APP_VERSION = 'v1.26';
-const APP_VERSION_DATE = '2026-08-17';
+const APP_VERSION = 'v1.27';
+const APP_VERSION_DATE = '2026-09-17';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
 firebase.initializeApp({
@@ -2604,11 +2639,12 @@ function toggleAdmin() {
   if (!document.body.classList.contains('locked')) {
     // Currently unlocked → lock
     document.body.classList.add('locked');
-    sessionStorage.removeItem('padel-admin');
+    localStorage.removeItem('padel-admin');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔒 Admin';
     btn.classList.remove('unlocked');
     if (['tab-tasks', 'tab-bot'].some(id => document.getElementById(id)?.classList.contains('active'))) switchTab('tab-next');
+    updateNavAdmin();
     toast('Mode lecture seule activé');
   } else {
     // Currently locked → ask password
@@ -2623,11 +2659,12 @@ function checkPassword() {
   const input = document.getElementById('admin-pwd-input').value;
   if (input === ADMIN_PWD) {
     document.body.classList.remove('locked');
-    sessionStorage.setItem('padel-admin', '1');
+    localStorage.setItem('padel-admin', '1');
     document.getElementById('admin-modal').classList.remove('open');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔓 Admin';
     btn.classList.add('unlocked');
+    updateNavAdmin();
     toast('Mode admin activé');
   } else {
     document.getElementById('admin-error').style.display = 'block';
@@ -2637,15 +2674,26 @@ function checkPassword() {
 }
 
 function initAdmin() {
-  // Start locked. If session already authenticated, unlock silently.
+  // Démarre verrouillé. Si déjà authentifié (persiste entre pages et entre
+  // relances de l'appli installée — localStorage, plus sessionStorage qui
+  // obligeait à ressaisir le mot de passe à chaque nouvel onglet/lancement).
   document.body.classList.add('locked');
-  if (sessionStorage.getItem('padel-admin') === '1') {
+  if (localStorage.getItem('padel-admin') === '1') {
     document.body.classList.remove('locked');
     const btn = document.getElementById('lock-btn');
     btn.textContent = '🔓 Admin';
     btn.classList.add('unlocked')
   }
+  updateNavAdmin();
 }
+
+// Affiche/masque les entrées de nav réservées à l'admin (Matchs, Bots), et
+// reste synchronisé si l'admin se (dé)verrouille depuis un autre onglet.
+function updateNavAdmin() {
+  const isAdmin = localStorage.getItem('padel-admin') === '1';
+  document.querySelectorAll('.app-nav-admin').forEach(el => el.classList.toggle('show', isAdmin));
+}
+window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateNavAdmin(); });
 
 restoreTheme();
 loadState(); initAdmin(); restoreDateFilters(); render(); checkBackupReminder(); restoreActiveTab();
@@ -2683,4 +2731,9 @@ DOC_REF.onSnapshot(function(snap) {
 
 <div class="modal-overlay" id="eb_modal"><div class="modal" style="max-width:400px"><h2>Modifier</h2><div class="modal-row"><label>Date</label><input type="date" id="eb_d" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Heure</label><input type="time" id="eb_h" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Terrain</label><input type="text" id="eb_t" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Statut</label><select id="eb_s" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"><option value="confirmée">confirmée</option><option value="probable">probable</option><option value="echec_captcha">echec_captcha</option><option value="echec_validation">echec_validation</option><option value="deja_reservé">deja_reservé</option><option value="aucun_creneau_disponible">aucun_creneau_disponible</option><option value="echec_connexion">echec_connexion</option><option value="echec_navigation">echec_navigation</option><option value="echec_date_introuvable">echec_date_introuvable</option><option value="dry_run">dry_run</option></select></div><div class="modal-actions"><button class="btn" onclick="saveBotResa()">Enregistrer</button><button class="btn secondary" onclick="document.getElementById('eb_modal').classList.remove('open')">Annuler</button></div></div></div>
 <div class="modal-overlay" id="eb_modal"><div class="modal" style="max-width:400px"><h2>Modifier la réservation</h2><div class="modal-row"><label>Date</label><input type="date" id="eb_d" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Heure</label><input type="time" id="eb_h" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Terrain</label><input type="text" id="eb_t" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"></div><div class="modal-row"><label>Statut</label><select id="eb_s" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:4px;font-size:13px;outline:none"><option value="confirmée">confirmée</option><option value="probable">probable</option><option value="echec_captcha">echec_captcha</option><option value="echec_validation">echec_validation</option><option value="deja_reservé">deja_reservé</option><option value="aucun_creneau_disponible">aucun_creneau_disponible</option><option value="echec_connexion">echec_connexion</option><option value="echec_navigation">echec_navigation</option><option value="echec_date_introuvable">echec_date_introuvable</option><option value="dry_run">dry_run</option></select></div><div class="modal-actions"><button class="btn" onclick="saveBotResa()">Enregistrer</button><button class="btn secondary" onclick="document.getElementById('eb_modal').classList.remove('open')">Annuler</button></div></div></div>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
 </body></html>
