@@ -4,6 +4,9 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.1 — 2026-09-17
+    Ajout de l'icône dans l'onglet du navigateur (favicon).
+
   v1.0 — 2026-09-17
     Début du suivi de version (comme le tracker principal). Appli unifiée :
     barre de navigation partagée (Suivi / Inscription / Matchs / Bots),
@@ -18,6 +21,8 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f0e">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="icon" href="icons/icon-512.png" type="image/png" sizes="512x512">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Padel Mardi">
@@ -184,7 +189,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.0';
+const APP_VERSION = 'v1.1';
 const APP_VERSION_DATE = '2026-09-17';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
