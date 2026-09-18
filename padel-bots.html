@@ -4,6 +4,12 @@
 <!--
   PADEL BOTS — Historique des versions
   ─────────────────────────────────────────
+  v1.3 — 2026-09-18
+    Remplacement du sélecteur d'heure natif (peu pratique au toucher) par un
+    contrôle à flèches ▲▼ (heures / minutes / secondes séparées) — le format
+    de stockage "HH:MM:SS" ne change pas, donc bot_watcher.py n'a rien à
+    modifier.
+
   v1.2 — 2026-09-18
     Heure de lancement précise à la seconde (input avec step="1") — le
     veilleur (bot_watcher.py) attend désormais jusqu'à la seconde exacte
@@ -54,8 +60,17 @@
   .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
   .section-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
-  select, input[type="time"] { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 4px; outline: none; }
+  select { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 10px 12px; border-radius: 4px; outline: none; }
   select:focus, input:focus { border-color: var(--accent); }
+
+  /* ── Sélecteur d'heure à flèches (remplace l'input time natif, peu pratique au toucher) ── */
+  .time-spinner { display: flex; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; }
+  .time-spinner-unit { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; }
+  .time-spinner-value { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--text); padding: 3px 0; min-width: 26px; text-align: center; letter-spacing: 0.5px; user-select: none; }
+  .time-spinner-arrow { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 9px; line-height: 1; padding: 6px 4px; width: 100%; }
+  .time-spinner-arrow:hover { color: var(--accent); }
+  .time-spinner-arrow:active { color: var(--accent2); }
+  .time-spinner-sep { color: var(--muted); font-size: 15px; padding-bottom: 2px; }
 
   .btn { background: var(--accent); color: var(--bg); border: none; font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 11px 20px; border-radius: 4px; cursor: pointer; transition: opacity 0.15s; }
   .btn:hover { opacity: 0.85; }
@@ -173,7 +188,7 @@ const db = firebase.firestore();
 const DOC_REF = db.collection("padel").doc("tracker");
 const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.3';
 const APP_VERSION_DATE = '2026-09-18';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
@@ -226,11 +241,23 @@ function renderAccounts() {
   }).join('');
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function timeSpinnerUnitHtml(name, unit, value) {
+  return '<div class="time-spinner-unit">'
+    +   '<button type="button" class="time-spinner-arrow" onclick="changeTime(\'' + name + '\',\'' + unit + '\',1)" aria-label="Augmenter">▲</button>'
+    +   '<div class="time-spinner-value">' + pad2(value) + '</div>'
+    +   '<button type="button" class="time-spinner-arrow" onclick="changeTime(\'' + name + '\',\'' + unit + '\',-1)" aria-label="Diminuer">▼</button>'
+    + '</div>';
+}
+
 function accountCardHtml(name, cfg) {
   const statusLine = cfg.lastFiredAt
     ? 'Dernier lancement : ' + formatDateTime(cfg.lastFiredAt) + (cfg.lastFiredStatus ? ' — ' + cfg.lastFiredStatus : '')
     : 'Jamais encore lancé par le veilleur.';
   const pending = cfg.runNow ? ' <span style="color:var(--accent)">— lancement manuel en attente du prochain passage du veilleur…</span>' : '';
+  const timeParts = (cfg.time || '22:00:00').split(':').map(p => parseInt(p, 10) || 0);
+  const th = timeParts[0] || 0, tm = timeParts[1] || 0, ts = timeParts[2] || 0;
   return '<div class="account-card' + (cfg.enabled ? '' : ' disabled') + '">'
     + '<div class="account-head">'
     +   '<div class="account-name">' + name + '</div>'
@@ -240,11 +267,29 @@ function accountCardHtml(name, cfg) {
     +   '<div class="account-field"><label>Jour de lancement</label><select onchange="onFieldChange(\'' + name + '\',\'weekday\',parseInt(this.value,10))">'
     +     WEEKDAYS.map((w, i) => '<option value="' + i + '"' + (i === cfg.weekday ? ' selected' : '') + '>' + w + '</option>').join('')
     +   '</select></div>'
-    +   '<div class="account-field"><label>Heure de lancement (précis à la seconde)</label><input type="time" step="1" value="' + (cfg.time || '22:00:00') + '" onchange="onFieldChange(\'' + name + '\',\'time\',this.value)"></div>'
+    +   '<div class="account-field"><label>Heure de lancement (précis à la seconde)</label>'
+    +     '<div class="time-spinner">'
+    +       timeSpinnerUnitHtml(name, 'h', th)
+    +       '<div class="time-spinner-sep">:</div>'
+    +       timeSpinnerUnitHtml(name, 'm', tm)
+    +       '<div class="time-spinner-sep">:</div>'
+    +       timeSpinnerUnitHtml(name, 's', ts)
+    +     '</div>'
+    +   '</div>'
     +   '<div class="account-field" style="flex:0 0 auto"><button class="btn secondary" onclick="runNow(\'' + name + '\')">▶ Lancer maintenant</button></div>'
     + '</div>'
     + '<div class="account-status">' + statusLine + pending + '</div>'
     + '</div>';
+}
+
+function changeTime(name, unit, delta) {
+  const cfg = Object.assign(accountDefaults(), (state.bot_schedule.accounts || {})[name] || {});
+  const parts = (cfg.time || '22:00:00').split(':').map(p => parseInt(p, 10) || 0);
+  let h = parts[0] || 0, m = parts[1] || 0, s = parts[2] || 0;
+  if (unit === 'h') h = (h + delta + 24) % 24;
+  else if (unit === 'm') m = (m + delta + 60) % 60;
+  else if (unit === 's') s = (s + delta + 60) % 60;
+  onFieldChange(name, 'time', pad2(h) + ':' + pad2(m) + ':' + pad2(s));
 }
 
 function onFieldChange(name, field, value) {
