@@ -10,11 +10,11 @@ const APP_SHELL = [
   './padel-matchs.html',
   './padel-bots.html',
   './manifest.json',
-  './Icons/icon-192.png',
-  './Icons/icon-512.png',
-  './Icons/icon-192-maskable.png',
-  './Icons/icon-512-maskable.png',
-  './Icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-192-maskable.png',
+  './icons/icon-512-maskable.png',
+  './icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
