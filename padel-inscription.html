@@ -4,6 +4,11 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.2 — 2026-09-18
+    Heure ajoutée à côté de la date de chaque séance (même logique que le
+    tracker principal v1.34) — déduite des réservations bot confirmées,
+    pas de l'heure de lancement réglée dans l'onglet Bots.
+
   v1.1 — 2026-09-17
     Ajout de l'icône dans l'onglet du navigateur (favicon).
 
@@ -70,6 +75,7 @@
 
   .session-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
   .ns-date { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--text); letter-spacing: 1px; line-height: 1; }
+  .ns-time { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted); letter-spacing: 0.5px; margin-left: 5px; }
   .ns-label { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
   .spots-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; text-align: center; }
   .spots-box .big { font-family: 'Bebas Neue', sans-serif; font-size: 32px; line-height: 1; }
@@ -151,7 +157,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.1';
+const APP_VERSION = 'v1.2';
 const APP_VERSION_DATE = '2026-09-17';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
@@ -186,6 +192,25 @@ function courtsForDate(date) {
     list.push({ numero: m ? m[1] : (r.terrain || '?') });
   });
   return list;
+}
+// Heure(s) réellement réservée(s) par le bot pour une date donnée (créneau
+// obtenu, pas l'heure de lancement réglée dans l'onglet Bots — voir même
+// logique dans Padel-tracke-firebase.html).
+function hoursForDate(date) {
+  const confirmed = (currentData.bot_reservations || []).filter(r =>
+    r.statut === 'confirmée' && r.date === date && r.heure && r.heure !== 'N/A'
+  );
+  const set = new Set(confirmed.map(r => r.heure));
+  return Array.from(set).sort();
+}
+function formatHeure(h) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(h);
+  return m ? (m[1].padStart(2,'0') + 'h' + m[2]) : h;
+}
+function sessionDateWithHourHtml(date) {
+  const hours = hoursForDate(date);
+  const hoursLabel = hours.length ? ' <span class="ns-time">' + hours.map(formatHeure).join(' / ') + '</span>' : '';
+  return formatDate(date) + hoursLabel;
 }
 
 // ── Connexion Firestore en direct ───────────────────────────────────────────
@@ -313,7 +338,7 @@ function renderSessionCard(s, idx) {
   return '<div class="session-card">'
     + '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
     +   '<div style="flex:1;min-width:140px">'
-    +     '<div class="ns-date">' + formatDate(s.date) + '</div>'
+    +     '<div class="ns-date">' + sessionDateWithHourHtml(s.date) + '</div>'
     +     '<div class="ns-label">' + label + '</div>'
     +   '</div>'
     +   '<div class="spots-box">'
