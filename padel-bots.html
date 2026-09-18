@@ -4,6 +4,11 @@
 <!--
   PADEL BOTS — Historique des versions
   ─────────────────────────────────────────
+  v1.2 — 2026-09-18
+    Heure de lancement précise à la seconde (input avec step="1") — le
+    veilleur (bot_watcher.py) attend désormais jusqu'à la seconde exacte
+    au lieu de se caler sur son passage toutes les 5 min.
+
   v1.1 — 2026-09-17
     Ajout de l'icône dans l'onglet du navigateur (favicon).
 
@@ -124,8 +129,11 @@
       <div class="watcher-badge" id="watcher-badge"><span class="watcher-dot"></span> Chargement…</div>
       <div class="hint">
         Le veilleur est un script qui tourne en tâche planifiée sur le mini PC toutes les
-        quelques minutes. Il lit ce qui est réglé ci-dessous et lance lui-même le bon bot
-        au bon moment — plus besoin de reprogrammer le planificateur Windows à la main.
+        5 min. Il lit ce qui est réglé ci-dessous et lance lui-même le bon bot au bon
+        moment — plus besoin de reprogrammer le planificateur Windows à la main. Quand un
+        lancement approche (dans les 5 prochaines minutes), il attend précisément jusqu'à
+        la seconde programmée avant de lancer — il ne se contente pas d'attendre son
+        prochain passage.
       </div>
     </div>
 
@@ -165,8 +173,8 @@ const db = firebase.firestore();
 const DOC_REF = db.collection("padel").doc("tracker");
 const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 
-const APP_VERSION = 'v1.1';
-const APP_VERSION_DATE = '2026-09-17';
+const APP_VERSION = 'v1.2';
+const APP_VERSION_DATE = '2026-09-18';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
 const DEFAULT_ACCOUNTS = ['Arnaud', 'Nicolas', 'Thibault'];
@@ -175,7 +183,7 @@ const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', '
 let state = { bot_schedule: { accounts: {}, watcher_status: {} } };
 
 function accountDefaults() {
-  return { enabled: false, weekday: 0, time: '22:00', runNow: false, lastFiredAt: null, lastFiredStatus: '' };
+  return { enabled: false, weekday: 0, time: '22:00:00', runNow: false, lastFiredAt: null, lastFiredStatus: '' };
 }
 
 function allAccountNames() {
@@ -232,7 +240,7 @@ function accountCardHtml(name, cfg) {
     +   '<div class="account-field"><label>Jour de lancement</label><select onchange="onFieldChange(\'' + name + '\',\'weekday\',parseInt(this.value,10))">'
     +     WEEKDAYS.map((w, i) => '<option value="' + i + '"' + (i === cfg.weekday ? ' selected' : '') + '>' + w + '</option>').join('')
     +   '</select></div>'
-    +   '<div class="account-field"><label>Heure de lancement</label><input type="time" value="' + (cfg.time || '22:00') + '" onchange="onFieldChange(\'' + name + '\',\'time\',this.value)"></div>'
+    +   '<div class="account-field"><label>Heure de lancement (précis à la seconde)</label><input type="time" step="1" value="' + (cfg.time || '22:00:00') + '" onchange="onFieldChange(\'' + name + '\',\'time\',this.value)"></div>'
     +   '<div class="account-field" style="flex:0 0 auto"><button class="btn secondary" onclick="runNow(\'' + name + '\')">▶ Lancer maintenant</button></div>'
     + '</div>'
     + '<div class="account-status">' + statusLine + pending + '</div>'
