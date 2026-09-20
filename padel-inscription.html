@@ -4,6 +4,10 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.3 — 2026-09-19
+    Bouton d'installation persistant "📲 Installer" dans le bandeau du haut
+    (même logique que le tracker principal v1.35).
+
   v1.2 — 2026-09-18
     Heure ajoutée à côté de la date de chaque séance (même logique que le
     tracker principal v1.34) — déduite des réservations bot confirmées,
@@ -100,6 +104,15 @@
   .app-nav a.current { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
   .app-nav a.app-nav-admin { display: none; }
   .app-nav a.app-nav-admin.show { display: flex; }
+  .app-nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 8px; flex-shrink: 0; }
+  #install-btn { display: none; background: rgba(184,245,60,0.08); border: 1px solid var(--accent); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  #install-btn:hover { background: rgba(184,245,60,0.16); }
+
+  /* ── Modale (une seule, pour les instructions d'installation iOS) ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 300; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: 100%; max-width: 360px; }
+  .modal h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--accent); margin-bottom: 16px; letter-spacing: 1px; }
 </style>
 </head>
 <body>
@@ -109,7 +122,24 @@
   <a href="padel-inscription.html" class="current">📝 Inscription</a>
   <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
   <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
+  <div class="app-nav-right">
+    <button id="install-btn" onclick="onInstallBtnClick()">📲 Installer</button>
+  </div>
 </nav>
+<div class="modal-overlay" id="install-ios-modal">
+  <div class="modal">
+    <h2>Installer l'application</h2>
+    <div style="font-size:13px;line-height:1.9;color:var(--text)">
+      Sur iPhone/iPad, Safari ne permet pas d'installer une appli en un clic — il faut passer par le menu Partage :
+      <ol style="margin:12px 0 0 20px;padding:0">
+        <li>Appuie sur <b>􀈂 Partager</b> en bas de l'écran (ou en haut, selon le modèle)</li>
+        <li>Fais défiler et choisis <b>« Sur l'écran d'accueil »</b></li>
+        <li>Appuie sur <b>« Ajouter »</b> en haut à droite</li>
+      </ol>
+    </div>
+    <button class="btn" style="margin-top:20px" onclick="document.getElementById('install-ios-modal').classList.remove('open')">Compris</button>
+  </div>
+</div>
 <span id="app-version" style="position:fixed;top:50px;right:10px;color:var(--muted);font-size:9px;letter-spacing:1px;z-index:50"></span>
 <div class="wrap">
   <header>
@@ -157,7 +187,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.3';
 const APP_VERSION_DATE = '2026-09-17';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
@@ -395,6 +425,45 @@ window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateN
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
+
+// ── Bouton d'installation persistant (même logique que Padel-tracke-firebase.html) ──
+let deferredInstallPrompt = null;
+function isIOSDevice() {
+  return /iP(hone|od|ad)/.test(navigator.platform)
+    || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+}
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function updateInstallButtonVisibility() {
+  const btn = document.getElementById('install-btn');
+  if (!btn) return;
+  if (isStandaloneApp()) { btn.style.display = 'none'; return; }
+  btn.style.display = (isIOSDevice() || deferredInstallPrompt) ? 'inline-block' : 'none';
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updateInstallButtonVisibility();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updateInstallButtonVisibility();
+});
+function onInstallBtnClick() {
+  if (isIOSDevice()) {
+    document.getElementById('install-ios-modal').classList.add('open');
+    return;
+  }
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(() => {
+    deferredInstallPrompt = null;
+    updateInstallButtonVisibility();
+  });
+}
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); }));
+updateInstallButtonVisibility();
 </script>
 
 </body>
