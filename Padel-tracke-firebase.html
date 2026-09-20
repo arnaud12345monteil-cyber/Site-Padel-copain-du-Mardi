@@ -2,6 +2,40 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.38 — 2026-09-20
+    Bloc "Équipes constituées" : (1) une équipe par ligne, numérotée, avec
+    une couleur propre par équipe (au lieu d'une liste horizontale séparée
+    par des points) ; (2) correction d'un bug d'affichage en double — quand
+    une séance compte 4 équipes (ou plus) réparties sur plusieurs
+    confrontations, une même équipe pouvait apparaître dans team1 d'une
+    confrontation ET team2 d'une autre, et donc être listée plusieurs fois.
+    Chaque équipe (par composition de joueurs) n'est désormais listée
+    qu'une seule fois.
+
+  v1.37 — 2026-09-20
+    Correction de l'affichage des équipes constituées (v1.36) : suppression
+    du cadre "Match 1 / Match 2" et du "VS", qui faisaient ressembler le bloc
+    à une liste de matchs. On affiche maintenant simplement les groupes de
+    joueurs formant chaque équipe, séparés par un point médian, sans
+    référence à un "match".
+
+  v1.36 — 2026-09-20
+    Équipes affichées dans "Prochaine séance" / "Séance suivante", entre les
+    joueurs inscrits et les terrains réservés, quand elles ont déjà été
+    constituées pour cette date via l'onglet "Saisir des matchs" (le score
+    n'a pas besoin d'être renseigné — seule la composition des équipes est
+    nécessaire). Rien ne s'affiche tant qu'aucune équipe n'est saisie.
+
+  v1.35 — 2026-09-19
+    Bouton d'installation persistant "📲 Installer" dans le bandeau du haut
+    (visible dès que le navigateur signale l'appli installable — Android/
+    Chrome/Edge — ou en permanence sur iOS, où il ouvre des instructions
+    manuelles faute d'API d'installation dans Safari). Il n'existe aucun
+    lien qui installe automatiquement une PWA : l'installation exige
+    toujours un geste explicite de l'utilisateur sur le site lui-même —
+    ce bouton est la meilleure alternative au bandeau natif du navigateur,
+    peu fiable dans le temps. Même ajout sur les 3 autres pages.
+
   v1.34 — 2026-09-18
     Heure ajoutée à côté de la date dans la liste des séances (Prochaine
     séance / Séance suivante) — déduite des réservations bot CONFIRMÉES
@@ -499,6 +533,8 @@
   .app-nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 8px; flex-shrink: 0; }
   .app-nav-right .admin-btn { padding: 5px 10px; font-size: 10px; white-space: nowrap; }
   .app-nav-right .theme-toggle-btn { padding: 4px 8px; font-size: 12px; }
+  #install-btn { display: none; background: rgba(184,245,60,0.08); border: 1px solid var(--accent); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  #install-btn:hover { background: rgba(184,245,60,0.16); }
   .app-nav-status { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   #pc-status-badge { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; letter-spacing: 0.5px; color: var(--muted); cursor: pointer; text-decoration: underline dotted; }
   #app-version { font-size: 9px; letter-spacing: 0.5px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
@@ -511,6 +547,7 @@
   <a href="padel-matchs.html" class="app-nav-admin">🎾 Matchs</a>
   <a href="padel-bots.html" class="app-nav-admin">🤖 Bots</a>
   <div class="app-nav-right">
+    <button id="install-btn" onclick="onInstallBtnClick()">📲 Installer</button>
     <button class="admin-btn unlocked" id="lock-btn" onclick="toggleAdmin()">🔓 Admin</button>
     <button class="theme-toggle-btn" onclick="toggleTheme()" id="theme-toggle-btn" title="Basculer clair/sombre">🌙</button>
     <div class="app-nav-status">
@@ -719,6 +756,25 @@
   </div>
 </div>
 
+<!-- Modal: instructions d'installation iOS (pas d'API JS d'installation sur Safari —
+     on ne peut que guider vers Partage > Sur l'écran d'accueil) -->
+<div class="modal-overlay" id="install-ios-modal">
+  <div class="modal" style="max-width:360px">
+    <h2>Installer l'application</h2>
+    <div style="font-size:13px;line-height:1.9;color:var(--text)">
+      Sur iPhone/iPad, Safari ne permet pas d'installer une appli en un clic — il faut passer par le menu Partage :
+      <ol style="margin:12px 0 0 20px;padding:0">
+        <li>Appuie sur <b>􀈂 Partager</b> en bas de l'écran (ou en haut, selon le modèle)</li>
+        <li>Fais défiler et choisis <b>« Sur l'écran d'accueil »</b></li>
+        <li>Appuie sur <b>« Ajouter »</b> en haut à droite</li>
+      </ol>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" style="width:100%" onclick="document.getElementById('install-ios-modal').classList.remove('open')">Compris</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Nouvelle séance -->
 <div class="modal-overlay" id="session-modal">
   <div class="modal">
@@ -845,8 +901,8 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {} };
-const APP_VERSION = 'v1.34';
-const APP_VERSION_DATE = '2026-09-18';
+const APP_VERSION = 'v1.38';
+const APP_VERSION_DATE = '2026-09-20';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
 firebase.initializeApp({
@@ -1450,6 +1506,63 @@ function sessionDateWithHourHtml(date) {
   return formatDate(date) + hoursLabel;
 }
 
+// Équipes déjà constituées pour une séance donnée (saisies dans l'onglet
+// "Saisir des matchs" — le score peut être renseigné plus tard, seule la
+// composition des équipes est nécessaire pour les afficher ici).
+function teamsForDate(date) {
+  return (state.matches || []).filter(m =>
+    m.sessionDate === date && m.team1 && m.team1.length && m.team2 && m.team2.length
+  );
+}
+
+// Une même équipe peut jouer plusieurs confrontations dans la séance (donc
+// apparaître dans plusieurs entrées team1/team2 de state.matches) : on ne
+// veut lister chaque équipe qu'UNE seule fois, quelle que soit sa position
+// (team1 ou team2) ou le nombre de confrontations où elle apparaît.
+function teamKey(team) {
+  return [...team].map(p => p.trim().toLowerCase()).sort().join('|');
+}
+
+function uniqueTeamsForDate(date) {
+  const matches = teamsForDate(date);
+  const seen = new Set();
+  const teams = [];
+  matches.forEach(m => {
+    [m.team1, m.team2].forEach(team => {
+      const key = teamKey(team);
+      if (!seen.has(key)) {
+        seen.add(key);
+        teams.push(team);
+      }
+    });
+  });
+  return teams;
+}
+
+const TEAM_COLORS = ['var(--accent)', 'var(--accent2)', 'var(--nicolas)', '#7ab8ff', '#e08ce0', '#ff9f6e'];
+
+function teamsBlockHtml(date) {
+  const teams = uniqueTeamsForDate(date);
+  if (!teams.length) return '';
+  // Une équipe par ligne, numérotée, avec une couleur propre par équipe —
+  // pas de cadre "Match", pas de "VS" : ce n'est pas une liste de matchs.
+  const multi = teams.length > 1;
+  return '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);width:100%">'
+    + '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Équipe' + (multi ? 's' : '') + ' constituée' + (multi ? 's' : '') + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px">'
+    +   teams.map((team, i) => {
+          const color = TEAM_COLORS[i % TEAM_COLORS.length];
+          return '<div style="display:flex;align-items:center;gap:8px">'
+            + '<span style="font-size:10px;color:var(--muted);min-width:14px">' + (i + 1) + '</span>'
+            + '<span style="display:inline-flex;gap:4px;flex-wrap:wrap">'
+            +   team.map(p => '<span class="ns-chip" style="color:' + color + '">' + shortName(p) + '</span>').join('')
+            + '</span>'
+            + '</div>';
+        }).join('')
+    + '</div>'
+    + '</div>';
+}
+
 function renderSessionCard(next, idx) {
   const spots = next.spots || 8;
   const attendeesArr = [...next.attendees];
@@ -1462,6 +1575,7 @@ function renderSessionCard(next, idx) {
   const spotsColor = remaining > 0 ? 'var(--nicolas)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
 
   const label = idx === 0 ? 'Prochaine séance' : 'Séance suivante';
+  const teamsBlock = teamsBlockHtml(next.date);
   const courts = courtsForDate(next.date);
   const courtsBlock = courts.length
     ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);width:100%">'
@@ -1493,6 +1607,7 @@ function renderSessionCard(next, idx) {
     +   '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Joueurs inscrits</div>'
     +   '<div class="ns-players">' + attendeesArr.map(p => '<span class="ns-chip">' + shortName(p) + '</span>').join('') + '</div>'
     + '</div>'
+    +   teamsBlock
     +   courtsBlock
     + '</div>'
     + '</div>';
@@ -2832,5 +2947,53 @@ DOC_REF.onSnapshot(function(snap) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
+
+// ── Bouton d'installation persistant ────────────────────────────────────────
+// Aucun navigateur ne permet d'installer une PWA juste en ouvrant un lien (ça
+// exige un geste utilisateur explicite sur le site lui-même, pour des raisons
+// de sécurité) — donc pas de "lien magique qui installe". Ce bouton est la
+// meilleure alternative : au lieu de dépendre du bandeau d'installation
+// automatique de Chrome (peu fiable dans le temps, cf. les soucis précédents),
+// on capture l'évènement dès qu'il est disponible et on affiche nous-mêmes un
+// bouton fixe dans le bandeau du haut, déclenchable à tout moment.
+let deferredInstallPrompt = null;
+
+function isIOSDevice() {
+  return /iP(hone|od|ad)/.test(navigator.platform)
+    || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+}
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function updateInstallButtonVisibility() {
+  const btn = document.getElementById('install-btn');
+  if (!btn) return;
+  if (isStandaloneApp()) { btn.style.display = 'none'; return; } // déjà installée/ouverte en appli
+  // iOS n'a aucune API d'installation : le bouton reste visible et ouvre les
+  // instructions manuelles (Partage > Sur l'écran d'accueil) au clic.
+  btn.style.display = (isIOSDevice() || deferredInstallPrompt) ? 'inline-block' : 'none';
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updateInstallButtonVisibility();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updateInstallButtonVisibility();
+});
+function onInstallBtnClick() {
+  if (isIOSDevice()) {
+    document.getElementById('install-ios-modal').classList.add('open');
+    return;
+  }
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(() => {
+    deferredInstallPrompt = null;
+    updateInstallButtonVisibility();
+  });
+}
+updateInstallButtonVisibility();
 </script>
 </body></html>
