@@ -2,6 +2,23 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.40 — 2026-09-21
+    1) Classement : nouveau tri par points façon championnat (2 pts / victoire,
+       1 pt / nul, 0 / défaite), à la place du tri en cascade victoires → nuls
+       → jeux. Un joueur avec plus de nuls peut désormais dépasser un joueur
+       avec plus de victoires si son total de points est supérieur (ex. 1V+3N
+       = 5 pts devance 2V+0N = 4 pts). S'applique aux deux classements
+       (Jeux gagnés et Présence pondérée) ainsi qu'au graphique d'évolution
+       par journée, qui suit maintenant la même logique. Une colonne "Points"
+       est ajoutée aux deux tableaux.
+    2) Onglet "Matchs séance" : le score des matchs en mode "Total" se saisit
+       désormais directement sur la carte du match (admin), avec des flèches
+       ▲/▼ de part et d'autre du score — même principe que l'étape 4
+       "Confrontations" de la page "Saisir des matchs" — au lieu de devoir
+       ouvrir la fenêtre "Modifier le match". Le bouton ✏️ reste disponible
+       pour changer la composition des équipes ou passer en mode "Sets" (non
+       concerné par la saisie inline, qui reste réservée au mode "Total").
+
   v1.39 — 2026-09-20
     Correction de fond du bloc "Équipes constituées" : il dérivait les équipes
     des confrontations enregistrées (state.matches), donc supprimer une
@@ -520,6 +537,22 @@
   .match-score .sep { color: var(--muted); font-size: 18px; margin: 0 2px; }
   .match-trophy { font-size: 10px; margin-top: 2px; }
   .match-score-detail { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  /* Saisie inline du score (mode admin), même style que le stepper d'heure de
+     padel-bots.html — flèches ▲/▼ de part et d'autre de la valeur, plus clair
+     qu'un simple champ numérique, en particulier sur mobile où les flèches
+     natives des <input type="number"> ne s'affichent pas toujours. */
+  .match-score-static { display: none; align-items: baseline; justify-content: center; }
+  body.locked .match-score-static { display: flex; }
+  .match-score-edit { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  body.locked .match-score-edit { display: none; }
+  .score-spinner-unit { display: flex; flex-direction: column; align-items: center; }
+  .score-spinner-arrow { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 9px; line-height: 1; padding: 3px 6px; }
+  .score-spinner-arrow:hover { color: var(--accent); }
+  .score-spinner-arrow:active { color: var(--accent2); }
+  .score-spinner-input { width: 32px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'Bebas Neue', sans-serif; font-size: 22px; text-align: center; padding: 2px 0; border-radius: 4px; outline: none; -moz-appearance: textfield; }
+  .score-spinner-input::-webkit-outer-spin-button, .score-spinner-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .score-spinner-input:focus { border-color: var(--accent); }
+  .score-spinner-sep { color: var(--muted); font-size: 14px; padding: 0 1px; }
   .bot-resa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 32px; }
   .bot-resa-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; border-left: 3px solid var(--border); }
   .bot-resa-card.confirmee { border-left-color: var(--accent); }
@@ -911,8 +944,8 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {} };
-const APP_VERSION = 'v1.39';
-const APP_VERSION_DATE = '2026-09-20';
+const APP_VERSION = 'v1.40';
+const APP_VERSION_DATE = '2026-09-21';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
 firebase.initializeApp({
@@ -2030,23 +2063,66 @@ function deleteMatch(idx) {
   toast('✓ Match supprimé');
 }
 
+// Saisie du score directement sur la carte (mode admin), au lieu de devoir
+// ouvrir la fenêtre "Modifier le match" — même principe de flèches ▲/▼ que
+// l'étape 4 "Confrontations" de la page Matchs. Réservé au mode "Total" : un
+// match en mode "Sets" reste modifiable uniquement via ✏️ (la page ne gère
+// pas de saisie set par set inline).
+function scoreSpinnerHtml(idx, side, value) {
+  return '<div class="score-spinner-unit">'
+    +   '<button type="button" class="score-spinner-arrow" onclick="adjustMatchScore(' + idx + ',' + side + ',1)" aria-label="Augmenter">▲</button>'
+    +   '<input type="number" min="0" class="score-spinner-input" value="' + value + '" onchange="setMatchScore(' + idx + ',' + side + ',this.value)">'
+    +   '<button type="button" class="score-spinner-arrow" onclick="adjustMatchScore(' + idx + ',' + side + ',-1)" aria-label="Diminuer">▼</button>'
+    + '</div>';
+}
+
+function adjustMatchScore(idx, side, delta) {
+  const m = state.matches[idx];
+  if (!m || m.scoreMode === 'sets') return;
+  const score = Array.isArray(m.score) ? [...m.score] : [0, 0];
+  score[side] = Math.max(0, (score[side] || 0) + delta);
+  m.score = score;
+  m.scoreMode = 'total';
+  saveState(); render();
+}
+
+function setMatchScore(idx, side, val) {
+  const m = state.matches[idx];
+  if (!m || m.scoreMode === 'sets') return;
+  const score = Array.isArray(m.score) ? [...m.score] : [0, 0];
+  score[side] = Math.max(0, parseInt(val) || 0);
+  m.score = score;
+  m.scoreMode = 'total';
+  saveState(); render();
+}
+
 function matchCard(m, showDate, matchNum) {
   const hasScore = Array.isArray(m.score);
   const winner = hasScore ? (m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0) : -1;
   const cardClass = !hasScore ? 'pending' : winner===1 ? 'win-a' : winner===2 ? 'win-b' : 'draw';
   const setsDetail = m.scoreMode === 'sets' && m.sets ? m.sets.map(s => s[0]+'-'+s[1]).join(' ') : '';
-  const scoreHtml = hasScore
+  const staticScoreHtml = hasScore
     ? '<span class="s-a">' + m.score[0] + '</span><span class="sep">—</span><span class="s-b">' + m.score[1] + '</span>'
     : '<span style="font-size:10px;color:var(--muted);letter-spacing:1px">SCORE À SAISIR</span>';
+  // Mode "Sets" : score affiché seul (statique) pour tout le monde, y compris
+  // en admin — la saisie inline ne s'applique qu'au mode "Total".
+  const scoreBlock = m.scoreMode === 'sets'
+    ? '<div class="match-score">' + staticScoreHtml + '</div>'
+    : '<div class="match-score match-score-static">' + staticScoreHtml + '</div>'
+      + '<div class="match-score match-score-edit admin-only">'
+      +   scoreSpinnerHtml(m.idx, 0, hasScore ? m.score[0] : 0)
+      +   '<div class="score-spinner-sep">—</div>'
+      +   scoreSpinnerHtml(m.idx, 1, hasScore ? m.score[1] : 0)
+      + '</div>';
   return '<div class="match-card ' + cardClass + '">'
     + '<div class="match-header">'
     + '<span class="match-num">' + (matchNum ? 'Match '+matchNum : '') + (showDate ? ' · '+m.sessionDate : '') + '</span>'
-    + '<div class="match-actions admin-only"><button onclick="openMatchModal('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">✏️</button><button onclick="deleteMatch('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">🗑️</button></div>'
+    + '<div class="match-actions admin-only"><button onclick="openMatchModal('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px" title="Modifier les équipes">✏️</button><button onclick="deleteMatch('+m.idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">🗑️</button></div>'
     + '</div>'
     + '<div class="match-body">'
     + '<div class="match-team-a"><div class="match-team-label a">Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
     + '<div class="match-center">'
-    + '<div class="match-score">' + scoreHtml + '</div>'
+    + scoreBlock
     + '<div class="match-trophy">' + (winner===1?'🏆':'') + (winner===0?'🤝':'') + (winner===2?'🏆':'') + '</div>'
     + (setsDetail ? '<div class="match-score-detail">'+setsDetail+'</div>' : '')
     + '</div>'
@@ -2232,26 +2308,29 @@ function renderRanking() {
     });
   });
 
-  // Tri : victoires d'abord, puis matchs nuls, puis nombre de jeux (comme un goalaverage)
-  const ranked = Object.entries(stats)
-    .sort((a,b) => b[1].victoires - a[1].victoires || b[1].nuls - a[1].nuls || b[1].jeux - a[1].jeux);
+  // Points façon championnat : 2 pts / victoire, 1 pt / nul, 0 / défaite.
+  Object.values(stats).forEach(s => { s.points = s.victoires * 2 + s.nuls; });
 
-  const slots = buildPodiumSlots(ranked, ([,s]) => s.victoires + '|' + s.nuls + '|' + s.jeux);
+  // Tri : points d'abord, puis nombre de jeux en départage (goalaverage)
+  const ranked = Object.entries(stats)
+    .sort((a,b) => b[1].points - a[1].points || b[1].jeux - a[1].jeux);
+
+  const slots = buildPodiumSlots(ranked, ([,s]) => s.points + '|' + s.jeux);
   const podiumEntries = slots.map(slot => {
     if (!slot) return null;
     const names = slot.group.map(([p]) => p.split(' ')[0]).join(' & ');
     const s = slot.group[0][1];
-    return { name: names, big: s.victoires, bigLabel: 'VICTOIRES', sub: s.nuls + ' nul(s) · ' + s.jeux + ' jeux', isEx: slot.isEx };
+    return { name: names, big: s.points, bigLabel: 'POINTS', sub: s.victoires + ' V · ' + s.nuls + ' N · ' + s.jeux + ' jeux', isEx: slot.isEx };
   });
 
   const podiumCards = buildPodiumSVG(podiumEntries);
 
   const posClass = ['gold','silver','bronze'];
-  const maxVictoires = ranked[0][1].victoires || 1;
+  const maxPoints = ranked[0][1].points || 1;
   const rows = ranked.map(([player, s], i) => {
     const winPct = s.matchs > 0 ? Math.round(s.victoires / s.matchs * 100) : 0;
     const pos = i < 3 ? '<span class="' + posClass[i] + '">' + (i+1) + '</span>' : (i+1);
-    const bar = Math.round(s.victoires / maxVictoires * 100);
+    const bar = Math.round(s.points / maxPoints * 100);
     return '<tr>'
       + '<td>' + pos + '</td>'
       + '<td style="text-align:left">'
@@ -2261,7 +2340,8 @@ function renderRanking() {
       + '<div style="height:2px;background:var(--border);border-radius:2px;margin-top:3px">'
       + '<div style="height:100%;width:' + bar + '%;background:var(--accent);border-radius:2px;transition:width 0.6s"></div>'
       + '</div></div></div></td>'
-      + '<td class="val-accent">' + s.victoires + '</td>'
+      + '<td class="val-accent">' + s.points + '</td>'
+      + '<td>' + s.victoires + '</td>'
       + '<td>' + s.nuls + '</td>'
       + '<td>' + s.jeux + '</td>'
       + '<td>' + s.matchs + '</td>'
@@ -2271,7 +2351,7 @@ function renderRanking() {
 
   container.innerHTML = journeeBanner() + '<div class="ranking-podium">' + podiumCards + '</div>'
     + '<table class="ranking-table">'
-    + '<thead><tr><th>#</th><th>Joueur</th><th>Victoires</th><th>Nuls</th><th>Jeux</th><th>Matchs</th><th>% Victoires</th></tr></thead>'
+    + '<thead><tr><th>#</th><th>Joueur</th><th>Points</th><th>Victoires</th><th>Nuls</th><th>Jeux</th><th>Matchs</th><th>% Victoires</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '</table>';
   renderEvolutionChart('chart-victoires', false);
@@ -2340,9 +2420,13 @@ function renderPresenceRanking() {
     };
   });
 
-  // Même tri en cascade que le classement Victoires, sur les valeurs pondérées par la présence
+  // Points façon championnat (2 pts / victoire, 1 pt / nul) calculés sur les
+  // valeurs pondérées par la présence, même logique que le classement Points.
+  Object.values(stats).forEach(s => { s.pointsPond = s.victoiresPond * 2 + s.nulsPond; });
+
+  // Tri : points pondérés d'abord, puis jeux pondérés en départage
   const ranked = Object.entries(stats)
-    .sort((a,b) => b[1].victoiresPond - a[1].victoiresPond || b[1].nulsPond - a[1].nulsPond || b[1].jeuxPond - a[1].jeuxPond);
+    .sort((a,b) => b[1].pointsPond - a[1].pointsPond || b[1].jeuxPond - a[1].jeuxPond);
 
   if (ranked.length === 0) {
     container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Pas assez de données sur cette période.</div>';
@@ -2350,22 +2434,22 @@ function renderPresenceRanking() {
     return;
   }
 
-  const slots = buildPodiumSlots(ranked, ([,s]) => s.victoiresPond + '|' + s.nulsPond + '|' + s.jeuxPond);
+  const slots = buildPodiumSlots(ranked, ([,s]) => s.pointsPond + '|' + s.jeuxPond);
   const podiumEntries = slots.map(slot => {
     if (!slot) return null;
     const names = slot.group.map(([p]) => p.split(' ')[0]).join(' & ');
     const s = slot.group[0][1];
-    return { name: names, big: s.victoiresPond, bigLabel: 'VICTOIRES PONDÉRÉES', sub: s.victoires + ' victoire(s) réelle(s) · ' + s.pct + '% présence', isEx: slot.isEx };
+    return { name: names, big: s.pointsPond, bigLabel: 'POINTS PONDÉRÉS', sub: s.victoires + ' victoire(s) réelle(s) · ' + s.pct + '% présence', isEx: slot.isEx };
   });
 
   const podiumCards = buildPodiumSVG(podiumEntries);
 
   const posClass = ['gold','silver','bronze'];
-  const maxV = ranked[0][1].victoiresPond || 1;
+  const maxP = ranked[0][1].pointsPond || 1;
   const rows = ranked.map(([player, s], i) => {
     const winPct = s.matchs > 0 ? Math.round(s.victoires / s.matchs * 100) : 0;
     const pos = i < 3 ? '<span class="' + posClass[i] + '">' + (i+1) + '</span>' : (i+1);
-    const bar = Math.round((s.victoiresPond / maxV) * 100);
+    const bar = Math.round((s.pointsPond / maxP) * 100);
     return '<tr>'
       + '<td>' + pos + '</td>'
       + '<td style="text-align:left">'
@@ -2375,7 +2459,8 @@ function renderPresenceRanking() {
       + '<div style="height:2px;background:var(--border);border-radius:2px;margin-top:3px">'
       + '<div style="height:100%;width:' + bar + '%;background:var(--accent);border-radius:2px;transition:width 0.6s"></div>'
       + '</div></div></div></td>'
-      + '<td class="val-accent">' + s.victoiresPond + '</td>'
+      + '<td class="val-accent">' + s.pointsPond + '</td>'
+      + '<td>' + s.victoiresPond + '</td>'
       + '<td>' + s.nulsPond + '</td>'
       + '<td>' + s.jeuxPond + '</td>'
       + '<td>' + s.matchs + '</td>'
@@ -2385,7 +2470,7 @@ function renderPresenceRanking() {
 
   container.innerHTML = journeeBanner() + '<div class="ranking-podium">' + podiumCards + '</div>'
     + '<table class="ranking-table">'
-    + '<thead><tr><th>#</th><th>Joueur</th><th>Victoires pond.</th><th>Nuls pond.</th><th>Jeux pond.</th><th>Matchs</th><th>% Victoires</th></tr></thead>'
+    + '<thead><tr><th>#</th><th>Joueur</th><th>Points pond.</th><th>Victoires pond.</th><th>Nuls pond.</th><th>Jeux pond.</th><th>Matchs</th><th>% Victoires</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '</table>';
   renderEvolutionChart('chart-presence', true);
@@ -2484,7 +2569,12 @@ function rankFromMatches(matchesUpTo, sessionsUpTo, weighted) {
     }
   });
 
-  return Object.entries(stats).sort((a,b) => b[1].victoires-a[1].victoires || b[1].nuls-a[1].nuls || b[1].jeux-a[1].jeux);
+  // Points façon championnat (2 pts / victoire, 1 pt / nul) — même logique que
+  // le classement affiché, pour que les positions du graphique d'évolution
+  // restent cohérentes avec le tableau.
+  Object.values(stats).forEach(s => { s.points = s.victoires * 2 + s.nuls; });
+
+  return Object.entries(stats).sort((a,b) => b[1].points-a[1].points || b[1].jeux-a[1].jeux);
 }
 
 function renderEvolutionChart(canvasId, weighted) {
