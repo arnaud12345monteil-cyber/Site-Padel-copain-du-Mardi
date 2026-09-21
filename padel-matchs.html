@@ -4,6 +4,16 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.3 — 2026-09-21
+    (1) L'étape 4 "Confrontations" prend maintenant en compte les matchs
+    enregistrés directement depuis l'onglet "Matchs de la séance" de la page
+    principale (bouton "+ Match"), sans être passés par l'étape 3 "Équipes"
+    de cette page — leurs équipes sont reprises automatiquement (sans
+    doublon) pour que la confrontation apparaisse bien ici. (2) "Tout
+    réinitialiser" (étape 3) propose désormais, si des confrontations étaient
+    déjà enregistrées pour la date, de les supprimer aussi en même temps que
+    les équipes.
+
   v1.2 — 2026-09-19
     Bouton d'installation persistant "📲 Installer" dans le bandeau du haut
     (même logique que le tracker principal v1.35).
@@ -213,8 +223,8 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.2';
-const APP_VERSION_DATE = '2026-09-17';
+const APP_VERSION = 'v1.3';
+const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
 
@@ -269,21 +279,43 @@ function onSessionChange() {
   pendingSelection = [];
 
   const saved = state.team_setups && state.team_setups[date];
-  if (saved && saved.length) {
-    // Reprend les équipes proposées la première fois pour cette date
-    teams = saved.map(t => ({ id: Date.now()+Math.random(), players: [...t.players] }));
-    renderPlayersGrid();
-    renderTeams();
-    renderExistingMatches();
-    rebuildMatchesFromTeams(date);
-  } else {
-    teams = [];
-    generatedMatches = [];
-    renderPlayersGrid();
-    renderTeams();
-    renderExistingMatches();
-    renderMatchesList();
-  }
+  teams = (saved && saved.length)
+    ? saved.map(t => ({ id: Date.now()+Math.random(), players: [...t.players] }))
+    : [];
+
+  // Reprend aussi les équipes des matchs déjà enregistrés pour cette date,
+  // même saisis directement depuis l'onglet "Matchs de la séance" de la page
+  // principale (bouton "+ Match", sans passer par cette page) — sinon
+  // l'étape 4 "Confrontations" ne les affiche pas.
+  mergeTeamsFromExistingMatches(date);
+
+  renderPlayersGrid();
+  renderTeams();
+  renderExistingMatches();
+  if (teams.length) rebuildMatchesFromTeams(date);
+  else { generatedMatches = []; renderMatchesList(); }
+}
+
+// Équipes provenant de confrontations déjà enregistrées (state.matches) pour
+// cette date, mais absentes de `teams` (saisies ailleurs que dans cette page) —
+// ajoutées sans doublon (comparaison par composition de joueurs, peu importe
+// l'ordre) pour que l'étape 4 les intègre.
+function sameTeamPlayers(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  const sa = [...a].map(x => x.trim().toLowerCase()).sort().join('|');
+  const sb = [...b].map(x => x.trim().toLowerCase()).sort().join('|');
+  return sa === sb;
+}
+function mergeTeamsFromExistingMatches(date) {
+  const existing = (state.matches || []).filter(m => m.sessionDate === date);
+  existing.forEach(m => {
+    [m.team1, m.team2].forEach(players => {
+      if (!players || !players.length) return;
+      if (!teams.some(t => sameTeamPlayers(t.players, players))) {
+        teams.push({ id: Date.now()+Math.random(), players: [...players] });
+      }
+    });
+  });
 }
 
 // Reconstruit la liste des confrontations à partir des équipes restaurées,
@@ -483,16 +515,40 @@ function formTeamsVariedPartners() {
 
 function resetTeams() {
   const date = document.getElementById('session-select').value;
+
+  // Si des confrontations ont déjà été générées ET enregistrées pour cette
+  // date (state.matches), on propose de les supprimer aussi — sinon elles
+  // resteraient liées à des équipes qui n'existent plus.
+  const existingMatches = (state.matches || []).filter(m => m.sessionDate === date);
+  let alsoDeleteMatches = false;
+  if (existingMatches.length) {
+    alsoDeleteMatches = confirm(
+      existingMatches.length + ' match(s) déjà enregistré(s) pour cette date.\n' +
+      'Les supprimer aussi en réinitialisant les équipes ?'
+    );
+  }
+
   teams = [];
   pendingSelection = [];
   generatedMatches = [];
   renderTeams();
   renderMatchesList();
   document.getElementById('strategy-hint').textContent = '';
+
+  const updates = {};
   if (state.team_setups && state.team_setups[date]) {
     delete state.team_setups[date];
-    docRef.update({ team_setups: state.team_setups }).catch(() => {});
+    updates.team_setups = state.team_setups;
   }
+  if (alsoDeleteMatches) {
+    state.matches = (state.matches || []).filter(m => m.sessionDate !== date);
+    updates.matches = state.matches;
+  }
+  if (Object.keys(updates).length) {
+    docRef.update(updates).catch(e => toast('Erreur : ' + e.message));
+  }
+  renderExistingMatches();
+  if (alsoDeleteMatches) toast('✓ Équipes et matchs réinitialisés pour cette date');
 }
 
 // ── Étape 4 : générer toutes les confrontations possibles ──────────────
