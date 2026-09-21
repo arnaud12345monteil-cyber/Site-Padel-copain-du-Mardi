@@ -4,6 +4,12 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.6 — 2026-09-21
+    Nouvel ajustement sur les avatars (v1.5) : dans "Joueurs inscrits" par
+    séance, le nom du joueur sort de la tuile et s'affiche en dessous (au
+    lieu d'être en légende par-dessus la photo). L'avatar du bandeau du haut
+    ("Connecté : ...") passe du rond au carré.
+
   v1.5 — 2026-09-21
     Ajustement sur l'affichage des photos/avatars (v1.4) : dans "Joueurs
     inscrits" par séance, la tuile carrée est maintenant intégralement
@@ -106,11 +112,13 @@
   .spots-box .big { font-family: 'Bebas Neue', sans-serif; font-size: 32px; line-height: 1; }
   .spots-box .cap { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
   .players-title { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin: 16px 0 8px; }
-  /* Tuile carrée : la photo (ou la couleur de repli) remplit tout le carré,
-     le nom du joueur est affiché par-dessus en légende dégradée en bas. */
-  .chip { position: relative; display: inline-block; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 0 6px 6px 0; vertical-align: top; }
-  .chip.me { border-color: var(--accent); border-width: 2px; }
-  .chip .chip-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 4px 5px; font-size: 11px; line-height: 1.1; text-align: center; color: #fff; background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.05)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Tuile carrée : la photo (ou la couleur de repli) remplit le carré, le nom
+     du joueur est affiché en dessous, en dehors de la tuile. */
+  .chip { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; margin: 0 6px 6px 0; vertical-align: top; }
+  .chip .avatar-square { position: relative; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .chip.me .avatar-square { border-color: var(--accent); border-width: 2px; }
+  .chip .chip-name { font-size: 11px; line-height: 1.1; text-align: center; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px; }
+  .chip.me .chip-name { color: var(--accent); }
   .court-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 16px; text-align: center; margin: 0 8px 8px 0; }
   .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
   .empty-state { text-align: center; color: var(--muted); font-size: 12px; padding: 40px 20px; }
@@ -221,7 +229,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.5';
+const APP_VERSION = 'v1.6';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
@@ -262,16 +270,17 @@ function avatarInitial(name) {
 }
 function avatarHtml(name, size) {
   const photo = (currentData.player_photos || {})[name];
+  const radius = Math.max(3, Math.round(size * 0.18));
   if (photo) {
-    return '<img src="' + photo + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block;vertical-align:middle">';
+    return '<img src="' + photo + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;object-fit:cover;flex-shrink:0;display:inline-block;vertical-align:middle">';
   }
   const fontSize = Math.round(size * 0.42);
-  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:' + fontSize + 'px;flex-shrink:0;vertical-align:middle">' + avatarInitial(name) + '</span>';
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:' + fontSize + 'px;flex-shrink:0;vertical-align:middle">' + avatarInitial(name) + '</span>';
 }
 // Variante "carré plein" : la photo (ou la couleur de repli) occupe tout le
 // fond de la tuile, en position absolute — pensée pour être injectée dans un
-// conteneur positionné en relative (.chip) dont le nom du joueur est affiché
-// par-dessus, en légende.
+// conteneur .avatar-square positionné en relative (.chip), le nom du joueur
+// étant affiché à côté ou en dessous, hors de la tuile.
 function avatarFillHtml(name) {
   const photo = (currentData.player_photos || {})[name];
   if (photo) {
@@ -449,7 +458,7 @@ function renderSessionCard(s, idx) {
     + '</div>'
     + '<div class="players-title">Joueurs inscrits</div>'
     + '<div>' + (attendees.length
-        ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '">' + avatarFillHtml(p) + '<span class="chip-name">' + shortName(p) + '</span></span>').join('')
+        ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '"><span class="avatar-square">' + avatarFillHtml(p) + '</span><span class="chip-name">' + shortName(p) + '</span></span>').join('')
         : '<span style="color:var(--muted);font-size:11px">Personne pour l\'instant</span>') + '</div>'
     + courtsHtml
     + '<button class="btn ' + (imIn ? 'leave' : 'join') + '" onclick="toggleAttendance(\'' + s.id + '\')">'
