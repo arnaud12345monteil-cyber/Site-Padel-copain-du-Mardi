@@ -4,6 +4,19 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.6 — 2026-09-21
+    Trois correctifs/ajouts demandés après usage réel : (1) les équipes de
+    l'étape 3 sont désormais enregistrées immédiatement à chaque formation/
+    modification (au hasard, équilibrage, variation, sélection manuelle,
+    dissolution) — avant, elles n'étaient sauvegardées qu'en cliquant
+    "Générer toutes les confrontations possibles", donc perdues si on
+    s'arrêtait à l'étape 3. (2) Bouton "+ Rejouer cette confrontation" sur
+    chaque ligne de l'étape 4, pour ajouter un 2e/3e match entre les mêmes
+    équipes (utile notamment avec seulement 2 équipes constituées). (3) Les
+    scores restent modifiables même une fois enregistrés (au lieu d'être
+    verrouillés) — les modifier puis cliquer "Enregistrer les matchs" met à
+    jour le match existant, sans créer de doublon.
+
   v1.5 — 2026-09-21
     L'étape 4 regroupait les confrontations PAR PAIRE D'ÉQUIPES : si la même
     paire avait joué plusieurs fois (ex. plusieurs matchs saisis via
@@ -121,7 +134,10 @@
   .match-row .vs { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
   .match-row input[type="number"] { width: 48px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: 'Bebas Neue', sans-serif; font-size: 18px; text-align: center; padding: 6px 2px; border-radius: 4px; outline: none; }
   .match-row input[type="number"]:focus { border-color: var(--accent); }
-  .match-row.saved { opacity: 0.45; }
+  /* Un simple liseré indique "déjà enregistré" SANS donner l'air désactivé —
+     le score reste modifiable même une fois enregistré. */
+  .match-row.saved { border-left: 3px solid var(--accent2); }
+  .match-tag { font-size: 9px; color: var(--muted); letter-spacing: 1px; width: 100%; margin-bottom: 2px; }
 
   .existing-list { font-size: 11px; color: var(--muted); line-height: 1.9; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); padding: 12px 20px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }
@@ -247,7 +263,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.5';
+const APP_VERSION = 'v1.6';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -405,9 +421,11 @@ function togglePresent(p) {
   if (presentPlayers.includes(p)) {
     presentPlayers = presentPlayers.filter(x => x !== p);
     // Retirer aussi des équipes s'il y était
+    const wasInTeam = teams.some(t => t.players.includes(p));
     teams.forEach(t => { t.players = t.players.filter(x => x !== p); });
     teams = teams.filter(t => t.players.length > 0);
     pendingSelection = pendingSelection.filter(x => x !== p);
+    if (wasInTeam) persistTeamSetups();
   } else {
     presentPlayers.push(p);
   }
@@ -422,6 +440,22 @@ function assignedPlayers() {
 function availablePlayers() {
   const assigned = assignedPlayers();
   return presentPlayers.filter(p => !assigned.has(p));
+}
+
+// Enregistre l'état courant des équipes dans team_setups[date] IMMÉDIATEMENT
+// après chaque formation/modification — sans attendre l'étape 4. Avant, les
+// équipes n'étaient sauvegardées qu'en cliquant "Générer toutes les
+// confrontations possibles" : si on s'arrêtait à l'étape 3, tout était perdu.
+function persistTeamSetups() {
+  const date = document.getElementById('session-select').value;
+  if (!date) return;
+  if (!state.team_setups) state.team_setups = {};
+  if (teams.length) {
+    state.team_setups[date] = teams.map(t => ({ players: t.players }));
+  } else {
+    delete state.team_setups[date];
+  }
+  docRef.update({ team_setups: state.team_setups }).catch(e => toast('Erreur sauvegarde équipes : ' + e.message));
 }
 
 function renderTeams() {
@@ -451,6 +485,7 @@ function pickForTeam(p) {
     teams.push({ id: Date.now()+Math.random(), players: [...pendingSelection] });
     pendingSelection = [];
     renderTeams();
+    persistTeamSetups();
   } else {
     renderAvailableGrid();
   }
@@ -459,6 +494,7 @@ function pickForTeam(p) {
 function removeTeam(i) {
   teams.splice(i, 1);
   renderTeams();
+  persistTeamSetups();
 }
 
 function autoFormTeams() {
@@ -473,6 +509,7 @@ function autoFormTeams() {
   }
   pendingSelection = [];
   renderTeams();
+  persistTeamSetups();
   if (avail.length === 1) toast('⚠️ ' + avail[0] + ' reste sans équipe (nombre impair)');
   document.getElementById('strategy-hint').textContent = '';
 }
@@ -518,6 +555,7 @@ function formTeamsBalanced() {
   }
   pendingSelection = [];
   renderTeams();
+  persistTeamSetups();
   if (lo === hi) toast('⚠️ ' + skills[lo].p + ' reste sans équipe (nombre impair)');
   document.getElementById('strategy-hint').textContent = noHistory
     ? 'Équilibrage basé sur les jeux gagnés/match — certains joueurs sans historique ont été supposés de niveau moyen.'
@@ -546,6 +584,7 @@ function formTeamsVariedPartners() {
   }
   pendingSelection = [];
   renderTeams();
+  persistTeamSetups();
   if (avail.length === 1) toast('⚠️ ' + avail[0] + ' reste sans équipe (nombre impair)');
   document.getElementById('strategy-hint').textContent = noHistory
     ? 'Aucun historique de matchs trouvé — équivaut à un tirage au hasard pour cette fois.'
@@ -595,11 +634,17 @@ function generateMatches() {
   const date = document.getElementById('session-select').value;
   rebuildMatchesFromTeams(date);
   toast(generatedMatches.length + ' confrontation(s) générée(s)');
+  persistTeamSetups(); // déjà sauvegardées à l'étape 3, mais on s'assure que c'est à jour
+}
 
-  // Mémorise ces équipes pour cette date — reproposées automatiquement la prochaine fois
-  if (!state.team_setups) state.team_setups = {};
-  state.team_setups[date] = teams.map(t => ({ players: t.players }));
-  docRef.update({ team_setups: state.team_setups }).catch(e => toast('Erreur sauvegarde équipes : ' + e.message));
+// Ajoute une confrontation supplémentaire ENTRE LES MÊMES ÉQUIPES qu'une
+// ligne existante (ex. rejouer un 2e ou 3e match entre les 2 mêmes équipes,
+// utile en particulier quand il n'y a que 2 équipes constituées).
+function addExtraMatch(i) {
+  const src = generatedMatches[i];
+  if (!src) return;
+  generatedMatches.push({ teamA: src.teamA, teamB: src.teamB, s1: '', s2: '', saved: false, pending: false, matchRef: null });
+  renderMatchesList();
 }
 
 function renderExistingMatches() {
@@ -623,14 +668,19 @@ function renderExistingMatches() {
 function renderMatchesList() {
   const el = document.getElementById('matches-list');
   document.getElementById('save-row').style.display = generatedMatches.length ? '' : 'none';
+  // Les scores restent TOUJOURS modifiables ici, y compris pour une
+  // confrontation déjà enregistrée avec un résultat — "Enregistrer les
+  // matchs" met à jour le score existant plutôt que d'en recréer un.
   el.innerHTML = generatedMatches.map((m, i) =>
     '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
-    + (m.pending ? '<div style="font-size:9px;color:var(--muted);letter-spacing:1px;width:100%;margin-bottom:2px">Déjà enregistré — score à compléter</div>' : '')
+    + (m.pending ? '<div class="match-tag">Déjà enregistré — score à compléter</div>'
+        : m.saved ? '<div class="match-tag">Déjà enregistré — modifiable</div>' : '')
     + '<div class="side a">' + m.teamA.join(' + ') + '</div>'
-    + '<input type="number" min="0" value="' + m.s1 + '" ' + (m.saved?'disabled':'') + ' oninput="updateScore(' + i + ',0,this.value)">'
+    + '<input type="number" min="0" value="' + m.s1 + '" oninput="updateScore(' + i + ',0,this.value)">'
     + '<div class="vs">VS</div>'
-    + '<input type="number" min="0" value="' + m.s2 + '" ' + (m.saved?'disabled':'') + ' oninput="updateScore(' + i + ',1,this.value)">'
+    + '<input type="number" min="0" value="' + m.s2 + '" oninput="updateScore(' + i + ',1,this.value)">'
     + '<div class="side b">' + m.teamB.join(' + ') + '</div>'
+    + '<button class="btn secondary" style="font-size:9px;padding:3px 10px;width:100%" onclick="addExtraMatch(' + i + ')">+ Rejouer cette confrontation</button>'
     + '</div>'
   ).join('');
 }
@@ -640,44 +690,45 @@ function updateScore(i, side, val) {
 }
 
 // ── Étape 5 : enregistrement groupé ──────────────────────────────────────
+// Les scores restent modifiables même après enregistrement (voir
+// renderMatchesList) : ce bouton traite donc TOUTES les lignes, pas
+// seulement celles pas encore enregistrées — une ligne déjà enregistrée et
+// non modifiée n'entraîne simplement aucune écriture.
 function saveAllMatches() {
   const date = document.getElementById('session-select').value;
-  const toSave = generatedMatches.filter(m => !m.saved);
-  if (toSave.length === 0) { toast('Rien à enregistrer'); return; }
-
   if (!state.matches) state.matches = [];
-  let withScore = 0, updated = 0, created = 0;
-  toSave.forEach(m => {
+  let updated = 0, created = 0;
+
+  generatedMatches.forEach(m => {
     const hasScore = m.s1 !== '' && m.s2 !== '';
-    if (hasScore) withScore++;
     const score = hasScore ? [parseInt(m.s1) || 0, parseInt(m.s2) || 0] : null;
 
-    // Un match déjà enregistré (ex. via "+ Match", sans score) : on complète
-    // son score en place, sans créer un doublon. On revérifie sa position au
-    // moment d'enregistrer (state.matches a pu être remplacé entre-temps par
-    // une mise à jour Firebase) ; si on ne le retrouve plus, on l'ajoute.
+    // Confrontation déjà présente dans state.matches (avec ou sans score) :
+    // on met à jour son score EN PLACE, sans créer de doublon. On revérifie
+    // sa position au moment d'enregistrer (state.matches a pu être remplacé
+    // entre-temps par une synchronisation Firebase) ; si on ne le retrouve
+    // plus, on la recrée.
     const idx = m.matchRef ? state.matches.indexOf(m.matchRef) : -1;
     if (idx !== -1) {
-      state.matches[idx].score = score;
-      updated++;
+      const changed = JSON.stringify(state.matches[idx].score) !== JSON.stringify(score);
+      if (changed) { state.matches[idx].score = score; updated++; }
     } else {
-      state.matches.push({
-        sessionDate: date,
-        team1: m.teamA,
-        team2: m.teamB,
-        scoreMode: 'total',
-        score,
-      });
+      const newMatch = { sessionDate: date, team1: m.teamA, team2: m.teamB, scoreMode: 'total', score };
+      state.matches.push(newMatch);
+      m.matchRef = newMatch; // pour qu'une modification ultérieure de cette même ligne mette à jour, sans doublon
       created++;
     }
-    m.saved = true;
+    m.saved = hasScore;
+    m.pending = !hasScore;
   });
+
+  if (!updated && !created) { toast('Rien à modifier'); return; }
 
   docRef.update({ matches: state.matches }).then(() => {
     const parts = [];
     if (created) parts.push(created + ' nouveau(x)');
-    if (updated) parts.push(updated + ' score(s) complété(s)');
-    toast('✓ ' + parts.join(', ') + (withScore < toSave.length ? ' (' + (toSave.length-withScore) + ' sans score)' : ''));
+    if (updated) parts.push(updated + ' score(s) mis à jour');
+    toast('✓ ' + parts.join(', '));
     renderMatchesList();
     renderExistingMatches();
   }).catch(e => toast('Erreur : ' + e.message));
