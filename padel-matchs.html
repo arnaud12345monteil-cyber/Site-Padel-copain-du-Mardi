@@ -4,6 +4,21 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.10 — 2026-09-21
+    Correction du bug introduit par le correctif "Manche suivante" de la
+    v1.9 : avec 4 joueurs (ou plus généralement dès qu'une confrontation de
+    la manche précédente était déjà enregistrée), cliquer sur "Manche
+    suivante" faisait réapparaître les équipes de la manche PRÉCÉDENTE en
+    plus des nouvelles — un joueur se retrouvait alors dans 2 équipes à la
+    fois, parfois opposées l'une à l'autre. Cause : la fonction chargée de
+    récupérer les équipes saisies hors de cette page (ex. bouton "+ Match")
+    ne distinguait pas "équipe orpheline à récupérer" et "équipe d'une
+    manche passée" — elle réinjectait systématiquement toute composition
+    d'équipe trouvée dans l'historique des matchs de la date, même quand ses
+    joueurs étaient déjà engagés dans la nouvelle manche. Elle ignore
+    désormais toute équipe historique dont au moins un joueur appartient
+    déjà à une équipe de la manche en cours.
+
   v1.9 — 2026-09-21
     Deux correctifs sur "Manche suivante" :
     1) "🆕 Manche suivante" ne se contentait plus de vider les équipes en
@@ -293,7 +308,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.9';
+const APP_VERSION = 'v1.10';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -387,9 +402,22 @@ function mergeTeamsFromExistingMatches(date) {
   existing.forEach(m => {
     [m.team1, m.team2].forEach(players => {
       if (!players || !players.length) return;
-      if (!teams.some(t => sameTeamPlayers(t.players, players))) {
-        teams.push({ id: Date.now()+Math.random(), players: [...players] });
-      }
+      if (teams.some(t => sameTeamPlayers(t.players, players))) return; // déjà présente, rien à faire
+
+      // Ne PAS l'ajouter si un de ses joueurs appartient déjà à une AUTRE
+      // équipe de la manche en cours : sinon, dès qu'une nouvelle manche
+      // (partenaires différents) est formée, cette fonction re-répêchait les
+      // équipes de la manche PRÉCÉDENTE (toujours présentes dans
+      // state.matches) car leur composition ne correspondait plus aux
+      // équipes actuelles — un joueur se retrouvait alors dans 2 équipes à la
+      // fois (l'ancienne et la nouvelle), avec des équipes en trop et parfois
+      // opposées à elles-mêmes. On ne récupère donc que les équipes
+      // "orphelines" issues de matchs saisis ailleurs (ex. bouton "+ Match"
+      // de la page principale) dont aucun joueur n'est déjà engagé ici.
+      const busy = new Set(teams.flatMap(t => t.players));
+      if (players.some(p => busy.has(p))) return;
+
+      teams.push({ id: Date.now()+Math.random(), players: [...players] });
     });
   });
 }
