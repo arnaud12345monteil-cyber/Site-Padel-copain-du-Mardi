@@ -4,6 +4,13 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.8 — 2026-09-21
+    Bouton 🗑️ sur chaque confrontation de l'étape 4, pour la supprimer sans
+    passer par l'onglet "Matchs de la séance" de la page principale. Sur une
+    confrontation déjà enregistrée, une confirmation est demandée puis la
+    suppression est définitive (Firebase) ; sur une proposition pas encore
+    enregistrée, elle est simplement retirée de la liste.
+
   v1.7 — 2026-09-21
     Nouveau bouton "🆕 Manche suivante (nouvelles équipes)" (étape 3) : vide
     la composition d'équipes en cours pour en former une nouvelle (ex. autres
@@ -274,7 +281,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.7';
+const APP_VERSION = 'v1.8';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -709,9 +716,39 @@ function renderMatchesList() {
     + '<div class="vs">VS</div>'
     + '<input type="number" min="0" value="' + m.s2 + '" oninput="updateScore(' + i + ',1,this.value)">'
     + '<div class="side b">' + m.teamB.join(' + ') + '</div>'
-    + '<button class="btn secondary" style="font-size:9px;padding:3px 10px;width:100%" onclick="addExtraMatch(' + i + ')">+ Rejouer cette confrontation</button>'
+    + '<div class="btn-row" style="width:100%;gap:6px">'
+    +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;flex:1" onclick="addExtraMatch(' + i + ')">+ Rejouer cette confrontation</button>'
+    +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;color:var(--danger);border-color:var(--danger)" onclick="deleteMatchRow(' + i + ')" title="Supprimer">🗑️</button>'
+    + '</div>'
     + '</div>'
   ).join('');
+}
+
+// Supprime une confrontation directement depuis cette page. Si elle est déjà
+// enregistrée (matchRef), c'est une suppression définitive dans Firebase
+// (confirmation demandée, comme dans l'onglet "Matchs de la séance" de la
+// page principale) ; si c'est une simple proposition pas encore enregistrée,
+// on la retire juste de la liste, sans rien écrire.
+function deleteMatchRow(i) {
+  const m = generatedMatches[i];
+  if (!m) return;
+
+  if (!m.matchRef) {
+    generatedMatches.splice(i, 1);
+    renderMatchesList();
+    return;
+  }
+
+  if (!confirm('Supprimer définitivement cette confrontation (' + m.teamA.join('/') + ' vs ' + m.teamB.join('/') + ') ?')) return;
+  const idx = state.matches.indexOf(m.matchRef);
+  if (idx !== -1) state.matches.splice(idx, 1);
+
+  docRef.update({ matches: state.matches }).then(() => {
+    toast('✓ Confrontation supprimée');
+    const date = document.getElementById('session-select').value;
+    rebuildMatchesFromTeams(date);
+    renderExistingMatches();
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 function updateScore(i, side, val) {
