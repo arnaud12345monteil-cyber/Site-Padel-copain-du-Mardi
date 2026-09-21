@@ -4,6 +4,18 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.9 — 2026-09-21
+    Deux correctifs sur "Manche suivante" :
+    1) "🆕 Manche suivante" ne se contentait plus de vider les équipes en
+       attendant un second clic sur "Varier les partenaires" : elle forme
+       maintenant automatiquement une nouvelle composition d'équipes (avec
+       partenaires différents) dès ce même clic.
+    2) Décocher un joueur dans "Joueurs présents" alors qu'il faisait partie
+       d'une équipe ne laissait plus son/ses coéquipier(s) coincé(s) dans une
+       équipe orpheline à 1 seul joueur (jamais nettoyée) : l'équipe entière
+       est maintenant dissoute, ce qui évite les équipes incomplètes qui
+       s'accumulaient et faussaient "Varier les partenaires".
+
   v1.8 — 2026-09-21
     Bouton 🗑️ sur chaque confrontation de l'étape 4, pour la supprimer sans
     passer par l'onglet "Matchs de la séance" de la page principale. Sur une
@@ -281,7 +293,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.8';
+const APP_VERSION = 'v1.9';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -438,10 +450,11 @@ function renderPlayersGrid() {
 function togglePresent(p) {
   if (presentPlayers.includes(p)) {
     presentPlayers = presentPlayers.filter(x => x !== p);
-    // Retirer aussi des équipes s'il y était
+    // Dissout ENTIÈREMENT l'équipe du joueur retiré (pas seulement lui) :
+    // sinon son/ses coéquipier(s) restaient seuls dans une "équipe" à 1 seul
+    // joueur, jamais nettoyée (d'où des équipes incomplètes qui s'accumulent).
     const wasInTeam = teams.some(t => t.players.includes(p));
-    teams.forEach(t => { t.players = t.players.filter(x => x !== p); });
-    teams = teams.filter(t => t.players.length > 0);
+    teams = teams.filter(t => !t.players.includes(p));
     pendingSelection = pendingSelection.filter(x => x !== p);
     if (wasInTeam) persistTeamSetups();
   } else {
@@ -619,12 +632,20 @@ function formTeamsVariedPartners() {
 function newRound() {
   teams = [];
   pendingSelection = [];
-  renderTeams();
   const date = document.getElementById('session-select').value;
-  renderExistingMatches();      // l'historique (état déjà en mémoire) reste visible immédiatement
-  rebuildMatchesFromTeams(date); // réaffiche les confrontations déjà enregistrées, sans nouvelle proposition tant qu'aucune équipe n'est reformée
-  document.getElementById('strategy-hint').textContent =
-    'Nouvelle manche : compose de nouvelles équipes ci-dessus — les confrontations déjà enregistrées restent inchangées.';
+  renderExistingMatches(); // l'historique (état déjà en mémoire) reste visible immédiatement
+
+  // Recompose tout de suite une nouvelle équipe (partenaires différents),
+  // au lieu de juste vider et attendre un second clic — c'est le but même
+  // du bouton "Manche suivante".
+  if (availablePlayers().length >= 2) {
+    formTeamsVariedPartners(); // forme les équipes + persiste + son propre message dans strategy-hint
+    toast('🆕 Nouvelle manche : équipes reformées');
+  } else {
+    renderTeams();
+    document.getElementById('strategy-hint').textContent = 'Pas assez de joueurs disponibles pour former une nouvelle équipe.';
+  }
+  rebuildMatchesFromTeams(date);
 }
 
 function resetTeams() {
