@@ -4,6 +4,17 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.4 — 2026-09-21
+    Chaque joueur peut ajouter/changer sa photo de profil ("📷 Changer ma
+    photo" dans le bandeau une fois connecté) — recadrée en carré et
+    compressée dans le navigateur avant envoi (le document Firebase partagé
+    avec toute l'appli a une limite de taille, donc les avatars restent
+    petits). Affichée sous le nom dans "Joueurs inscrits" de chaque
+    séance ; sans photo, un rond de couleur avec l'initiale du prénom sert
+    de repère visuel. Même logique reprise dans le tracker principal
+    (v1.43) pour les classements/podium (à côté du nom) et les séances
+    (sous le nom).
+
   v1.3 — 2026-09-19
     Bouton d'installation persistant "📲 Installer" dans le bandeau du haut
     (même logique que le tracker principal v1.35).
@@ -72,10 +83,13 @@
   .btn.join { background: var(--accent); color: #06110a; }
   .error-msg { color: var(--danger); font-size: 11px; margin-top: 10px; display: none; }
 
-  .who-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+  .who-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; gap: 10px; flex-wrap: wrap; }
   .who-bar .name { font-size: 13px; }
   .who-bar .name b { color: var(--accent); }
   .who-bar a { color: var(--muted); font-size: 11px; letter-spacing: 1px; cursor: pointer; text-decoration: underline; }
+  .who-left { display: flex; align-items: center; gap: 10px; }
+  .who-actions { display: flex; gap: 12px; margin-top: 3px; }
+  .who-actions a { font-size: 10px; }
 
   .session-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
   .ns-date { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--text); letter-spacing: 1px; line-height: 1; }
@@ -85,7 +99,8 @@
   .spots-box .big { font-family: 'Bebas Neue', sans-serif; font-size: 32px; line-height: 1; }
   .spots-box .cap { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
   .players-title { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin: 16px 0 8px; }
-  .chip { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 11px; margin: 0 6px 6px 0; }
+  /* Nom au-dessus, avatar/photo en dessous — un petit badge par joueur */
+  .chip { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 11px; margin: 0 6px 6px 0; }
   .chip.me { border-color: var(--accent); color: var(--accent); }
   .court-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 16px; text-align: center; margin: 0 8px 8px 0; }
   .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
@@ -167,9 +182,19 @@
   <!-- Écran principal (une fois connecté) -->
   <div id="main-screen" style="display:none">
     <div class="who-bar">
-      <div class="name">Connecté : <b id="who-name"></b></div>
+      <div class="who-left">
+        <span id="who-avatar"></span>
+        <div>
+          <div class="name">Connecté : <b id="who-name"></b></div>
+          <div class="who-actions">
+            <a onclick="triggerAvatarPicker()">📷 Changer ma photo</a>
+            <a onclick="removeMyAvatar()" id="remove-avatar-link" style="display:none">🗑️ Retirer ma photo</a>
+          </div>
+        </div>
+      </div>
       <a onclick="logout()">Changer de joueur</a>
     </div>
+    <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="onAvatarFileChosen(this.files[0])">
     <div id="sessions-container"><div class="loading-state">Chargement des séances...</div></div>
   </div>
 </div>
@@ -187,11 +212,11 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.3';
-const APP_VERSION_DATE = '2026-09-17';
+const APP_VERSION = 'v1.4';
+const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
-let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {} };
+let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {}, player_photos: {} };
 let currentPlayer = localStorage.getItem('padel_current_player') || '';
 
 // ── Utilitaires date (mêmes règles que le tracker principal) ───────────────
@@ -210,6 +235,29 @@ function shortName(fullName) {
   const parts = fullName.trim().split(/\s+/);
   if (parts.length === 1) return parts[0];
   return parts[0] + ' ' + parts[parts.length-1][0].toUpperCase() + '.';
+}
+
+// ── Avatars ──────────────────────────────────────────────────────────────
+// Photo si le joueur en a mis une (currentData.player_photos), sinon un
+// rond de couleur avec son initiale — couleur dérivée du nom, stable dans
+// le temps (même joueur = même couleur sur toutes les pages de l'appli).
+const AVATAR_PALETTE = ['#b8f53c','#3cffa0','#ff8c1a','#ff4f4f','#4fa8ff','#ffd166','#c77dff','#ff6fb0','#5fe3d1','#f4a259'];
+function avatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+function avatarInitial(name) {
+  const first = name.trim().split(/\s+/)[0] || '?';
+  return first[0].toUpperCase();
+}
+function avatarHtml(name, size) {
+  const photo = (currentData.player_photos || {})[name];
+  if (photo) {
+    return '<img src="' + photo + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block;vertical-align:middle">';
+  }
+  const fontSize = Math.round(size * 0.42);
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:' + fontSize + 'px;flex-shrink:0;vertical-align:middle">' + avatarInitial(name) + '</span>';
 }
 function courtsForDate(date) {
   const confirmed = (currentData.bot_reservations || []).filter(r => r.statut === 'confirmée' && r.date === date);
@@ -251,6 +299,7 @@ onSnapshot(docRef, (snap) => {
     sessions: (data.sessions || []).map(s => ({ ...s, attendees: s.attendees || [] })),
     bot_reservations: data.bot_reservations || [],
     player_pins: data.player_pins || {},
+    player_photos: data.player_photos || {},
   };
   populateNameSelect();
   if (currentPlayer) showMainScreen();
@@ -331,6 +380,8 @@ function showMainScreen() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-screen').style.display = 'block';
   document.getElementById('who-name').textContent = currentPlayer;
+  document.getElementById('who-avatar').innerHTML = avatarHtml(currentPlayer, 40);
+  document.getElementById('remove-avatar-link').style.display = (currentData.player_photos || {})[currentPlayer] ? 'inline' : 'none';
   renderSessions();
 }
 
@@ -378,7 +429,7 @@ function renderSessionCard(s, idx) {
     + '</div>'
     + '<div class="players-title">Joueurs inscrits</div>'
     + '<div>' + (attendees.length
-        ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '">' + shortName(p) + '</span>').join('')
+        ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '"><span>' + shortName(p) + '</span>' + avatarHtml(p, 22) + '</span>').join('')
         : '<span style="color:var(--muted);font-size:11px">Personne pour l\'instant</span>') + '</div>'
     + courtsHtml
     + '<button class="btn ' + (imIn ? 'leave' : 'join') + '" onclick="toggleAttendance(\'' + s.id + '\')">'
@@ -410,6 +461,93 @@ window.toggleAttendance = async function(sessionId) {
 };
 window.doLogin = doLogin;
 window.logout = logout;
+
+// ── Avatar personnel (photo de profil) ──────────────────────────────────────
+// Recadrée en carré et compressée côté navigateur (canvas) avant envoi : le
+// document Firestore "tracker" est partagé avec TOUTES les données de
+// l'appli (séances, matchs, etc.), donc chaque avatar doit rester petit —
+// on vise quelques Ko, pas une photo haute résolution.
+function triggerAvatarPicker() {
+  document.getElementById('avatar-file-input').click();
+}
+window.triggerAvatarPicker = triggerAvatarPicker;
+
+function compressImageToDataUri(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture du fichier impossible'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Fichier image invalide'));
+      img.onload = () => {
+        const CAP = 15000; // caractères base64 (~11 Ko) — largement suffisant pour un petit avatar
+        const sizes = [128, 96, 72];
+        let result = null;
+        for (let s = 0; s < sizes.length && !result; s++) {
+          const size = sizes[s];
+          const canvas = document.createElement('canvas');
+          canvas.width = size; canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          // Recadrage carré centré (cover), comme un avatar classique
+          const srcSize = Math.min(img.width, img.height);
+          const sx = (img.width - srcSize) / 2, sy = (img.height - srcSize) / 2;
+          ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
+          for (let q = 0.7; q >= 0.3 && !result; q -= 0.15) {
+            const uri = canvas.toDataURL('image/jpeg', q);
+            if (uri.length <= CAP) result = uri;
+          }
+          if (s === sizes.length - 1 && !result) result = canvas.toDataURL('image/jpeg', 0.3);
+        }
+        resolve(result);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onAvatarFileChosen(file) {
+  if (!file) return;
+  if (!file.type || !file.type.startsWith('image/')) { alert('Choisis un fichier image.'); document.getElementById('avatar-file-input').value = ''; return; }
+  const link = document.getElementById('remove-avatar-link');
+  try {
+    const dataUri = await compressImageToDataUri(file);
+    // Lecture-modification-écriture en transaction (comme player_pins) pour ne
+    // pas écraser la photo qu'un autre joueur vient d'envoyer au même moment.
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(docRef);
+      const data = snap.data() || {};
+      const photos = data.player_photos || {};
+      photos[currentPlayer] = dataUri;
+      tx.update(docRef, { player_photos: photos });
+    });
+    document.getElementById('who-avatar').innerHTML = avatarHtml(currentPlayer, 40);
+    link.style.display = 'inline';
+  } catch (e) {
+    alert('Erreur lors de l\'envoi de la photo : ' + e.message);
+  } finally {
+    document.getElementById('avatar-file-input').value = '';
+  }
+}
+window.onAvatarFileChosen = onAvatarFileChosen;
+
+async function removeMyAvatar() {
+  if (!confirm('Retirer ta photo de profil ?')) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(docRef);
+      const data = snap.data() || {};
+      const photos = data.player_photos || {};
+      delete photos[currentPlayer];
+      tx.update(docRef, { player_photos: photos });
+    });
+    document.getElementById('who-avatar').innerHTML = avatarHtml(currentPlayer, 40);
+    document.getElementById('remove-avatar-link').style.display = 'none';
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+window.removeMyAvatar = removeMyAvatar;
 
 // Affiche/masque les entrées de nav réservées à l'admin (Matchs, Bots) —
 // cette page n'a pas son propre accès admin, elle lit juste l'état partagé.
