@@ -4,6 +4,16 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.7 — 2026-09-21
+    Nouveau bouton "🆕 Manche suivante (nouvelles équipes)" (étape 3) : vide
+    la composition d'équipes en cours pour en former une nouvelle (ex. autres
+    partenaires), SANS toucher aux confrontations déjà enregistrées lors des
+    manches précédentes — contrairement à "Tout réinitialiser", qui propose
+    de les supprimer. Permet d'enchaîner plusieurs matchs le même jour en
+    changeant les équipes à chaque fois (le bouton "Varier les partenaires"
+    évite déjà naturellement de reproposer les mêmes duos d'une manche à
+    l'autre, puisqu'il se base sur l'historique des matchs déjà enregistrés).
+
   v1.6 — 2026-09-21
     Trois correctifs/ajouts demandés après usage réel : (1) les équipes de
     l'étape 3 sont désormais enregistrées immédiatement à chaque formation/
@@ -223,6 +233,7 @@
         <button class="btn secondary" onclick="autoFormTeams()">🎲 Au hasard</button>
         <button class="btn secondary" onclick="formTeamsBalanced()">⚖️ Équilibrer le niveau</button>
         <button class="btn secondary" onclick="formTeamsVariedPartners()">🔀 Varier les partenaires</button>
+        <button class="btn secondary" onclick="newRound()">🆕 Manche suivante (nouvelles équipes)</button>
         <button class="btn secondary" onclick="resetTeams()">↺ Tout réinitialiser</button>
       </div>
       <div class="hint" id="strategy-hint"></div>
@@ -263,7 +274,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.6';
+const APP_VERSION = 'v1.7';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -589,6 +600,24 @@ function formTeamsVariedPartners() {
   document.getElementById('strategy-hint').textContent = noHistory
     ? 'Aucun historique de matchs trouvé — équivaut à un tirage au hasard pour cette fois.'
     : 'Priorité aux duos qui ont le moins souvent joué ensemble par le passé.';
+}
+
+// Manche suivante : vide juste la composition d'équipes EN COURS pour
+// pouvoir en former une nouvelle (partenaires différents), SANS toucher aux
+// confrontations déjà enregistrées lors des manches précédentes — à la
+// différence de "Tout réinitialiser", qui propose de les supprimer. Les
+// équipes précédentes restent visibles dans "Déjà enregistrés pour cette
+// date" (étape 4) via leurs matchs, et "Varier les partenaires" évite déjà
+// naturellement de reproposer les mêmes duos d'une manche à l'autre.
+function newRound() {
+  teams = [];
+  pendingSelection = [];
+  renderTeams();
+  const date = document.getElementById('session-select').value;
+  renderExistingMatches();      // l'historique (état déjà en mémoire) reste visible immédiatement
+  rebuildMatchesFromTeams(date); // réaffiche les confrontations déjà enregistrées, sans nouvelle proposition tant qu'aucune équipe n'est reformée
+  document.getElementById('strategy-hint').textContent =
+    'Nouvelle manche : compose de nouvelles équipes ci-dessus — les confrontations déjà enregistrées restent inchangées.';
 }
 
 function resetTeams() {
