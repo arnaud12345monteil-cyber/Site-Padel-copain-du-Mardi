@@ -4,6 +4,15 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.9 — 2026-09-21
+    Nom sous les tuiles "Joueurs inscrits" : police remplacée par Bebas Neue
+    (au lieu de la police à chasse fixe du reste de la page), pour un rendu
+    identique au tracker principal (même police, majuscules, graisse).
+
+  v1.8 — 2026-09-21
+    Nom sous les tuiles "Joueurs inscrits" affiché en majuscules, comme sur
+    le tracker principal.
+
   v1.7 — 2026-09-21
     Nom sous les tuiles "Joueurs inscrits" agrandi à 16px (même taille que le
     tracker principal, v1.47) — passe sur 2 lignes si besoin pour ne jamais
@@ -123,7 +132,7 @@
   .chip { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; margin: 0 6px 6px 0; vertical-align: top; }
   .chip .avatar-square { position: relative; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .chip.me .avatar-square { border-color: var(--accent); border-width: 2px; }
-  .chip .chip-name { font-size: 16px; line-height: 1.15; text-align: center; color: var(--text); max-width: 72px; overflow-wrap: break-word; word-break: break-word; }
+  .chip .chip-name { font-family: 'Bebas Neue', sans-serif; font-size: 16px; line-height: 1.15; text-align: center; color: var(--text); max-width: 72px; overflow-wrap: break-word; word-break: break-word; text-transform: uppercase; letter-spacing: 0.5px; }
   .chip.me .chip-name { color: var(--accent); }
   .court-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 16px; text-align: center; margin: 0 8px 8px 0; }
   .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
@@ -235,7 +244,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.7';
+const APP_VERSION = 'v1.9';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
