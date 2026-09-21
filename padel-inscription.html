@@ -4,6 +4,12 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.7 — 2026-09-21
+    Nom sous les tuiles "Joueurs inscrits" agrandi à 16px (même taille que le
+    tracker principal, v1.47) — passe sur 2 lignes si besoin pour ne jamais
+    tronquer le nom, la police à chasse fixe de cette page étant plus large
+    que la Bebas Neue du tracker.
+
   v1.6 — 2026-09-21
     Nouvel ajustement sur les avatars (v1.5) : dans "Joueurs inscrits" par
     séance, le nom du joueur sort de la tuile et s'affiche en dessous (au
@@ -117,7 +123,7 @@
   .chip { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; margin: 0 6px 6px 0; vertical-align: top; }
   .chip .avatar-square { position: relative; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .chip.me .avatar-square { border-color: var(--accent); border-width: 2px; }
-  .chip .chip-name { font-size: 11px; line-height: 1.1; text-align: center; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px; }
+  .chip .chip-name { font-size: 16px; line-height: 1.15; text-align: center; color: var(--text); max-width: 72px; overflow-wrap: break-word; word-break: break-word; }
   .chip.me .chip-name { color: var(--accent); }
   .court-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 16px; text-align: center; margin: 0 8px 8px 0; }
   .court-badge .num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--orange); letter-spacing: 1px; }
@@ -229,7 +235,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.6';
+const APP_VERSION = 'v1.7';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
