@@ -4,6 +4,18 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.4 — 2026-09-21
+    Cause réelle du bug "la partie 4 ne se met pas à jour en changeant de
+    date" (rapporté juste après v1.3) : renderExistingMatches() plantait
+    (m.score[0] sur un score null) dès qu'une date avait un match enregistré
+    SANS score — ce qui interrompait silencieusement le reste de
+    onSessionChange() avant qu'il n'atteigne le rendu de l'étape 4, laissant
+    affichées les confrontations de la date précédente (ou plus rien, selon
+    l'historique de navigation). Corrigé : score manquant affiché comme
+    "score non saisi" au lieu de planter. Chaque étape de onSessionChange()
+    est en plus désormais isolée (try/catch) pour qu'une erreur dans l'une
+    n'empêche plus les autres de se mettre à jour.
+
   v1.3 — 2026-09-21
     (1) L'étape 4 "Confrontations" prend maintenant en compte les matchs
     enregistrés directement depuis l'onglet "Matchs de la séance" de la page
@@ -223,7 +235,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.3';
+const APP_VERSION = 'v1.4';
 const APP_VERSION_DATE = '2026-09-21';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -289,11 +301,17 @@ function onSessionChange() {
   // l'étape 4 "Confrontations" ne les affiche pas.
   mergeTeamsFromExistingMatches(date);
 
-  renderPlayersGrid();
-  renderTeams();
-  renderExistingMatches();
-  if (teams.length) rebuildMatchesFromTeams(date);
-  else { generatedMatches = []; renderMatchesList(); }
+  // Chaque étape est isolée : une erreur dans l'une (ex. donnée inattendue)
+  // ne doit plus empêcher les autres de se mettre à jour — notamment l'étape
+  // 4 "Confrontations", qui sinon restait affichée avec les données de la
+  // date précédemment sélectionnée sans qu'aucune erreur ne soit visible.
+  try { renderPlayersGrid(); } catch (e) { console.error('renderPlayersGrid:', e); }
+  try { renderTeams(); } catch (e) { console.error('renderTeams:', e); }
+  try { renderExistingMatches(); } catch (e) { console.error('renderExistingMatches:', e); }
+  try {
+    if (teams.length) rebuildMatchesFromTeams(date);
+    else { generatedMatches = []; renderMatchesList(); }
+  } catch (e) { console.error('rebuildMatchesFromTeams:', e); }
 }
 
 // Équipes provenant de confrontations déjà enregistrées (state.matches) pour
@@ -568,8 +586,16 @@ function renderExistingMatches() {
   const existing = state.matches.filter(m => m.sessionDate === date);
   const el = document.getElementById('existing-matches');
   if (existing.length === 0) { el.innerHTML = ''; return; }
+  // m.score peut être null (match enregistré sans résultat, ex. via le bouton
+  // "+ Match" de la page principale sans score saisi) : sans ce garde-fou,
+  // m.score[0] plantait ici et interrompait le reste de onSessionChange()
+  // AVANT le rendu de l'étape 4 "Confrontations" — ce qui laissait affichées
+  // les confrontations de la date précédemment sélectionnée.
   el.innerHTML = '<div class="existing-list">Déjà enregistrés pour cette date (' + existing.length + ') :<br>'
-    + existing.map(m => '• ' + m.team1.join('/') + ' ' + m.score[0] + '-' + m.score[1] + ' ' + m.team2.join('/')).join('<br>')
+    + existing.map(m => {
+        const scoreLabel = Array.isArray(m.score) ? (m.score[0] + '-' + m.score[1]) : 'score non saisi';
+        return '• ' + m.team1.join('/') + ' ' + scoreLabel + ' ' + m.team2.join('/');
+      }).join('<br>')
     + '</div>';
 }
 
