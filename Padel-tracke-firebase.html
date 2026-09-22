@@ -2,6 +2,14 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.51 — 2026-09-22
+    Extension du zoom (survol souris + tap tactile) à toutes les autres
+    photos de joueur de l'appli : les avatars du tableau de classement
+    (Victoires / Victoires-Présence), du podium (SVG), et des cartes de
+    "Statistiques joueurs". Même principe qu'en v1.49/v1.50, adapté à leur
+    taille plus petite (zoom ~2.2x pour les avatars de 20-26px, ~1.8x pour
+    le podium).
+
   v1.50 — 2026-09-22
     Le zoom des tuiles "Joueurs inscrits" (v1.49) ne fonctionnait qu'à la
     souris (:hover n'existe pas sur écran tactile). Ajout d'un zoom au tap
@@ -560,6 +568,17 @@
      voir le gestionnaire "click" délégué sur document). */
   .ns-chip.with-avatar.is-zoomed .avatar-square { transform: scale(1.6); z-index: 5; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
   .ns-chip.with-avatar .chip-name { font-size: 16px; line-height: 1.15; text-align: center; color: var(--text); letter-spacing: 0.5px; max-width: 72px; overflow-wrap: break-word; word-break: break-word; }
+  /* Même effet de zoom (survol souris + tap tactile via .is-zoomed) sur les
+     petits avatars du classement et des statistiques joueurs (avatarHtml()),
+     et sur les avatars du podium (SVG, buildPodiumSVG() — cible le <g>
+     .podium-avatar-zoom, transform-origin déjà centré sur l'avatar en JS). */
+  .avatar-zoom, .podium-avatar-zoom { transition: transform 0.18s ease; cursor: pointer; }
+  @media (hover: hover) and (pointer: fine) {
+    .avatar-zoom:hover { transform: scale(2.2); z-index: 20; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    .podium-avatar-zoom:hover { transform: scale(1.8); }
+  }
+  .avatar-zoom.is-zoomed { transform: scale(2.2); z-index: 20; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+  .podium-avatar-zoom.is-zoomed { transform: scale(1.8); }
   .ns-spots { text-align: right; }
   .ns-spots .spots-big { font-family: 'Bebas Neue', sans-serif; font-size: 48px; line-height: 1; }
   .ns-spots .spots-big.ok { color: var(--accent); }
@@ -1055,7 +1074,7 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {}, player_photos: {}, player_pins: {} };
-const APP_VERSION = 'v1.50';
+const APP_VERSION = 'v1.51';
 const APP_VERSION_DATE = '2026-09-22';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
@@ -1975,10 +1994,10 @@ function avatarHtml(name, size) {
   const photo = (state.player_photos || {})[name];
   const radius = Math.max(3, Math.round(size * 0.18));
   if (photo) {
-    return '<img src="' + photo + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;object-fit:cover;flex-shrink:0;display:inline-block;vertical-align:middle">';
+    return '<img src="' + photo + '" alt="" class="avatar-zoom" style="width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;object-fit:cover;flex-shrink:0;display:inline-block;vertical-align:middle;position:relative">';
   }
   const fontSize = Math.round(size * 0.42);
-  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:' + fontSize + 'px;flex-shrink:0;vertical-align:middle">' + avatarInitial(name) + '</span>';
+  return '<span class="avatar-zoom" style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:' + fontSize + 'px;flex-shrink:0;vertical-align:middle;position:relative">' + avatarInitial(name) + '</span>';
 }
 // Variante "carré plein" : la photo (ou la couleur de repli) occupe tout le
 // fond de la tuile, en position absolute — pensée pour être injectée dans un
@@ -1991,15 +2010,30 @@ function avatarFillHtml(name) {
   }
   return '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:26px">' + avatarInitial(name) + '</div>';
 }
-// Zoom des tuiles "Joueurs inscrits" au tap (mobile/tablette, où :hover n'existe
-// pas) : un appui sur une tuile bascule .is-zoomed, un appui ailleurs la retire.
-// Délégué sur document pour fonctionner même après un re-render() de la liste.
+// Zoom au tap (mobile/tablette, où :hover n'existe pas) : un appui bascule
+// .is-zoomed sur l'élément visé, un appui ailleurs la retire. Couvre les
+// trois familles d'avatars de l'appli — tuiles "Joueurs inscrits", petits
+// avatars du classement/stats (avatarHtml → .avatar-zoom) et avatars du
+// podium (SVG → .podium-avatar-zoom). Délégué sur document pour fonctionner
+// même après un re-render().
 document.addEventListener('click', function(e) {
   const chip = e.target.closest('.ns-chip.with-avatar');
   document.querySelectorAll('.ns-chip.with-avatar.is-zoomed').forEach(function(el) {
     if (el !== chip) el.classList.remove('is-zoomed');
   });
   if (chip) chip.classList.toggle('is-zoomed');
+
+  const avatar = e.target.closest('.avatar-zoom');
+  document.querySelectorAll('.avatar-zoom.is-zoomed').forEach(function(el) {
+    if (el !== avatar) el.classList.remove('is-zoomed');
+  });
+  if (avatar) avatar.classList.toggle('is-zoomed');
+
+  const podiumAvatar = e.target.closest('.podium-avatar-zoom');
+  document.querySelectorAll('.podium-avatar-zoom.is-zoomed').forEach(function(el) {
+    if (el !== podiumAvatar) el.classList.remove('is-zoomed');
+  });
+  if (podiumAvatar) podiumAvatar.classList.toggle('is-zoomed');
 });
 
 function formatDate(raw) {
@@ -2403,16 +2437,24 @@ function buildPodiumSVG(entries, podiumId) {
 
       const nameY = stepY - 36;
       const photoUri = (!isEx && entry.avatarName) ? (state.player_photos || {})[entry.avatarName] : null;
+      // Pivot du zoom centré sur l'avatar (transform-origin en unités du
+      // repère SVG local — la hauteur totale du viewBox laisse assez de
+      // marge au-dessus pour que le zoom ne soit pas rogné).
+      const avatarOrigin = cx + 'px ' + (nameY - 18) + 'px';
       if (photoUri) {
         const clipId = 'avatarClip-' + podiumId + i;
+        svgContent += `<g class="podium-avatar-zoom" style="transform-origin:${avatarOrigin}">`;
         svgContent += `<clipPath id="${clipId}"><circle cx="${cx}" cy="${nameY - 18}" r="18"/></clipPath>`;
         svgContent += `<image href="${photoUri}" x="${cx-18}" y="${nameY-36}" width="36" height="36" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>`;
         svgContent += `<circle cx="${cx}" cy="${nameY - 18}" r="18" fill="none" stroke="${col}" stroke-width="1.5"/>`;
         svgContent += `<circle cx="${cx + 13}" cy="${nameY - 5}" r="9" fill="#0d0f0e" stroke="${col}" stroke-width="1"/>`;
         svgContent += `<text x="${cx + 13}" y="${nameY - 1}" text-anchor="middle" font-size="10">${isEx ? '🤝' : medals[i]}</text>`;
+        svgContent += `</g>`;
       } else {
+        svgContent += `<g class="podium-avatar-zoom" style="transform-origin:${avatarOrigin}">`;
         svgContent += `<circle cx="${cx}" cy="${nameY - 18}" r="18" fill="${col}" fill-opacity="0.12" stroke="${col}" stroke-width="1.2"/>`;
         svgContent += `<text x="${cx}" y="${nameY - 11}" text-anchor="middle" font-size="16">${isEx ? '🤝' : medals[i]}</text>`;
+        svgContent += `</g>`;
       }
 
       const nameParts = name.split(' ');
