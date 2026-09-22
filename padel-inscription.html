@@ -4,6 +4,20 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.11 — 2026-09-22
+    Le zoom des tuiles "Joueurs inscrits" (v1.10) ne fonctionnait qu'à la
+    souris (:hover n'existe pas sur écran tactile). Ajout d'un zoom au tap
+    pour mobile/tablette : un appui sur une tuile la zoome, un second appui
+    (sur la même tuile ou ailleurs) la remet à sa taille normale. Le survol
+    souris reste inchangé sur desktop. Même comportement que dans le tracker
+    principal (v1.50).
+
+  v1.10 — 2026-09-22
+    Effet de zoom au survol sur les photos de "Joueurs inscrits" : la tuile
+    (72px) grossit à environ 1.6x au passage de la souris, passe au-dessus
+    des tuiles voisines avec une ombre portée, puis revient à sa taille
+    normale. Même comportement que dans le tracker principal (v1.49).
+
   v1.9 — 2026-09-21
     Nom sous les tuiles "Joueurs inscrits" : police remplacée par Bebas Neue
     (au lieu de la police à chasse fixe du reste de la page), pour un rendu
@@ -130,7 +144,15 @@
   /* Tuile carrée : la photo (ou la couleur de repli) remplit le carré, le nom
      du joueur est affiché en dessous, en dehors de la tuile. */
   .chip { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; margin: 0 6px 6px 0; vertical-align: top; }
-  .chip .avatar-square { position: relative; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .chip .avatar-square { position: relative; width: 72px; height: 72px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: transform 0.18s ease; cursor: pointer; }
+  /* Souris/trackpad : zoom au survol. */
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover .avatar-square { transform: scale(1.6); z-index: 5; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+  }
+  /* Tactile (et fallback universel) : zoom au tap, piloté en JS via .is-zoomed
+     (un appui sur la tuile bascule la classe, un appui ailleurs la retire —
+     voir le gestionnaire "click" délégué sur document). */
+  .chip.is-zoomed .avatar-square { transform: scale(1.6); z-index: 5; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
   .chip.me .avatar-square { border-color: var(--accent); border-width: 2px; }
   .chip .chip-name { font-family: 'Bebas Neue', sans-serif; font-size: 16px; line-height: 1.15; text-align: center; color: var(--text); max-width: 72px; overflow-wrap: break-word; word-break: break-word; text-transform: uppercase; letter-spacing: 0.5px; }
   .chip.me .chip-name { color: var(--accent); }
@@ -244,8 +266,8 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.9';
-const APP_VERSION_DATE = '2026-09-21';
+const APP_VERSION = 'v1.11';
+const APP_VERSION_DATE = '2026-09-22';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
 let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {}, player_photos: {} };
@@ -303,6 +325,16 @@ function avatarFillHtml(name) {
   }
   return '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:' + avatarColor(name) + ';color:#0d0f0e;font-family:\'Bebas Neue\',sans-serif;font-size:26px">' + avatarInitial(name) + '</div>';
 }
+// Zoom des tuiles "Joueurs inscrits" au tap (mobile/tablette, où :hover n'existe
+// pas) : un appui sur une tuile bascule .is-zoomed, un appui ailleurs la retire.
+// Délégué sur document pour fonctionner même après un re-render() de la liste.
+document.addEventListener('click', function(e) {
+  const chip = e.target.closest('.chip');
+  document.querySelectorAll('.chip.is-zoomed').forEach(function(el) {
+    if (el !== chip) el.classList.remove('is-zoomed');
+  });
+  if (chip) chip.classList.toggle('is-zoomed');
+});
 function courtsForDate(date) {
   const confirmed = (currentData.bot_reservations || []).filter(r => r.statut === 'confirmée' && r.date === date);
   const seen = new Set(); const list = [];
