@@ -4,6 +4,15 @@
 <!--
   PADEL INSCRIPTION — Historique des versions
   ─────────────────────────────────────────
+  v1.12 — 2026-09-28
+    Prise en compte du blocage des inscriptions défini côté tracker (modale
+    "Modifier la séance", stylo en mode admin) : quand une séance est
+    marquée complète/bloquée, le bouton "Je m'inscris" est remplacé par un
+    message "🔒 Séance complète — inscriptions bloquées" pour les joueurs pas
+    encore inscrits ; ceux déjà inscrits conservent "Je me désinscris". Le
+    blocage est aussi vérifié dans la transaction Firestore elle-même, pas
+    seulement à l'affichage.
+
   v1.11 — 2026-09-22
     Le zoom des tuiles "Joueurs inscrits" (v1.10) ne fonctionnait qu'à la
     souris (:hover n'existe pas sur écran tactile). Ajout d'un zoom au tap
@@ -266,8 +275,8 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const docRef = doc(db, "padel", "tracker");
 
-const APP_VERSION = 'v1.11';
-const APP_VERSION_DATE = '2026-09-22';
+const APP_VERSION = 'v1.12';
+const APP_VERSION_DATE = '2026-09-28';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
 let currentData = { players: [], sessions: [], bot_reservations: [], player_pins: {}, player_photos: {} };
@@ -484,6 +493,7 @@ function renderSessionCard(s, idx) {
   const remaining = spots - filled;
   const label = idx === 0 ? 'Prochaine séance' : '';
   const imIn = attendees.includes(currentPlayer);
+  const regClosed = !!s.regClosed;
   const spotsColor = remaining > 0 ? 'var(--accent2)' : remaining < 0 ? 'var(--danger)' : 'var(--accent)';
 
   const courts = courtsForDate(s.date);
@@ -492,11 +502,23 @@ function renderSessionCard(s, idx) {
       courts.map(c => '<div class="court-badge"><div class="num">🎾 ' + c.numero + '</div></div>').join('')
     : '';
 
+  // Inscriptions bloquées par l'admin (séance complète) : ceux déjà inscrits
+  // peuvent toujours se désinscrire, mais on ne propose plus de rejoindre —
+  // remplacé par un message. Le blocage est aussi vérifié côté transaction
+  // dans toggleAttendance(), pas seulement ici (affichage).
+  const joinBlockedHtml = '<div style="text-align:center;font-size:11px;color:var(--danger);letter-spacing:1px;padding:14px;margin-top:6px;background:rgba(255,79,79,0.08);border:1px solid var(--danger);border-radius:4px">🔒 SÉANCE COMPLÈTE — INSCRIPTIONS BLOQUÉES</div>';
+  const actionHtml = (regClosed && !imIn)
+    ? joinBlockedHtml
+    : '<button class="btn ' + (imIn ? 'leave' : 'join') + '" onclick="toggleAttendance(\'' + s.id + '\')">'
+      +   (imIn ? 'Je me désinscris' : "Je m'inscris")
+      + '</button>';
+
   return '<div class="session-card">'
     + '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">'
     +   '<div style="flex:1;min-width:140px">'
     +     '<div class="ns-date">' + sessionDateWithHourHtml(s.date) + '</div>'
     +     '<div class="ns-label">' + label + '</div>'
+    +     (regClosed ? '<div style="margin-top:5px;font-size:10px;color:var(--danger);letter-spacing:1px;font-weight:600">🔒 BLOQUÉE</div>' : '')
     +   '</div>'
     +   '<div class="spots-box">'
     +     '<div class="big" style="color:' + spotsColor + '">' + filled + '<span style="font-size:16px;color:var(--muted)">/' + spots + '</span></div>'
@@ -508,9 +530,7 @@ function renderSessionCard(s, idx) {
         ? attendees.map(p => '<span class="chip' + (p===currentPlayer?' me':'') + '"><span class="avatar-square">' + avatarFillHtml(p) + '</span><span class="chip-name">' + shortName(p) + '</span></span>').join('')
         : '<span style="color:var(--muted);font-size:11px">Personne pour l\'instant</span>') + '</div>'
     + courtsHtml
-    + '<button class="btn ' + (imIn ? 'leave' : 'join') + '" onclick="toggleAttendance(\'' + s.id + '\')">'
-    +   (imIn ? 'Je me désinscris' : "Je m'inscris")
-    + '</button>'
+    + actionHtml
     + '</div>';
 }
 
@@ -527,6 +547,12 @@ window.toggleAttendance = async function(sessionId) {
       const session = sessions[idx];
       const attendees = session.attendees || [];
       const has = attendees.includes(currentPlayer);
+      // Séance bloquée par l'admin : on ne bloque que les nouvelles inscriptions,
+      // pas les désinscriptions de ceux déjà présents. Vérifié ici (pas
+      // seulement à l'affichage) au cas où la page ne serait pas à jour.
+      if (!has && session.regClosed) {
+        throw new Error('Inscriptions bloquées pour cette séance (complète).');
+      }
       const newAttendees = has ? attendees.filter(p => p !== currentPlayer) : [...attendees, currentPlayer];
       sessions[idx] = { ...session, attendees: newAttendees };
       tx.update(docRef, { sessions });
