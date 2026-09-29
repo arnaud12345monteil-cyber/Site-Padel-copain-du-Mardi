@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carnet de recettes</title>
+<!-- PWA : appli installable (icône unique, lancement plein écran) -->
+<link rel="manifest" href="manifest-recettes.json">
+<meta name="theme-color" content="#EFE9DC">
+<link rel="apple-touch-icon" href="icon1/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carnet de recettes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1731,7 +1738,7 @@
   // phrase avant de déployer — il sert juste à éviter un clic accidentel
   // sur Sauvegarder/Restaurer, pas à protéger la base contre quelqu'un de
   // déterminé (les règles Firestore restent ouvertes en dessous).
-  var ADMIN_PASSPHRASE = '0350';
+  var ADMIN_PASSPHRASE = 'change-moi';
   var adminUnlocked = false;
   try{ adminUnlocked = localStorage.getItem('recipe-catalog-admin') === 'true'; }catch(e){}
 
@@ -1778,6 +1785,11 @@
 
   initFirebase();
 })();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw-recettes.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
