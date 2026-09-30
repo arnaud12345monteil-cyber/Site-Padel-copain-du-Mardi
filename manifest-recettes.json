@@ -3,7 +3,7 @@
   "short_name": "Carnet de recettes",
   "description": "Carnet de recettes personnel — recherche, tri par type, synchronisé en temps réel",
   "start_url": "./Carnet-recettes.html",
-  "scope": "./",
+  "scope": "./Carnet-recettes.html",
   "id": "/Carnet-recettes.html",
   "display": "standalone",
   "background_color": "#EFE9DC",
