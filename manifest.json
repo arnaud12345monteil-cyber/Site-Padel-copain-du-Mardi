@@ -3,7 +3,7 @@
   "short_name": "Padel Mardi",
   "description": "Suivi des présences, inscriptions, matchs, classements et réservations auto — Padel Mardi",
   "start_url": "./Padel-tracke-firebase.html",
-  "scope": "./",
+  "scope": "./Padel-tracke-firebase.html",
   "id": "/Padel-tracke-firebase.html",
   "display": "standalone",
   "background_color": "#0d0f0e",
