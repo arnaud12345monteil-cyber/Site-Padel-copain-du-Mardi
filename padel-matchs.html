@@ -4,6 +4,13 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.13 — 2026-10-14
+    Les statistiques d'opposition ("Face-à-face inédits : x/4") ne disparaissent
+    plus une fois les matchs enregistrés : elles sont recalculées pour chaque
+    match d'après l'historique chronologique (date de séance puis ordre
+    d'enregistrement), donc aussi pour les matchs plus anciens. Le détail des
+    face-à-face déjà joués avant le match s'affiche en infobulle.
+
   v1.12 — 2026-10-14
     Étape 4 : choix du nombre de matchs de la séance (liste 1 à
     6, 3 par défaut = 1h30 de jeu en matchs de 30 min). Le bouton ne génère
@@ -362,7 +369,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.12';
+const APP_VERSION = 'v1.13';
 const APP_VERSION_DATE = '2026-10-14';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -485,6 +492,7 @@ function sameTeam(a, b) {
 }
 function rebuildMatchesFromTeams(date) {
   generatedMatches = [];
+  const novelty = noveltyByMatch(state.matches);
   const existingForDate = (state.matches || []).filter(m => m.sessionDate === date);
 
   // 1) Une ligne par confrontation RÉELLEMENT enregistrée pour cette date —
@@ -506,6 +514,7 @@ function rebuildMatchesFromTeams(date) {
       // Numéro d'ordre / terrain / tour mémorisés à l'enregistrement (absents
       // sur les matchs saisis avant la v1.11 ou depuis la page principale).
       ordre: m.ordre, terrain: m.terrain, tour: m.tour,
+      info: novelty.get(m),   // stats d'opposition recalculées (voir noveltyByMatch)
     });
   });
 
@@ -545,7 +554,7 @@ function rebuildMatchesFromTeams(date) {
     generatedMatches.push({
       teamA: p.teamA, teamB: p.teamB, s1: '', s2: '', saved: false,
       ordre: ordreBase + k + 1, tour: tourBase + p.tour, terrain: p.terrain,
-      inedits: p.inedits, totalFaceAFace: p.total,
+      info: { inedits: p.inedits, n: p.teamA.length * p.teamB.length, repeats: p.repeats },
     });
   });
   currentCourts = courts;
@@ -585,14 +594,47 @@ function opponentCounts() {
   });
   return map;
 }
+// ── Statistiques d'opposition d'un match, calculées d'après l'historique
+// CHRONOLOGIQUE (date de séance, puis ordre d'enregistrement) : pour chaque
+// match, combien de ses face-à-face individuels (joueur de l'équipe A contre
+// joueur de l'équipe B) n'avaient encore jamais eu lieu avant lui, et lesquels
+// étaient déjà des répétitions. Recalculé à l'affichage : fonctionne donc aussi
+// pour les matchs enregistrés avant cette fonction, et ne dépend d'aucun champ
+// stocké.
+function noveltyByMatch(matches) {
+  const order = (matches || []).map((m, i) => ({ m, i }))
+    .sort((x, y) => String(x.m.sessionDate || '').localeCompare(String(y.m.sessionDate || '')) || x.i - y.i);
+  const seen = {}, out = new Map();
+  const key = (p, q) => (p < q ? p + '|' + q : q + '|' + p);
+  order.forEach(({ m }) => {
+    const a = m.team1 || [], b = m.team2 || [];
+    let inedits = 0, n = 0;
+    const repeats = [];
+    a.forEach(p => b.forEach(q => {
+      const c = seen[key(p, q)] || 0;
+      n++;
+      if (!c) inedits++; else repeats.push({ a: p, b: q, n: c });
+    }));
+    out.set(m, { inedits, n, repeats });
+    a.forEach(p => b.forEach(q => { seen[key(p, q)] = (seen[key(p, q)] || 0) + 1; }));
+  });
+  return out;
+}
+function noveltyTitle(info) {
+  if (!info) return '';
+  if (!info.repeats.length) return 'Aucun de ces face-à-face n’avait eu lieu auparavant.';
+  return 'Déjà affrontés avant ce match : ' + info.repeats.map(r => r.a + ' / ' + r.b + ' (' + r.n + ' fois)').join(', ');
+}
+
 function faceOffStats(teamA, teamB, map) {
   let total = 0, inedits = 0, n = 0;
+  const repeats = [];
   teamA.forEach(a => teamB.forEach(b => {
     const c = map[a < b ? a + '|' + b : b + '|' + a] || 0;
     total += c; n++;
-    if (c === 0) inedits++;
+    if (c === 0) inedits++; else repeats.push({ a, b, n: c });
   }));
-  return { total, inedits, n, met: n - inedits };
+  return { total, inedits, n, met: n - inedits, repeats };
 }
 
 // Classe les confrontations à proposer :
@@ -615,7 +657,7 @@ function scheduleProposals(pending, nTeams, nCourts, courts, opts) {
   const map = opponentCounts();
   const items = pending.map(p => {
     const s = faceOffStats(p.teamA, p.teamB, map);
-    return { ...p, inedits: s.inedits, total: s.total, cost: s.met * 1000 + s.total };
+    return { ...p, inedits: s.inedits, total: s.total, repeats: s.repeats, cost: s.met * 1000 + s.total };
   });
   const perTour = Math.max(1, Math.min(Math.floor(nTeams / 2), nCourts > 0 ? nCourts : Infinity));
   const played = (opts.played || new Array(nTeams).fill(0)).slice();
@@ -1040,8 +1082,8 @@ function renderMatchesList() {
     const chips = [];
     if (m.ordre !== undefined) chips.push('<span class="chip-ordre">N° ' + m.ordre + '</span>');
     if (m.terrain) chips.push('<span class="chip-terrain">🎾 Terrain ' + m.terrain + '</span>');
-    const nouveaute = (m.inedits !== undefined)
-      ? '<span class="chip-nouv">Face-à-face inédits : ' + m.inedits + '/' + (m.teamA.length * m.teamB.length) + '</span>' : '';
+    const nouveaute = m.info
+      ? '<span class="chip-nouv" title="' + noveltyTitle(m.info).replace(/"/g, '&quot;') + '">Face-à-face inédits : ' + m.info.inedits + '/' + m.info.n + '</span>' : '';
     return head + '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
     + (chips.length || nouveaute ? '<div class="match-meta">' + chips.join('') + nouveaute + '</div>' : '')
     + (m.pending ? '<div class="match-tag">Déjà enregistré — score à compléter</div>'
