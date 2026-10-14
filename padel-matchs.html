@@ -4,6 +4,13 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.16 — 2026-10-14
+    Numéro de terrain : quand l'intitulé de la réservation n'avait pas
+    exactement la forme "Terrain n.6", c'est tout le texte ("Padel - Terrain
+    6 - Outdoor") qui était mémorisé puis affiché. Le numéro est maintenant
+    extrait de façon plus tolérante et l'affichage est "Terrain 6" (les
+    valeurs déjà enregistrées sont nettoyées à l'affichage).
+
   v1.15 — 2026-10-14
     (1) Les noms des joueurs (équipes, joueurs présents, confrontations)
     utilisent la même police en capitales que l'onglet "Matchs séance" du
@@ -250,7 +257,7 @@
   html.hide-nouv .match-nouv, html.hide-nouv .match-nouv-detail, html.hide-nouv .chip-nouv { display: none !important; }
   .tour-head { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--accent2); margin: 14px 0 6px; }
   .match-meta { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .match-meta span { font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); }
+  .match-meta span { font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
   .match-meta .chip-ordre { color: var(--accent); border-color: var(--accent); }
   .match-meta .chip-terrain { color: var(--text); }
   .match-meta .chip-nouv { color: var(--muted); margin-left: auto; }
@@ -392,7 +399,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.15';
+const APP_VERSION = 'v1.16';
 const APP_VERSION_DATE = '2026-10-14';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -590,12 +597,20 @@ function rebuildMatchesFromTeams(date) {
 // numéro de terrain (un même terrain réservé sur deux créneaux = un seul
 // terrain physique).
 let currentCourts = [];
+// "Padel - Terrain n.6 - Outdoor" → "6". À défaut de numéro : le texte sans le
+// préfixe "Padel -" ni le suffixe "- Outdoor/Indoor". Sert à afficher "Terrain 6"
+// sans répéter l'intitulé complet de la réservation.
+function courtLabel(raw) {
+  const t = String(raw == null ? '' : raw).trim();
+  const m = /Terrain\s*(?:n\s*[°º.]?\s*)?(\d+)/i.exec(t) || /\bn\s*[°º.]\s*(\d+)/i.exec(t) || /(\d+)/.exec(t);
+  if (m) return m[1];
+  return t.replace(/^padel\s*[-–]\s*/i, '').replace(/\s*[-–]\s*(outdoor|indoor|extérieur|intérieur)\s*$/i, '').replace(/^terrain\s*/i, '').trim();
+}
 function courtsForDate(date) {
   const out = [], seen = new Set();
   (state.bot_reservations || []).forEach(r => {
     if (r.statut !== 'confirmée' || r.date !== date) return;
-    const m = /Terrain\s*n\.?\s*(\d+)/i.exec(r.terrain || '');
-    const label = m ? m[1] : String(r.terrain || '').trim();
+    const label = courtLabel(r.terrain);
     if (!label || seen.has(label)) return;
     seen.add(label);
     out.push(label);
@@ -1139,7 +1154,7 @@ function renderMatchesList() {
     }
     const chips = [];
     if (m.ordre !== undefined) chips.push('<span class="chip-ordre">N° ' + m.ordre + '</span>');
-    if (m.terrain) chips.push('<span class="chip-terrain">🎾 Terrain ' + m.terrain + '</span>');
+    if (m.terrain) chips.push('<span class="chip-terrain">Terrain ' + courtLabel(m.terrain) + '</span>');
     const nouveaute = m.info
       ? '<span class="chip-nouv" title="' + noveltyTitle(m.info).replace(/"/g, '&quot;') + '">' + noveltyLabel(m.info) + '</span>' : '';
     const detail = m.info ? noveltyDetail(m.info) : '';
