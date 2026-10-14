@@ -4,6 +4,13 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.14 — 2026-10-14
+    Statistiques d'opposition : en plus de "Face-à-face inédits : x/4", la
+    ligne indique maintenant le nombre total de duels déjà joués ("déjà
+    joués 5 fois") et le détail par paire s'affiche en clair sous le match
+    ("Déjà croisés : Arthur / Dan ×2 · …") au lieu d'une simple infobulle,
+    introuvable sur téléphone.
+
   v1.13 — 2026-10-14
     Les statistiques d'opposition ("Face-à-face inédits : x/4") ne disparaissent
     plus une fois les matchs enregistrés : elles sont recalculées pour chaque
@@ -233,6 +240,7 @@
   .match-meta .chip-ordre { color: var(--accent); border-color: var(--accent); }
   .match-meta .chip-terrain { color: var(--text); }
   .match-meta .chip-nouv { color: var(--muted); margin-left: auto; }
+  .match-nouv-detail { width: 100%; font-size: 10px; color: var(--muted); line-height: 1.5; }
 
   .existing-list { font-size: 11px; color: var(--muted); line-height: 1.9; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); padding: 12px 20px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }
@@ -369,7 +377,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.13';
+const APP_VERSION = 'v1.14';
 const APP_VERSION_DATE = '2026-10-14';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -619,6 +627,18 @@ function noveltyByMatch(matches) {
     a.forEach(p => b.forEach(q => { seen[key(p, q)] = (seen[key(p, q)] || 0) + 1; }));
   });
   return out;
+}
+function noveltyLabel(info) {
+  if (!info) return '';
+  const total = info.repeats.reduce((s, r) => s + r.n, 0);
+  return 'Face-à-face inédits : ' + info.inedits + '/' + info.n
+    + ' · ' + (total ? 'déjà joués ' + total + ' fois' : 'aucun déjà joué');
+}
+// Détail visible (sans survol) des duels déjà joués : « Arthur / Dan ×2 · … ».
+function noveltyDetail(info) {
+  if (!info || !info.repeats.length) return '';
+  const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return 'Déjà croisés : ' + info.repeats.map(r => esc(r.a) + ' / ' + esc(r.b) + ' ×' + r.n).join(' · ');
 }
 function noveltyTitle(info) {
   if (!info) return '';
@@ -1083,9 +1103,11 @@ function renderMatchesList() {
     if (m.ordre !== undefined) chips.push('<span class="chip-ordre">N° ' + m.ordre + '</span>');
     if (m.terrain) chips.push('<span class="chip-terrain">🎾 Terrain ' + m.terrain + '</span>');
     const nouveaute = m.info
-      ? '<span class="chip-nouv" title="' + noveltyTitle(m.info).replace(/"/g, '&quot;') + '">Face-à-face inédits : ' + m.info.inedits + '/' + m.info.n + '</span>' : '';
+      ? '<span class="chip-nouv" title="' + noveltyTitle(m.info).replace(/"/g, '&quot;') + '">' + noveltyLabel(m.info) + '</span>' : '';
+    const detail = m.info ? noveltyDetail(m.info) : '';
     return head + '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
     + (chips.length || nouveaute ? '<div class="match-meta">' + chips.join('') + nouveaute + '</div>' : '')
+    + (detail ? '<div class="match-nouv-detail">' + detail + '</div>' : '')
     + (m.pending ? '<div class="match-tag">Déjà enregistré — score à compléter</div>'
         : m.saved ? '<div class="match-tag">Déjà enregistré — modifiable</div>' : '')
     + '<div class="side a">' + m.teamA.join(' + ') + '</div>'
