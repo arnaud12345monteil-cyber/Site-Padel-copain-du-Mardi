@@ -4,6 +4,22 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.12 — 2026-10-14
+    Étape 4 : choix du nombre de matchs de la séance (liste 1 à
+    6, 3 par défaut = 1h30 de jeu en matchs de 30 min). Le bouton ne génère
+    plus "toutes les confrontations possibles" mais au plus autant de tours
+    (créneaux de 30 min) que ce nombre, chaque joueur jouant au plus ce
+    nombre de matchs. Quand il y a
+    plus d'équipes que de matchs à jouer (ex. 6 équipes, 3 matchs chacune), les
+    adversaires retenus sont ceux qui se sont le moins affrontés par le
+    passé. Les matchs déjà enregistrés pour la date comptent dans le quota,
+    y compris ceux d'une manche précédente avec d'autres équipes : une fois
+    le quota atteint, plus rien n'est proposé (message) jusqu'à ce qu'on
+    l'augmente. Si les équipes n'ont pas assez d'adversaires différents pour
+    atteindre le quota (ex. 4 équipes et 5 matchs), un message l'indique ;
+    "Rejouer cette confrontation" permet de compléter. Changer le quota
+    conserve les scores déjà saisis dans les propositions non enregistrées.
+
   v1.11 — 2026-10-14
     Étape 4 : les confrontations proposées sont maintenant CLASSÉES au lieu
     d'être listées dans l'ordre de création des équipes. Le classement tient
@@ -200,6 +216,10 @@
   .match-row.saved { border-left: 3px solid var(--accent2); }
   .match-tag { font-size: 9px; color: var(--muted); letter-spacing: 1px; width: 100%; margin-bottom: 2px; }
 
+  .quota-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .quota-row label { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .quota-row select { width: auto; font-size: 13px; padding: 6px 10px; }
+  .quota-row #quota-duration { font-size: 11px; color: var(--muted); }
   .tour-head { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--accent2); margin: 14px 0 6px; }
   .match-meta { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .match-meta span { font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); }
@@ -300,8 +320,17 @@
     <div class="section">
       <div class="section-title"><span class="n">4</span> Confrontations &amp; résultats</div>
       <div id="existing-matches"></div>
+      <div class="quota-row">
+        <label for="matches-per-player">Nombre de matchs de la séance (1 tour = 30 min)</label>
+        <select id="matches-per-player" onchange="onMatchesPerPlayerChange()">
+          <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        </select>
+        <span id="quota-duration">≈ 1h30 de jeu (matchs de 30 min)</span>
+      </div>
+      <div class="hint" id="quota-hint" style="display:none"></div>
       <div class="btn-row">
-        <button class="btn" id="generate-btn" onclick="generateMatches()" disabled>Générer toutes les confrontations possibles</button>
+        <button class="btn" id="generate-btn" onclick="generateMatches()" disabled>Générer les confrontations</button>
       </div>
       <div class="hint" id="order-hint" style="display:none"></div>
       <div id="matches-list" style="margin-top:14px"></div>
@@ -333,7 +362,7 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.11';
+const APP_VERSION = 'v1.12';
 const APP_VERSION_DATE = '2026-10-14';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
@@ -496,9 +525,22 @@ function rebuildMatchesFromTeams(date) {
     }
   }
   const courts = courtsForDate(date);
-  const sched = scheduleProposals(pending, teams.length, courts.length, courts);
+  // Quota de la séance : chaque joueur joue au plus N matchs (N × 30 min). Les
+  // matchs déjà enregistrés pour la date comptent dans ce quota, y compris
+  // ceux d'une manche précédente avec d'autres équipes.
+  const perPlayer = matchesPerPlayer();
   const ordreBase = Math.max(existingForDate.length, ...existingForDate.map(m => Number(m.ordre) || 0));
   const tourBase = Math.max(0, ...existingForDate.map(m => Number(m.tour) || 0));
+  const playedToday = {};
+  existingForDate.forEach(m => [...(m.team1 || []), ...(m.team2 || [])].forEach(p => { playedToday[p] = (playedToday[p] || 0) + 1; }));
+  const teamPlayed = teams.map(t => Math.max(0, ...t.players.map(p => playedToday[p] || 0)));
+  // Budget par équipe (matchs restants pour ses joueurs) ET nombre de tours
+  // restants : un tour = un créneau de 30 min, la séance n'en a que `perPlayer`.
+  const budget = teamPlayed.map(n => Math.max(0, perPlayer - n));
+  const toursLeft = Math.max(0, perPlayer - Math.max(tourBase, ...teamPlayed, 0));
+  const res = scheduleProposals(pending, teams.length, courts.length, courts, { budget, played: teamPlayed, maxTours: toursLeft });
+  const sched = res.list;
+  renderQuotaHint(perPlayer, teams, budget, res, toursLeft);
   sched.forEach((p, k) => {
     generatedMatches.push({
       teamA: p.teamA, teamB: p.teamB, s1: '', s2: '', saved: false,
@@ -565,35 +607,98 @@ function faceOffStats(teamA, teamB, map) {
 //  • dans un tour, le match le plus inédit prend le plus petit numéro et le
 //    premier terrain. Résultat déterministe (pas de hasard) pour ne pas changer
 //    d'ordre à chaque synchronisation.
-function scheduleProposals(pending, nTeams, nCourts, courts) {
-  if (!pending.length) return [];
+function scheduleProposals(pending, nTeams, nCourts, courts, opts) {
+  opts = opts || {};
+  const budget = (opts.budget || new Array(nTeams).fill(Infinity)).slice();
+  const maxTours = opts.maxTours !== undefined ? opts.maxTours : Infinity;
+  if (!pending.length) return { list: [], budgetLeft: budget, tours: 0 };
   const map = opponentCounts();
   const items = pending.map(p => {
     const s = faceOffStats(p.teamA, p.teamB, map);
     return { ...p, inedits: s.inedits, total: s.total, cost: s.met * 1000 + s.total };
   });
   const perTour = Math.max(1, Math.min(Math.floor(nTeams / 2), nCourts > 0 ? nCourts : Infinity));
-  const played = new Array(nTeams).fill(0);
+  const played = (opts.played || new Array(nTeams).fill(0)).slice();
   let remaining = items.slice();
   const out = [];
   let tour = 0;
 
-  while (remaining.length) {
+  // Les tours s'arrêtent quand le quota de matchs est atteint (au plus
+  // `maxTours` tours, et une équipe n'est plus sélectionnée une fois son
+  // budget épuisé) ou quand il n'y a plus d'affiche possible.
+  while (remaining.length && tour < maxTours) {
+    const cand = remaining.filter(p => budget[p.i] > 0 && budget[p.j] > 0);
+    if (!cand.length) break;
     tour++;
-    const chosen = nTeams <= 12 ? bestRound(remaining, perTour, played) : greedyRound(remaining, perTour);
+    const chosen = bestRound(cand, perTour, played);
     chosen.sort((x, y) => x.cost - y.cost || x.i - y.i || x.j - y.j);
     chosen.forEach((p, k) => {
-      played[p.i]++; played[p.j]++;
+      played[p.i]++; played[p.j]++; budget[p.i]--; budget[p.j]--;
       out.push({ ...p, tour, terrain: courts.length ? courts[k % courts.length] : undefined });
     });
     remaining = remaining.filter(p => !chosen.includes(p));
   }
-  return out;
+  return { list: out, budgetLeft: budget, tours: tour };
 }
 
-// Recherche exhaustive (≤ 12 équipes) du meilleur ensemble de matchs simultanés.
-function bestRound(remaining, perTour, played) {
-  let best = null;
+// ── Quota de matchs par joueur (séance de 1h30 = 3 matchs de 30 min) ────────
+const MATCH_MINUTES = 30;
+function matchesPerPlayer() {
+  const el = document.getElementById('matches-per-player');
+  const n = el ? parseInt(el.value) : 3;
+  return n > 0 ? n : 3;
+}
+function formatDuree(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? (h + 'h' + (m ? String(m).padStart(2, '0') : '')) : (m + ' min');
+}
+function onMatchesPerPlayerChange() {
+  const date = document.getElementById('session-select').value;
+  // Garde les scores déjà saisis dans les propositions pas encore enregistrées.
+  const typed = {};
+  generatedMatches.forEach(m => {
+    if (!m.matchRef && (m.s1 !== '' || m.s2 !== '')) typed[m.teamA.join('+') + '|' + m.teamB.join('+')] = [m.s1, m.s2];
+  });
+  rebuildMatchesFromTeams(date);
+  generatedMatches.forEach(m => {
+    const t = !m.matchRef && typed[m.teamA.join('+') + '|' + m.teamB.join('+')];
+    if (t) { m.s1 = t[0]; m.s2 = t[1]; }
+  });
+  renderMatchesList();
+}
+function renderQuotaHint(perPlayer, teamsNow, budget, res, toursLeft) {
+  const dur = document.getElementById('quota-duration');
+  if (dur) dur.textContent = '≈ ' + formatDuree(perPlayer * MATCH_MINUTES) + ' de jeu (matchs de ' + MATCH_MINUTES + ' min)';
+  const el = document.getElementById('quota-hint');
+  if (!el) return;
+  let msg = '';
+  if (teamsNow.length >= 2) {
+    const noRoom = toursLeft <= 0 || budget.every(b => b <= 0);
+    // Tours produits < tours possibles = on a manqué d'affiches inédites (pas
+    // seulement de créneaux) : les équipes avec du budget restant sont citées.
+    const short = res.tours < toursLeft ? teamsNow.filter((t, k) => budget[k] > 0 && res.budgetLeft[k] > 0) : [];
+    if (noRoom) {
+      msg = 'Quota atteint : ' + perPlayer + ' match(s) déjà joués ou enregistrés pour cette date. Augmente le nombre ci-dessus pour proposer d’autres confrontations.';
+    } else if (short.length) {
+      msg = 'Avec ces ' + teamsNow.length + ' équipes, ' + short.map(t => t.players.join('/')).join(' ; ')
+        + (short.length > 1 ? ' n’ont' : ' n’a')
+        + ' pas assez d’adversaires différents pour atteindre ' + perPlayer + ' matchs sans rejouer la même affiche (bouton « Rejouer cette confrontation » si besoin).';
+    }
+  }
+  el.style.display = msg ? '' : 'none';
+  el.textContent = msg;
+}
+
+// Recherche du meilleur ensemble de matchs simultanés. Exhaustive tant que le
+// nombre de combinaisons reste raisonnable (jusqu'à ~12 équipes) ; au-delà, la
+// recherche est plafonnée (NODE_LIMIT) et part des affiches les plus inédites,
+// donc le résultat est au pire celui d'un choix glouton.
+const NODE_LIMIT = 400000;
+function bestRound(remainingIn, perTour, played) {
+  const remaining = remainingIn.length > 66
+    ? remainingIn.slice().sort((x, y) => x.cost - y.cost || x.i - y.i || x.j - y.j)
+    : remainingIn;
+  let best = null, nodes = 0;
   const cur = [], used = new Set();
   function better(size, wait, cost) {
     if (!best) return true;
@@ -603,7 +708,7 @@ function bestRound(remaining, perTour, played) {
   }
   function dfs(start, wait, cost) {
     if (cur.length && better(cur.length, wait, cost)) best = { size: cur.length, wait, cost, list: cur.slice() };
-    if (cur.length === perTour) return;
+    if (cur.length === perTour || ++nodes > NODE_LIMIT) return;
     for (let k = start; k < remaining.length; k++) {
       const p = remaining[k];
       if (used.has(p.i) || used.has(p.j)) continue;
@@ -614,14 +719,6 @@ function bestRound(remaining, perTour, played) {
   }
   dfs(0, 0, 0);
   return best.list;
-}
-function greedyRound(remaining, perTour) {
-  const used = new Set(), list = [];
-  remaining.slice().sort((x, y) => x.cost - y.cost || x.i - y.i || x.j - y.j).forEach(p => {
-    if (list.length >= perTour || used.has(p.i) || used.has(p.j)) return;
-    used.add(p.i); used.add(p.j); list.push(p);
-  });
-  return list;
 }
 
 // ── Étape 2 : joueurs présents ───────────────────────────────────────────
