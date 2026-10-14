@@ -2,6 +2,14 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.62 — 2026-10-14
+    Onglet "Matchs séance" : chaque match affiche ses statistiques d'opposition
+    ("Face-à-face inédits : 3/4" = nombre de duels joueur contre joueur qui
+    n'avaient jamais eu lieu avant ce match). Calcul d'après l'historique
+    chronologique complet (date de séance puis ordre d'enregistrement), donc
+    valable aussi pour les anciens matchs ; l'infobulle détaille les duels
+    déjà joués. Même calcul que la page Matchs (v1.13).
+
   v1.61 — 2026-10-14
     Onglet "Matchs séance" : chaque match affiche maintenant son numéro
     d'ordre, son terrain et son tour lorsqu'ils ont été définis par la page
@@ -808,6 +816,7 @@
   .match-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .match-num { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
   .match-court { color: var(--accent); }
+  .match-nouv { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin: -2px 0 6px; }
   .match-body { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
   .match-team-a { text-align: left; }
   .match-team-b { text-align: right; }
@@ -1275,7 +1284,7 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {}, player_photos: {}, player_pins: {} };
-const APP_VERSION = 'v1.61';
+const APP_VERSION = 'v1.62';
 const APP_VERSION_DATE = '2026-10-14';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
@@ -2893,10 +2902,43 @@ function setMatchScore(matchId, side, val) {
   }).catch(e => toast('Erreur : ' + e.message));
 }
 
+// ── Statistiques d'opposition d'un match, calculées d'après l'historique
+// CHRONOLOGIQUE (date de séance, puis ordre d'enregistrement) : pour chaque
+// match, combien de ses face-à-face individuels (joueur de l'équipe A contre
+// joueur de l'équipe B) n'avaient encore jamais eu lieu avant lui, et lesquels
+// étaient déjà des répétitions. Recalculé à l'affichage : fonctionne donc aussi
+// pour les matchs enregistrés avant cette fonction, et ne dépend d'aucun champ
+// stocké.
+function noveltyByMatch(matches) {
+  const order = (matches || []).map((m, i) => ({ m, i }))
+    .sort((x, y) => String(x.m.sessionDate || '').localeCompare(String(y.m.sessionDate || '')) || x.i - y.i);
+  const seen = {}, out = new Map();
+  const key = (p, q) => (p < q ? p + '|' + q : q + '|' + p);
+  order.forEach(({ m }) => {
+    const a = m.team1 || [], b = m.team2 || [];
+    let inedits = 0, n = 0;
+    const repeats = [];
+    a.forEach(p => b.forEach(q => {
+      const c = seen[key(p, q)] || 0;
+      n++;
+      if (!c) inedits++; else repeats.push({ a: p, b: q, n: c });
+    }));
+    out.set(m, { inedits, n, repeats });
+    a.forEach(p => b.forEach(q => { seen[key(p, q)] = (seen[key(p, q)] || 0) + 1; }));
+  });
+  return out;
+}
+function noveltyTitle(info) {
+  if (!info) return '';
+  if (!info.repeats.length) return 'Aucun de ces face-à-face n’avait eu lieu auparavant.';
+  return 'Déjà affrontés avant ce match : ' + info.repeats.map(r => r.a + ' / ' + r.b + ' (' + r.n + ' fois)').join(', ');
+}
+
 function escHtml(v) {
   return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+let _noveltyMap = null;   // recalculée à chaque renderMatches()
 function matchCard(m, showDate, matchNum) {
   const hasScore = Array.isArray(m.score);
   const winner = hasScore ? (m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0) : -1;
@@ -2915,6 +2957,10 @@ function matchCard(m, showDate, matchNum) {
       +   '<div class="score-spinner-sep">—</div>'
       +   scoreSpinnerHtml(m.id, 1, hasScore ? m.score[1] : 0)
       + '</div>';
+  const nov = _noveltyMap && _noveltyMap.get(m);
+  const novHtml = nov
+    ? '<div class="match-nouv" title="' + escHtml(noveltyTitle(nov)) + '">Face-à-face inédits : ' + nov.inedits + '/' + nov.n + '</div>'
+    : '';
   return '<div class="match-card ' + cardClass + '">'
     + '<div class="match-header">'
     + '<span class="match-num">' + ((m.ordre || matchNum) ? 'Match '+(m.ordre || matchNum) : '') + (showDate ? ' · '+m.sessionDate : '')
@@ -2922,6 +2968,7 @@ function matchCard(m, showDate, matchNum) {
     +   (m.tour ? ' · Tour '+escHtml(m.tour) : '') + '</span>'
     + '<div class="match-actions admin-only"><button onclick="openMatchModal('+m.id+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px" title="Modifier les équipes">✏️</button><button onclick="deleteMatch('+m.id+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px">🗑️</button></div>'
     + '</div>'
+    + novHtml
     + '<div class="match-body">'
     + '<div class="match-team-a"><div class="match-team-label a">Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
     + '<div class="match-center">'
@@ -2952,6 +2999,8 @@ function renderMatches() {
     allContainer.innerHTML = '';
     return;
   }
+
+  _noveltyMap = noveltyByMatch(state.matches);
 
   // Trouver la séance la plus récente ayant des matchs
   const dates = [...new Set(state.matches.map(m => m.sessionDate))].sort((a,b) => b.localeCompare(a));
