@@ -4,6 +4,23 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.11 — 2026-10-14
+    Étape 4 : les confrontations proposées sont maintenant CLASSÉES au lieu
+    d'être listées dans l'ordre de création des équipes. Le classement tient
+    compte de tout l'historique des matchs : on propose en priorité les
+    affrontements où les adversaires se sont le moins souvent rencontrés
+    (d'abord le moins de paires de joueurs déjà opposées, puis le moins de
+    face-à-face cumulés). Chaque confrontation reçoit un numéro d'ordre, un
+    tour (matchs jouables en même temps, au plus un par terrain réservé, sans
+    équipe en double) et un terrain pris parmi les terrains réservés par le
+    bot pour cette date. Le tour 1 est choisi uniquement sur la nouveauté des
+    adversaires ; aux tours suivants, les équipes qui ont le moins joué
+    passent d'abord (rotation si le nombre d'équipes est impair). Chaque ligne
+    indique combien de face-à-face individuels sont inédits (ex. 3/4). Ordre,
+    tour et terrain sont mémorisés à l'enregistrement (champs ordre/tour/
+    terrain du match) ; les matchs plus anciens n'en ont pas et s'affichent
+    comme avant. Sans réservation trouvée pour la date, seuls ordre et tour
+    sont affichés.
   v1.10 — 2026-09-21
     Correction du bug introduit par le correctif "Manche suivante" de la
     v1.9 : avec 4 joueurs (ou plus généralement dès qu'une confrontation de
@@ -183,6 +200,13 @@
   .match-row.saved { border-left: 3px solid var(--accent2); }
   .match-tag { font-size: 9px; color: var(--muted); letter-spacing: 1px; width: 100%; margin-bottom: 2px; }
 
+  .tour-head { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--accent2); margin: 14px 0 6px; }
+  .match-meta { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .match-meta span { font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); }
+  .match-meta .chip-ordre { color: var(--accent); border-color: var(--accent); }
+  .match-meta .chip-terrain { color: var(--text); }
+  .match-meta .chip-nouv { color: var(--muted); margin-left: auto; }
+
   .existing-list { font-size: 11px; color: var(--muted); line-height: 1.9; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); padding: 12px 20px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 1000; }
   .toast.show { opacity: 1; }
@@ -279,6 +303,7 @@
       <div class="btn-row">
         <button class="btn" id="generate-btn" onclick="generateMatches()" disabled>Générer toutes les confrontations possibles</button>
       </div>
+      <div class="hint" id="order-hint" style="display:none"></div>
       <div id="matches-list" style="margin-top:14px"></div>
       <div class="btn-row" id="save-row" style="display:none">
         <button class="btn" onclick="saveAllMatches()">Enregistrer les matchs</button>
@@ -308,8 +333,8 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.10';
-const APP_VERSION_DATE = '2026-09-21';
+const APP_VERSION = 'v1.11';
+const APP_VERSION_DATE = '2026-10-14';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
 
@@ -328,6 +353,7 @@ docRef.onSnapshot(snap => {
   state.sessions = (data.sessions || []).map(s => ({ ...s, attendees: Array.isArray(s.attendees) ? s.attendees : [...(s.attendees||[])] }));
   state.matches = data.matches || [];
   state.team_setups = data.team_setups || {};
+  state.bot_reservations = data.bot_reservations || [];   // lecture seule : sert à connaître les terrains réservés
   populateSessionSelect();
 }, err => {
   toast('Erreur Firebase : ' + err.message);
@@ -448,11 +474,17 @@ function rebuildMatchesFromTeams(date) {
       saved: hasScore,
       pending: !hasScore,   // déjà enregistré, score à compléter (indication visuelle)
       matchRef: m,          // référence directe pour compléter le score au bon endroit
+      // Numéro d'ordre / terrain / tour mémorisés à l'enregistrement (absents
+      // sur les matchs saisis avant la v1.11 ou depuis la page principale).
+      ordre: m.ordre, terrain: m.terrain, tour: m.tour,
     });
   });
 
   // 2) Paires d'équipes qui n'ont ENCORE aucune confrontation enregistrée
-  //    pour cette date — proposées comme avant ("round-robin" à générer).
+  //    pour cette date — proposées comme avant ("round-robin" à générer),
+  //    mais maintenant CLASSÉES (voir scheduleProposals) : numéro d'ordre,
+  //    tour et terrain réservé.
+  const pending = [];
   for (let i = 0; i < teams.length; i++) {
     for (let j = i+1; j < teams.length; j++) {
       const teamA = teams[i].players, teamB = teams[j].players;
@@ -460,11 +492,136 @@ function rebuildMatchesFromTeams(date) {
         (sameTeam(m.team1, teamA) && sameTeam(m.team2, teamB)) ||
         (sameTeam(m.team1, teamB) && sameTeam(m.team2, teamA))
       );
-      if (!already) generatedMatches.push({ teamA, teamB, s1: '', s2: '', saved: false });
+      if (!already) pending.push({ i, j, teamA, teamB });
     }
   }
+  const courts = courtsForDate(date);
+  const sched = scheduleProposals(pending, teams.length, courts.length, courts);
+  const ordreBase = Math.max(existingForDate.length, ...existingForDate.map(m => Number(m.ordre) || 0));
+  const tourBase = Math.max(0, ...existingForDate.map(m => Number(m.tour) || 0));
+  sched.forEach((p, k) => {
+    generatedMatches.push({
+      teamA: p.teamA, teamB: p.teamB, s1: '', s2: '', saved: false,
+      ordre: ordreBase + k + 1, tour: tourBase + p.tour, terrain: p.terrain,
+      inedits: p.inedits, totalFaceAFace: p.total,
+    });
+  });
+  currentCourts = courts;
 
   renderMatchesList();
+}
+
+// ── Terrains réservés pour une date (réservations bot confirmées) ───────────
+// Même source que l'affichage "Terrain réservé" du tracker : on déduplique par
+// numéro de terrain (un même terrain réservé sur deux créneaux = un seul
+// terrain physique).
+let currentCourts = [];
+function courtsForDate(date) {
+  const out = [], seen = new Set();
+  (state.bot_reservations || []).forEach(r => {
+    if (r.statut !== 'confirmée' || r.date !== date) return;
+    const m = /Terrain\s*n\.?\s*(\d+)/i.exec(r.terrain || '');
+    const label = m ? m[1] : String(r.terrain || '').trim();
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    out.push(label);
+  });
+  // Ordre numérique quand ce sont des numéros ("6" avant "10").
+  return out.sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0) || a.localeCompare(b));
+}
+
+// ── Historique des oppositions : combien de fois deux joueurs se sont déjà
+// retrouvés dans des équipes ADVERSES (tous les matchs enregistrés, y compris
+// ceux déjà saisis pour la date en cours, avec ou sans score).
+function opponentCounts() {
+  const map = {};
+  (state.matches || []).forEach(m => {
+    (m.team1 || []).forEach(a => (m.team2 || []).forEach(b => {
+      const k = a < b ? a + '|' + b : b + '|' + a;
+      map[k] = (map[k] || 0) + 1;
+    }));
+  });
+  return map;
+}
+function faceOffStats(teamA, teamB, map) {
+  let total = 0, inedits = 0, n = 0;
+  teamA.forEach(a => teamB.forEach(b => {
+    const c = map[a < b ? a + '|' + b : b + '|' + a] || 0;
+    total += c; n++;
+    if (c === 0) inedits++;
+  }));
+  return { total, inedits, n, met: n - inedits };
+}
+
+// Classe les confrontations à proposer :
+//  • un "tour" = des matchs jouables en même temps (aucune équipe en double),
+//    au plus un par terrain réservé ;
+//  • pour chaque tour, on retient l'ensemble de matchs qui (1) occupe le plus de
+//    terrains, (2) fait jouer en priorité les équipes qui ont le moins joué
+//    jusque-là (rotation quand le nombre d'équipes est impair), puis (3) maximise
+//    les affrontements INÉDITS entre joueurs (le moins de paires déjà opposées,
+//    puis le moins de face-à-face cumulés). Le tour 1 est donc purement choisi
+//    sur la nouveauté des adversaires ;
+//  • dans un tour, le match le plus inédit prend le plus petit numéro et le
+//    premier terrain. Résultat déterministe (pas de hasard) pour ne pas changer
+//    d'ordre à chaque synchronisation.
+function scheduleProposals(pending, nTeams, nCourts, courts) {
+  if (!pending.length) return [];
+  const map = opponentCounts();
+  const items = pending.map(p => {
+    const s = faceOffStats(p.teamA, p.teamB, map);
+    return { ...p, inedits: s.inedits, total: s.total, cost: s.met * 1000 + s.total };
+  });
+  const perTour = Math.max(1, Math.min(Math.floor(nTeams / 2), nCourts > 0 ? nCourts : Infinity));
+  const played = new Array(nTeams).fill(0);
+  let remaining = items.slice();
+  const out = [];
+  let tour = 0;
+
+  while (remaining.length) {
+    tour++;
+    const chosen = nTeams <= 12 ? bestRound(remaining, perTour, played) : greedyRound(remaining, perTour);
+    chosen.sort((x, y) => x.cost - y.cost || x.i - y.i || x.j - y.j);
+    chosen.forEach((p, k) => {
+      played[p.i]++; played[p.j]++;
+      out.push({ ...p, tour, terrain: courts.length ? courts[k % courts.length] : undefined });
+    });
+    remaining = remaining.filter(p => !chosen.includes(p));
+  }
+  return out;
+}
+
+// Recherche exhaustive (≤ 12 équipes) du meilleur ensemble de matchs simultanés.
+function bestRound(remaining, perTour, played) {
+  let best = null;
+  const cur = [], used = new Set();
+  function better(size, wait, cost) {
+    if (!best) return true;
+    if (size !== best.size) return size > best.size;
+    if (wait !== best.wait) return wait < best.wait;
+    return cost < best.cost;
+  }
+  function dfs(start, wait, cost) {
+    if (cur.length && better(cur.length, wait, cost)) best = { size: cur.length, wait, cost, list: cur.slice() };
+    if (cur.length === perTour) return;
+    for (let k = start; k < remaining.length; k++) {
+      const p = remaining[k];
+      if (used.has(p.i) || used.has(p.j)) continue;
+      used.add(p.i); used.add(p.j); cur.push(p);
+      dfs(k + 1, wait + played[p.i] + played[p.j], cost + p.cost);
+      cur.pop(); used.delete(p.i); used.delete(p.j);
+    }
+  }
+  dfs(0, 0, 0);
+  return best.list;
+}
+function greedyRound(remaining, perTour) {
+  const used = new Set(), list = [];
+  remaining.slice().sort((x, y) => x.cost - y.cost || x.i - y.i || x.j - y.j).forEach(p => {
+    if (list.length >= perTour || used.has(p.i) || used.has(p.j)) return;
+    used.add(p.i); used.add(p.j); list.push(p);
+  });
+  return list;
 }
 
 // ── Étape 2 : joueurs présents ───────────────────────────────────────────
@@ -728,7 +885,17 @@ function generateMatches() {
 function addExtraMatch(i) {
   const src = generatedMatches[i];
   if (!src) return;
-  generatedMatches.push({ teamA: src.teamA, teamB: src.teamB, s1: '', s2: '', saved: false, pending: false, matchRef: null });
+  // Rejouer = un match de plus, joué après les autres (nouvel ordre, nouveau
+  // tour) ; on garde le terrain de la ligne d'origine.
+  const ordres = generatedMatches.map(m => Number(m.ordre) || 0);
+  const tours = generatedMatches.map(m => Number(m.tour) || 0);
+  const extra = { teamA: src.teamA, teamB: src.teamB, s1: '', s2: '', saved: false, pending: false, matchRef: null };
+  if (src.ordre !== undefined) {
+    extra.ordre = Math.max(generatedMatches.length, ...ordres) + 1;
+    extra.tour = Math.max(0, ...tours) + 1;
+    extra.terrain = src.terrain;
+  }
+  generatedMatches.push(extra);
   renderMatchesList();
 }
 
@@ -756,8 +923,30 @@ function renderMatchesList() {
   // Les scores restent TOUJOURS modifiables ici, y compris pour une
   // confrontation déjà enregistrée avec un résultat — "Enregistrer les
   // matchs" met à jour le score existant plutôt que d'en recréer un.
-  el.innerHTML = generatedMatches.map((m, i) =>
-    '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
+  const hintEl = document.getElementById('order-hint');
+  if (hintEl) {
+    const hasProposals = generatedMatches.some(m => !m.matchRef && m.ordre !== undefined);
+    hintEl.style.display = hasProposals ? '' : 'none';
+    hintEl.textContent = 'Confrontations classées pour que les adversaires se soient le moins affrontés par le passé (tout l’historique de matchs) ; '
+      + 'un tour = des matchs en même temps, un par terrain réservé. '
+      + (currentCourts.length
+          ? 'Terrains réservés ce jour : ' + currentCourts.join(', ') + '.'
+          : 'Aucun terrain réservé trouvé pour cette date : numéros d’ordre sans terrain.');
+  }
+  let lastTour = null;
+  el.innerHTML = generatedMatches.map((m, i) => {
+    let head = '';
+    if (m.tour !== undefined && m.tour !== lastTour) {
+      lastTour = m.tour;
+      head = '<div class="tour-head">Tour ' + m.tour + '</div>';
+    }
+    const chips = [];
+    if (m.ordre !== undefined) chips.push('<span class="chip-ordre">N° ' + m.ordre + '</span>');
+    if (m.terrain) chips.push('<span class="chip-terrain">🎾 Terrain ' + m.terrain + '</span>');
+    const nouveaute = (m.inedits !== undefined)
+      ? '<span class="chip-nouv">Face-à-face inédits : ' + m.inedits + '/' + (m.teamA.length * m.teamB.length) + '</span>' : '';
+    return head + '<div class="match-row' + (m.saved ? ' saved' : '') + '">'
+    + (chips.length || nouveaute ? '<div class="match-meta">' + chips.join('') + nouveaute + '</div>' : '')
     + (m.pending ? '<div class="match-tag">Déjà enregistré — score à compléter</div>'
         : m.saved ? '<div class="match-tag">Déjà enregistré — modifiable</div>' : '')
     + '<div class="side a">' + m.teamA.join(' + ') + '</div>'
@@ -769,8 +958,8 @@ function renderMatchesList() {
     +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;flex:1" onclick="addExtraMatch(' + i + ')">+ Rejouer cette confrontation</button>'
     +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;color:var(--danger);border-color:var(--danger)" onclick="deleteMatchRow(' + i + ')" title="Supprimer">🗑️</button>'
     + '</div>'
-    + '</div>'
-  ).join('');
+    + '</div>';
+  }).join('');
 }
 
 // Supprime une confrontation directement depuis cette page. Si elle est déjà
@@ -784,6 +973,11 @@ function deleteMatchRow(i) {
 
   if (!m.matchRef) {
     generatedMatches.splice(i, 1);
+    // Renumérote les lignes pas encore enregistrées pour ne pas laisser de trou
+    // dans la numérotation (les terrains et tours restent ceux calculés).
+    const saved = generatedMatches.filter(x => x.matchRef);
+    let n = Math.max(saved.length, ...saved.map(x => Number(x.ordre) || 0));
+    generatedMatches.forEach(x => { if (!x.matchRef && x.ordre !== undefined) x.ordre = ++n; });
     renderMatchesList();
     return;
   }
@@ -829,6 +1023,12 @@ function saveAllMatches() {
       if (changed) { state.matches[idx].score = score; updated++; }
     } else {
       const newMatch = { sessionDate: date, team1: m.teamA, team2: m.teamB, scoreMode: 'total', score };
+      // Champs facultatifs (Firestore refuse les valeurs undefined) : numéro
+      // d'ordre, tour et terrain, mémorisés pour que la numérotation reste
+      // stable une fois les matchs enregistrés.
+      if (m.ordre !== undefined) newMatch.ordre = m.ordre;
+      if (m.tour !== undefined) newMatch.tour = m.tour;
+      if (m.terrain) newMatch.terrain = m.terrain;
       state.matches.push(newMatch);
       m.matchRef = newMatch; // pour qu'une modification ultérieure de cette même ligne mette à jour, sans doublon
       created++;
