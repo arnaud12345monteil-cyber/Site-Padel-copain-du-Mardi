@@ -2,6 +2,45 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.72 — 2026-10-19
+    Onglet "Matchs séance" : les équipes reprennent la couleur qu'elles ont
+    dans "Équipes constituées" (libellé "Équipe A / B", noms des joueurs et
+    pastilles de filtre par équipe). Une équipe est reconnue par ses deux
+    joueurs ; une paire qui ne correspond à aucune équipe constituée (match
+    saisi à la main, séance dont les équipes ont été réinitialisées) garde les
+    couleurs d'origine. Un match gagné n'est plus signalé par la couleur des
+    noms (elle sert désormais à identifier l'équipe) mais reste signalé par le
+    trophée et la bordure de la carte. Même logique réutilisée dans la vue
+    "équipes + matchs" de la prochaine séance.
+
+  v1.71 — 2026-10-19
+    Vue "équipes + matchs" : la ligne "équipe A vs équipe B" tient maintenant
+    toujours sur une seule ligne. Elle ne passe plus à la ligne : si les noms
+    sont trop longs pour la largeur disponible, la taille du texte diminue
+    automatiquement (16px au maximum, 10,5px avant de toucher aux noms) ; en
+    dernier recours (très petit écran, noms très longs) les initiales
+    ("Arthur D." → "Arthur") sont retirées et le texte peut descendre à 9px ;
+    si cela ne suffit toujours pas (écran de 320px avec des prénoms de plus
+    de 12 lettres), la ligne passe à la ligne plutôt que de couper un nom.
+    Espaces resserrés ; la grille ne déborde plus sur petit écran.
+
+  v1.70 — 2026-10-19
+    Vue "équipes + matchs" de la prochaine séance : chaque équipe d'un match
+    reprend la couleur qu'elle a dans la liste "Équipes constituées" (au lieu
+    du vert / orange A / B). Une équipe est reconnue par ses deux joueurs ;
+    si la paire d'un match ne correspond à aucune équipe constituée (ex. match
+    saisi à la main), ses noms restent en couleur de texte normale.
+
+  v1.69 — 2026-10-19
+    "Prochaine séance" / "Séance suivante" : un bouton dans le bloc "Équipes
+    constituées" bascule vers une vue qui liste les équipes puis tous les
+    matchs enregistrés pour cette séance. Chaque match tient sur deux lignes :
+    "Match N · Tour T" + pastille "Terrain X" (comme l'onglet "Matchs
+    séance"), puis les deux équipes sur une seule ligne, bordure de carte
+    identique à l'onglet. Même ordre et même numérotation que "Matchs
+    séance". Sans match enregistré, un message l'indique. Le choix reste
+    mémorisé pendant la session de navigation.
+
   v1.68 — 2026-10-16
     Tableau "Oppositions entre joueurs" : nouvelle dernière colonne
     "Adversaires" = nombre de joueurs différents déjà affrontés sur le total
@@ -875,6 +914,19 @@
   .stats-toggle-btn.off { opacity: .45; border-style: dashed; }
   html.hide-nouv .match-nouv, html.hide-nouv .match-nouv-detail, html.hide-nouv .chip-nouv { display: none !important; }
   .date-courts { color: var(--accent); margin-left: 6px; }
+  /* Prochaine séance : vue "équipes + matchs" */
+  .teams-view-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 14px; cursor: pointer; white-space: nowrap; }
+  .teams-view-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .teams-view-btn.on { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.1); }
+  .tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 6px; }
+  .tm-card { min-width: 0; }
+  .tm-card .match-header { margin-bottom: 4px; }
+  /* Une seule ligne, toujours : la taille de police est réduite par fitTeamLines() si les noms sont longs */
+  .tm-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 0 0.5em; white-space: nowrap; overflow: hidden; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.3px; line-height: 1.25; }
+  .tm-line .tm-vs { color: var(--muted); font-size: 0.75em; }
+  .tm-line.no-ini .ini { display: none; }
+  /* Cas extrême (écran très étroit + noms très longs) : on préfère passer sur 2 lignes plutôt que couper un nom */
+  .tm-line.wrap { flex-wrap: wrap; white-space: normal; overflow: visible; gap: 1px 0.5em; font-size: 12px; }
   .match-body { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
   .match-team-a { text-align: left; }
   .match-team-b { text-align: right; }
@@ -1347,8 +1399,8 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [],bot_reservations: [], date_filters: {}, player_photos: {}, player_pins: {} };
-const APP_VERSION = 'v1.68';
-const APP_VERSION_DATE = '2026-10-14';
+const APP_VERSION = 'v1.72';
+const APP_VERSION_DATE = '2026-10-19';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
 firebase.initializeApp({
@@ -2083,7 +2135,44 @@ function renderNextSession() {
     allContainer.style.display = 'none';
     _showAllUpcoming = false;
   }
+  fitTeamLines();
 }
+
+// Ajuste la taille de police de la ligne "équipe A vs équipe B" pour qu'elle
+// tienne toujours sur une seule ligne, quelle que soit la longueur des noms
+// ou la largeur de l'écran (16px par défaut, 9px au plus petit). Rejoué quand
+// la ligne change de largeur (rotation, onglet réaffiché) et une fois la
+// police chargée.
+const TM_FONT_MAX = 16, TM_FONT_MIN = 9, TM_FONT_COMFORT = 10.5;
+let _tmObserver = null;
+function fitOneTeamLine(el) {
+  if (!el.clientWidth) return;            // masqué (onglet / zone repliée) : repris au réaffichage
+  const over = () => el.scrollWidth > el.clientWidth + 0.5;
+  const shrink = floor => {
+    let size = TM_FONT_MAX;
+    el.style.fontSize = size + 'px';
+    while (over() && size > floor) { size -= 0.5; el.style.fontSize = size + 'px'; }
+  };
+  el.classList.remove('no-ini', 'wrap');
+  shrink(TM_FONT_COMFORT);                // 1) on réduit jusqu'à 10,5px, noms complets
+  if (over()) {                           // 2) sinon on retire les initiales ("Arthur D." → "Arthur")
+    el.classList.add('no-ini');
+    shrink(TM_FONT_MIN);                  //    puis on réduit jusqu'à 9px au plus
+    if (over()) {                         // 3) cas extrême : retour à la ligne plutôt que nom coupé
+      el.classList.add('wrap');
+      el.style.fontSize = '';
+    }
+  }
+}
+function fitTeamLines() {
+  const lines = document.querySelectorAll('.tm-line');
+  lines.forEach(fitOneTeamLine);
+  if (typeof ResizeObserver === 'undefined') return;
+  if (_tmObserver) _tmObserver.disconnect();
+  _tmObserver = new ResizeObserver(entries => entries.forEach(e => fitOneTeamLine(e.target)));
+  lines.forEach(el => _tmObserver.observe(el));
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTeamLines);
 
 function toggleAllUpcoming() {
   _showAllUpcoming = !_showAllUpcoming;
@@ -2153,14 +2242,72 @@ function teamsForDate(date) {
 
 const TEAM_COLORS = ['var(--accent)', 'var(--accent2)', 'var(--nicolas)', '#7ab8ff', '#e08ce0', '#ff9f6e'];
 
+// Couleur de chaque équipe constituée d'une date (même rang que dans la liste
+// "Équipes constituées"), indexée par matchTeamKey(joueurs). Une paire absente
+// de cette liste n'a pas de couleur (undefined) : l'appelant garde son style.
+function teamColorMap(date) {
+  const map = {};
+  teamsForDate(date).forEach((t, i) => { map[matchTeamKey(t)] = TEAM_COLORS[i % TEAM_COLORS.length]; });
+  return map;
+}
+
+// Vue "équipes + matchs" de la prochaine séance : dates pour lesquelles le
+// bouton est activé (mémoire de la page, survit aux rafraîchissements Firestore).
+const _teamsMatchView = {};
+function toggleTeamsMatchView(date) {
+  _teamsMatchView[date] = !_teamsMatchView[date];
+  renderNextSession();
+}
+
+// Une carte par match enregistré pour la date : ligne 1 = "Match N · Tour T"
+// + pastille terrain (même rendu que l'onglet "Matchs séance"), ligne 2 = les
+// deux équipes sur une seule ligne. Même ordre et même numéro que l'onglet.
+function sessionMatchesListHtml(date) {
+  const list = (state.matches || []).filter(m => m.sessionDate === date);
+  const title = '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin:14px 0 8px">Matchs de la séance' + (list.length ? ' (' + list.length + ')' : '') + '</div>';
+  if (!list.length) {
+    return title + '<div style="font-size:12px;color:var(--muted)">Aucun match enregistré pour cette séance. Ils s\'affichent ici une fois enregistrés depuis la page « Saisir des matchs ».</div>';
+  }
+  // "Arthur D." → prénom + initiale dans un <span class="ini"> que fitTeamLines()
+  // masque en dernier recours si la ligne est encore trop large à la taille minimale.
+  const nameHtml = p => {
+    const sn = shortName(p);
+    const m = /^(.+?)(\s\S\.)$/.exec(sn);
+    return m ? escHtml(m[1]) + '<span class="ini">' + escHtml(m[2]) + '</span>' : escHtml(sn);
+  };
+  const names = team => (team || []).map(nameHtml).join(' / ');
+  // Couleur de chaque équipe = celle de la liste "Équipes constituées" (même
+  // TEAM_COLORS, même rang). Paire absente de la liste : couleur de texte normale.
+  const colorByTeam = teamColorMap(date);
+  const colorOf = team => colorByTeam[matchTeamKey(team)] || 'var(--text)';
+  return title + '<div class="tm-grid">' + list.map((m, i) => {
+    const hasScore = Array.isArray(m.score);
+    const winner = hasScore ? (m.score[0] > m.score[1] ? 1 : m.score[0] < m.score[1] ? 2 : 0) : -1;
+    const cardClass = !hasScore ? 'pending' : winner === 1 ? 'win-a' : winner === 2 ? 'win-b' : 'draw';
+    const num = m.ordre || (i + 1);
+    return '<div class="match-card tm-card ' + cardClass + '">'
+      + '<div class="match-header"><div class="match-head-left">'
+      +   '<span class="match-num">Match ' + num + (m.tour ? ' · Tour ' + escHtml(m.tour) : '') + '</span>'
+      +   (m.terrain ? '<span class="match-court">Terrain ' + escHtml(courtLabel(m.terrain)) + '</span>' : '')
+      + '</div></div>'
+      + '<div class="tm-line"><span class="tm-a" style="color:' + colorOf(m.team1) + '">' + names(m.team1) + '</span><span class="tm-vs">vs</span><span class="tm-b" style="color:' + colorOf(m.team2) + '">' + names(m.team2) + '</span></div>'
+      + '</div>';
+  }).join('') + '</div>';
+}
+
 function teamsBlockHtml(date) {
   const teams = teamsForDate(date);
   if (!teams.length) return '';
   // Une équipe par ligne, numérotée, avec une couleur propre par équipe —
   // pas de cadre "Match", pas de "VS" : ce n'est pas une liste de matchs.
+  // Le bouton ajoute en dessous la liste des matchs de la séance.
   const multi = teams.length > 1;
+  const withMatches = !!_teamsMatchView[date];
   return '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);width:100%">'
-    + '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Équipe' + (multi ? 's' : '') + ' constituée' + (multi ? 's' : '') + '</div>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+    +   '<div style="font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase">Équipe' + (multi ? 's' : '') + ' constituée' + (multi ? 's' : '') + '</div>'
+    +   '<button type="button" class="teams-view-btn' + (withMatches ? ' on' : '') + '" onclick="toggleTeamsMatchView(\'' + date + '\')" title="' + (withMatches ? 'Revenir aux équipes seules' : 'Afficher aussi tous les matchs de la séance') + '">🎾 Matchs' + (withMatches ? ' ✓' : '') + '</button>'
+    + '</div>'
     + '<div style="display:flex;flex-direction:column;gap:6px">'
     +   teams.map((team, i) => {
           const color = TEAM_COLORS[i % TEAM_COLORS.length];
@@ -2172,6 +2319,7 @@ function teamsBlockHtml(date) {
             + '</div>';
         }).join('')
     + '</div>'
+    + (withMatches ? sessionMatchesListHtml(date) : '')
     + '</div>';
 }
 
@@ -3063,6 +3211,8 @@ function matchCard(m, showDate, matchNum) {
       +   '<div class="score-spinner-sep">—</div>'
       +   scoreSpinnerHtml(m.id, 1, hasScore ? m.score[1] : 0)
       + '</div>';
+  const tcMap = teamColorMap(m.sessionDate);
+  const c1 = tcMap[matchTeamKey(m.team1)], c2 = tcMap[matchTeamKey(m.team2)];
   const nov = _noveltyMap && _noveltyMap.get(m);
   const novHtml = nov
     ? '<div class="match-nouv" title="' + escHtml(noveltyTitle(nov)) + '">' + noveltyLabel(nov) + '</div>'
@@ -3079,13 +3229,13 @@ function matchCard(m, showDate, matchNum) {
     + '</div>'
     + novHtml
     + '<div class="match-body">'
-    + '<div class="match-team-a"><div class="match-team-label a">Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '">' + m.team1.join('<br>') + '</div></div>'
+    + '<div class="match-team-a"><div class="match-team-label a"' + (c1 ? ' style="color:' + c1 + '"' : '') + '>Équipe A</div><div class="match-team-players' + (winner===1?' winner':'') + '"' + (c1 ? ' style="color:' + c1 + '"' : '') + '>' + m.team1.join('<br>') + '</div></div>'
     + '<div class="match-center">'
     + scoreBlock
     + '<div class="match-trophy">' + (winner===1?'🏆':'') + (winner===0?'🤝':'') + (winner===2?'🏆':'') + '</div>'
     + (setsDetail ? '<div class="match-score-detail">'+setsDetail+'</div>' : '')
     + '</div>'
-    + '<div class="match-team-b"><div class="match-team-label b" style="text-align:right">Équipe B</div><div class="match-team-players' + (winner===2?' winner-b':'') + '" style="text-align:right">' + m.team2.join('<br>') + '</div></div>'
+    + '<div class="match-team-b"><div class="match-team-label b" style="text-align:right' + (c2 ? ';color:' + c2 : '') + '">Équipe B</div><div class="match-team-players' + (winner===2?' winner-b':'') + '" style="text-align:right' + (c2 ? ';color:' + c2 : '') + '">' + m.team2.join('<br>') + '</div></div>'
     + '</div>'
     + '</div>';
 }
@@ -3331,13 +3481,14 @@ function matchesBlockHtml(date, matchesOfDate) {
   const stored = _matchTeamFilter[date];
   const activeKey = (stored && teams.some(t => t.key === stored)) ? stored : null;
 
+  const tcMap = teamColorMap(date);
   let bar = '';
   if (teams.length > 2) {
     bar = '<div class="team-filter-bar">'
       + '<button type="button" class="team-filter-chip' + (activeKey ? '' : ' active') + '" onclick="setMatchTeamFilter(\'' + date + '\',-1)">Toutes<span class="cnt">' + matchesOfDate.length + '</span></button>'
       + teams.map((t, i) => {
           const n = matchesOfDate.filter(m => matchInvolvesTeam(m, t.key)).length;
-          return '<button type="button" class="team-filter-chip' + (t.key === activeKey ? ' active' : '') + '" onclick="setMatchTeamFilter(\'' + date + '\',' + i + ')">'
+          return '<button type="button" class="team-filter-chip' + (t.key === activeKey ? ' active' : '') + '"' + (tcMap[t.key] ? ' style="color:' + tcMap[t.key] + '"' : '') + ' onclick="setMatchTeamFilter(\'' + date + '\',' + i + ')">'
             + t.players.map(shortName).join(' &amp; ') + '<span class="cnt">' + n + '</span></button>';
         }).join('')
       + '</div>';
