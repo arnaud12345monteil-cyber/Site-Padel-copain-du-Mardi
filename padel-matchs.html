@@ -4,6 +4,15 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.17 — 2026-10-19
+    Couleurs d'équipe identiques à celles du tracker (bloc "Équipes
+    constituées" de l'onglet "Prochaine séance", onglet "Matchs séance") :
+    chaque équipe composée a sa couleur (même palette, même ordre), reprise
+    sur les noms de la liste "Équipes" et sur les deux côtés de chaque
+    confrontation. Une équipe est reconnue par ses deux joueurs ; une paire
+    qui ne correspond à aucune équipe composée garde ses couleurs d'origine
+    (vert / turquoise). Aucun changement de calcul ni d'enregistrement.
+
   v1.16 — 2026-10-14
     Numéro de terrain : quand l'intitulé de la réservation n'avait pas
     exactement la forme "Terrain n.6", c'est tout le texte ("Padel - Terrain
@@ -192,7 +201,7 @@
   :root {
     --bg: #0d0f0e; --surface: #131612; --surface2: #1a1e1b; --border: #2a2f2b;
     --accent: #b8f53c; --accent2: #3cffa0; --text: #e8ede9; --muted: #687068;
-    --danger: #ff4f4f; --orange: #ff8c1a;
+    --danger: #ff4f4f; --orange: #ff8c1a; --nicolas: #ffd166;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; min-height: 100vh; padding: 24px 16px 80px; }
@@ -399,8 +408,8 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.16';
-const APP_VERSION_DATE = '2026-10-14';
+const APP_VERSION = 'v1.17';
+const APP_VERSION_DATE = '2026-10-19';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
 
@@ -409,6 +418,16 @@ const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 let state = { players: [], sessions: [], matches: [] };
 let presentPlayers = [];      // joueurs cochés pour la séance
 let teams = [];               // [{ id, players: [a,b] }, ...]
+
+// Couleur de chaque équipe : même palette et même ordre que "Équipes
+// constituées" dans le tracker (TEAM_COLORS). Équipe reconnue par ses joueurs.
+const TEAM_COLORS = ['var(--accent)', 'var(--accent2)', 'var(--nicolas)', '#7ab8ff', '#e08ce0', '#ff9f6e'];
+function teamPairKey(players) { return (players || []).map(p => String(p).trim()).sort().join('|'); }
+function teamColorOf(players) {
+  const k = teamPairKey(players);
+  const i = teams.findIndex(t => teamPairKey(t.players) === k);
+  return i === -1 ? '' : TEAM_COLORS[i % TEAM_COLORS.length];
+}
 let pendingSelection = [];    // sélection en cours pour former une équipe manuellement
 let generatedMatches = [];    // [{ teamA, teamB, s1, s2, saved }]
 
@@ -890,7 +909,7 @@ function renderTeams() {
   const list = document.getElementById('teams-list');
   list.innerHTML = teams.map((t, i) =>
     '<div class="team-row"><div class="team-label">Équipe ' + (i+1) + '</div>'
-    + '<div class="team-players">' + t.players.join(' + ') + '</div>'
+    + '<div class="team-players" style="color:' + TEAM_COLORS[i % TEAM_COLORS.length] + '">' + t.players.join(' + ') + '</div>'
     + '<button class="remove-team" onclick="removeTeam(' + i + ')" title="Dissoudre">✕</button></div>'
   ).join('');
   renderAvailableGrid();
@@ -922,6 +941,9 @@ function pickForTeam(p) {
 function removeTeam(i) {
   teams.splice(i, 1);
   renderTeams();
+  // Les couleurs suivent le rang de l'équipe : dissoudre l'une décale les autres,
+  // on redessine donc aussi les confrontations déjà affichées.
+  if (generatedMatches.length) renderMatchesList();
   persistTeamSetups();
 }
 
@@ -1163,11 +1185,11 @@ function renderMatchesList() {
     + (detail ? '<div class="match-nouv-detail">' + detail + '</div>' : '')
     + (m.pending ? '<div class="match-tag">Déjà enregistré — score à compléter</div>'
         : m.saved ? '<div class="match-tag">Déjà enregistré — modifiable</div>' : '')
-    + '<div class="side a">' + m.teamA.join(' + ') + '</div>'
+    + '<div class="side a"' + (teamColorOf(m.teamA) ? ' style="color:' + teamColorOf(m.teamA) + '"' : '') + '>' + m.teamA.join(' + ') + '</div>'
     + '<input type="number" min="0" value="' + m.s1 + '" oninput="updateScore(' + i + ',0,this.value)">'
     + '<div class="vs">VS</div>'
     + '<input type="number" min="0" value="' + m.s2 + '" oninput="updateScore(' + i + ',1,this.value)">'
-    + '<div class="side b">' + m.teamB.join(' + ') + '</div>'
+    + '<div class="side b"' + (teamColorOf(m.teamB) ? ' style="color:' + teamColorOf(m.teamB) + '"' : '') + '>' + m.teamB.join(' + ') + '</div>'
     + '<div class="btn-row" style="width:100%;gap:6px">'
     +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;flex:1" onclick="addExtraMatch(' + i + ')">+ Rejouer cette confrontation</button>'
     +   '<button class="btn secondary" style="font-size:9px;padding:3px 10px;color:var(--danger);border-color:var(--danger)" onclick="deleteMatchRow(' + i + ')" title="Supprimer">🗑️</button>'
