@@ -4,6 +4,18 @@
 <!--
   PADEL MATCHS — Historique des versions
   ─────────────────────────────────────────
+  v1.18 — 2026-10-20
+    Étape 3 "Équipes" : nouveau bouton "⇄ Intervertir 2 joueurs". On touche un
+    joueur d'une équipe puis un joueur d'une autre équipe : ils échangent leur
+    place. Le programme de la séance ne bouge pas : les matchs prévus (sans
+    score) gardent leur numéro d'ordre, leur tour, leur terrain et leurs
+    adversaires, seuls les noms des deux joueurs changent. Les matchs déjà
+    joués (score saisi) ne sont jamais modifiés. Si des confrontations sont
+    affichées mais pas encore enregistrées, une confirmation propose de les
+    enregistrer sans score pour figer le programme (sinon elles seraient
+    recalculées avec les nouvelles équipes). Écriture en une seule transaction
+    Firestore (équipes + matchs), sur les données les plus récentes.
+
   v1.17 — 2026-10-19
     Couleurs d'équipe identiques à celles du tracker (bloc "Équipes
     constituées" de l'onglet "Prochaine séance", onglet "Matchs séance") :
@@ -231,6 +243,11 @@
   .team-row { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
   .team-row .team-label { font-family: 'Bebas Neue', sans-serif; font-size: 15px; color: var(--muted); min-width: 70px; }
   .team-row .team-players { flex: 1; font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .team-row .tp { border-radius: 4px; }
+  #teams-list.swap-mode .team-row .tp { cursor: pointer; padding: 3px 7px; margin: 0 1px; border: 1px dashed currentColor; }
+  #teams-list.swap-mode .team-row .tp:hover { background: rgba(255,255,255,0.08); }
+  #teams-list.swap-mode .team-row .tp.sel { background: rgba(255,255,255,0.18); border-style: solid; }
+  .btn.secondary.swap-on { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.08); }
   .team-row .remove-team { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 8px; }
   .team-row .remove-team:hover { color: var(--danger); }
 
@@ -359,8 +376,10 @@
         <button class="btn secondary" onclick="formTeamsVariedPartners()">🔀 Varier les partenaires</button>
         <button class="btn secondary" onclick="newRound()">🆕 Manche suivante (nouvelles équipes)</button>
         <button class="btn secondary" onclick="resetTeams()">↺ Tout réinitialiser</button>
+        <button class="btn secondary" id="swap-btn" onclick="toggleSwapMode()" style="display:none">⇄ Intervertir 2 joueurs</button>
       </div>
       <div class="hint" id="strategy-hint"></div>
+      <div class="hint" id="swap-hint" style="display:none"></div>
     </div>
 
     <div class="section">
@@ -408,8 +427,8 @@ const FIREBASE_CONFIG = {
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 
-const APP_VERSION = 'v1.17';
-const APP_VERSION_DATE = '2026-10-19';
+const APP_VERSION = 'v1.18';
+const APP_VERSION_DATE = '2026-10-20';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 const docRef = db.collection("padel").doc("tracker");
 
@@ -429,6 +448,8 @@ function teamColorOf(players) {
   return i === -1 ? '' : TEAM_COLORS[i % TEAM_COLORS.length];
 }
 let pendingSelection = [];    // sélection en cours pour former une équipe manuellement
+let swapMode = false;         // mode "intervertir 2 joueurs" actif
+let swapSel = null;           // premier joueur choisi : { i: index d'équipe, k: index du joueur }
 let generatedMatches = [];    // [{ teamA, teamB, s1, s2, saved }]
 
 // ── Chargement Firestore en direct ──────────────────────────────────────────
@@ -473,6 +494,7 @@ function onSessionChange() {
   const session = state.sessions.find(s => s.date === date);
   presentPlayers = session ? [...session.attendees] : [];
   pendingSelection = [];
+  swapMode = false; swapSel = null;
 
   const saved = state.team_setups && state.team_setups[date];
   teams = (saved && saved.length)
@@ -907,13 +929,128 @@ function persistTeamSetups() {
 
 function renderTeams() {
   const list = document.getElementById('teams-list');
+  if (teams.length < 2) { swapMode = false; swapSel = null; }
+  if (swapSel && !(teams[swapSel.i] && teams[swapSel.i].players[swapSel.k])) swapSel = null;
+  list.classList.toggle('swap-mode', swapMode);
   list.innerHTML = teams.map((t, i) =>
     '<div class="team-row"><div class="team-label">Équipe ' + (i+1) + '</div>'
-    + '<div class="team-players" style="color:' + TEAM_COLORS[i % TEAM_COLORS.length] + '">' + t.players.join(' + ') + '</div>'
+    + '<div class="team-players" style="color:' + TEAM_COLORS[i % TEAM_COLORS.length] + '">'
+    +   t.players.map((p, k) => '<span class="tp' + (swapSel && swapSel.i === i && swapSel.k === k ? ' sel' : '') + '"'
+          + (swapMode ? ' onclick="swapPick(' + i + ',' + k + ')"' : '') + '>' + p + '</span>').join(' + ')
+    + '</div>'
     + '<button class="remove-team" onclick="removeTeam(' + i + ')" title="Dissoudre">✕</button></div>'
   ).join('');
   renderAvailableGrid();
   document.getElementById('generate-btn').disabled = teams.length < 2;
+  renderSwapUi();
+}
+
+// ── Intervertir 2 joueurs de 2 équipes, sans toucher au programme ─────────────
+function renderSwapUi() {
+  const btn = document.getElementById('swap-btn');
+  const hint = document.getElementById('swap-hint');
+  if (!btn || !hint) return;
+  btn.style.display = teams.length >= 2 ? '' : 'none';
+  btn.classList.toggle('swap-on', swapMode);
+  btn.textContent = swapMode ? '✕ Annuler l’échange' : '⇄ Intervertir 2 joueurs';
+  hint.style.display = swapMode ? '' : 'none';
+  if (swapMode) {
+    hint.textContent = swapSel
+      ? 'Touche maintenant un joueur d’une AUTRE équipe pour l’échanger avec ' + teams[swapSel.i].players[swapSel.k] + '.'
+      : 'Touche le premier joueur à échanger, puis un joueur d’une autre équipe. Les matchs prévus gardent leur ordre, leur tour et leur terrain.';
+  }
+}
+
+function toggleSwapMode() {
+  swapMode = !swapMode;
+  swapSel = null;
+  renderTeams();
+}
+
+function swapPick(i, k) {
+  if (!swapMode) return;
+  if (!swapSel) { swapSel = { i, k }; renderTeams(); return; }
+  if (swapSel.i === i) {                       // même équipe : on change / annule la sélection
+    swapSel = (swapSel.k === k) ? null : { i, k };
+    renderTeams();
+    return;
+  }
+  swapPlayers(swapSel, { i, k });
+}
+
+function swapPlayers(selA, selB) {
+  const date = document.getElementById('session-select').value;
+  if (!date || !teams[selA.i] || !teams[selB.i]) return;
+  const oldA = [...teams[selA.i].players], oldB = [...teams[selB.i].players];
+  const a = oldA[selA.k], b = oldB[selB.k];
+  const newA = oldA.map(p => p === a ? b : p);
+  const newB = oldB.map(p => p === b ? a : p);
+  const mapSide = side => (!Array.isArray(side)) ? side
+    : sameTeam(side, oldA) ? [...newA] : sameTeam(side, oldB) ? [...newB] : side;
+  const involves = m => [m.team1, m.team2].some(t => Array.isArray(t) && (sameTeam(t, oldA) || sameTeam(t, oldB)));
+
+  const forDate = (state.matches || []).filter(m => m.sessionDate === date);
+  const nPlanned = forDate.filter(m => !Array.isArray(m.score) && involves(m)).length;
+  const nPlayed = forDate.filter(m => Array.isArray(m.score) && involves(m)).length;
+  const unsaved = generatedMatches.filter(r => !r.matchRef);
+
+  // Scores tapés dans les champs mais pas encore enregistrés : le réaffichage
+  // après l'échange les effacerait. On demande de les enregistrer d'abord.
+  const dirty = generatedMatches.some(r => {
+    const has = r.s1 !== '' && r.s2 !== '';
+    if (!r.matchRef) return has;
+    const cur = Array.isArray(r.matchRef.score) ? r.matchRef.score : null;
+    const val = has ? [parseInt(r.s1) || 0, parseInt(r.s2) || 0] : null;
+    return JSON.stringify(cur) !== JSON.stringify(val);
+  });
+  if (dirty) {
+    alert('Des scores saisis ne sont pas encore enregistrés. Clique d’abord sur « Enregistrer les matchs », puis refais l’échange.');
+    return;
+  }
+
+  let msg = 'Intervertir ' + a + ' (équipe ' + (selA.i + 1) + ') et ' + b + ' (équipe ' + (selB.i + 1) + ') ?\n';
+  msg += '\n• Matchs prévus concernés : ' + nPlanned + ' — même ordre, même tour, même terrain, seuls les noms changent.';
+  if (nPlayed) msg += '\n• Matchs déjà joués : ' + nPlayed + ' — inchangés.';
+  if (unsaved.length) msg += '\n• ' + unsaved.length + ' confrontation(s) affichée(s) mais pas encore enregistrée(s) : elles seront enregistrées SANS score pour figer le programme (sinon elles seraient recalculées avec les nouvelles équipes).';
+  if (!confirm(msg)) return;
+
+  const newTeamsList = teams.map((t, idx) => ({ players: idx === selA.i ? newA : idx === selB.i ? newB : [...t.players] }));
+  const toCreate = unsaved.map(r => {
+    const m = { sessionDate: date, team1: [...mapSide(r.teamA)], team2: [...mapSide(r.teamB)], scoreMode: 'total', score: null };
+    if (r.ordre !== undefined) m.ordre = r.ordre;     // champs facultatifs : Firestore refuse undefined
+    if (r.tour !== undefined) m.tour = r.tour;
+    if (r.terrain) m.terrain = r.terrain;
+    return m;
+  });
+
+  let result = null;
+  db.runTransaction(tx => tx.get(docRef).then(snap => {
+    const data = (snap && snap.data && snap.data()) || {};
+    const matches = (data.matches || []).map(m => ({ ...m }));
+    matches.forEach(m => {
+      if (m.sessionDate !== date || Array.isArray(m.score)) return;   // jamais les matchs déjà joués
+      m.team1 = mapSide(m.team1); m.team2 = mapSide(m.team2);
+    });
+    const key = (m) => [m.team1, m.team2].map(t => (t || []).slice().sort().join('+')).sort().join(' vs ');
+    toCreate.forEach(nm => {
+      const dup = matches.some(m => m.sessionDate === date && key(m) === key(nm) && (m.ordre === nm.ordre));
+      if (!dup) matches.push(nm);
+    });
+    const setups = { ...(data.team_setups || {}) };
+    setups[date] = newTeamsList.map(t => ({ players: [...t.players] }));
+    tx.update(docRef, { matches, team_setups: setups });
+    result = { matches, setups };
+  })).then(() => {
+    state.matches = result.matches;
+    state.team_setups = result.setups;
+    teams[selA.i].players = newA;
+    teams[selB.i].players = newB;
+    swapMode = false; swapSel = null;
+    renderTeams();
+    rebuildMatchesFromTeams(date);
+    renderExistingMatches();
+    toast('✓ ' + a + ' ⇄ ' + b + ' : programme inchangé');
+  }).catch(e => toast('Erreur : ' + e.message));
 }
 
 function renderAvailableGrid() {
