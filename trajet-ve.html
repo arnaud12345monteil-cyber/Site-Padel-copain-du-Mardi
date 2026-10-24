@@ -289,6 +289,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <div class="body">
             <label for="useTime" style="display:block">Arrêt au plus tard toutes les</label>
             <div class="inline"><input id="maxMin" type="number" min="30" max="600" value="120"> minutes de route</div>
+            <div class="inline">dépassement toléré <input id="timeTol" type="number" min="0" max="60" step="5" value="15"> min</div>
+            <p class="note">Si aucune borne ne se trouve vers la fin de l'intervalle, la première borne après la limite est acceptée dans cette tolérance, plutôt qu'un arrêt bien trop tôt.</p>
           </div>
         </div>
         <div class="toggle">
@@ -380,6 +382,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.1.1", d:"25/10/2026", c:[
+    "Règle « arrêt toutes les X minutes » : tolérance de dépassement réglable (15 min par défaut). Quand la seule borne conforme arrive très tôt, la première borne juste après la limite est retenue, au lieu d'un arrêt inutile en début d'intervalle",
+    "Le dépassement est affiché sur l'arrêt concerné (ex. « limite de temps (+12 min) »)"]},
   {v:"2.1", d:"24/10/2026", c:[
     "Étapes intermédiaires : ajout, suppression et pause facultative à chaque étape (une pause de 10 min ou plus remet le compteur de temps de conduite à zéro)",
     "Étapes affichées sur la carte, dans la feuille de route et dans les exports Google Maps, KML et texte",
@@ -783,6 +788,13 @@ function simulate(R,C,p){
     const timeOK  = c => !p.useTime || (R.sec[c.idx]-R.sec[refAt(c.idx)] + c.det/DET_KMH*3600) <= p.maxMin*60+60;
     let cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
     let late=false;
+    const driveFromRef=c=>(R.sec[c.idx]-R.sec[refAt(c.idx)] + c.det/DET_KMH*3600)/60;   // minutes de route depuis le dernier vrai arrêt
+    // Règle de temps : si la seule borne conforme arrive très tôt (moins de 70 % de l'intervalle),
+    // on accepte la première borne située juste après la limite, dans la tolérance choisie.
+    if(reason==="time" && p.timeTol>0 && (!cand.length || cand.every(c=>driveFromRef(c) < p.maxMin*0.7))){
+      const extra=C.filter(c=>c.km>hi && reachOK(c) && driveFromRef(c) <= p.maxMin+p.timeTol);
+      if(extra.length){ const k0=extra[0].km; cand=extra.filter(c=>c.km<=k0+10); late=true; }
+    }
     if(!cand.length && reason==="soc"){ cand=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)).slice(0,1); late=cand.length>0; }
     if(!cand.length){
       const where = fmtKm(hi)+" après le départ";
@@ -824,7 +836,7 @@ function simulate(R,C,p){
     if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
     soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, over: late&&reason==="time" ? Math.max(1,Math.round(driveFromRef(c)-p.maxMin)) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -884,7 +896,7 @@ function render(res,p,a,b){
       const c=s.c;
       const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
         `<span class="chip kw">${c.kw?Math.round(c.kw)+" kW":"~"+Math.round(s.effKW)+" kW (non renseigné)"}</span>`,
-        `<span class="chip why">${REASON[s.reason]}${s.late?" (dépassé)":""}</span>`];
+        `<span class="chip why">${REASON[s.reason]}${s.over?` (+${s.over} min)`:s.late?" (dépassé)":""}</span>`];
       if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
@@ -932,7 +944,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -1137,7 +1149,7 @@ function updateSums(){
   const nv=readVias().filter(x=>x.q).length; set("trajet",`${v("from")||"?"} → ${nv?nv+" étape"+(nv>1?"s":"")+" → ":""}${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
-  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min`:"", on("useSoc")?`à ${v("socTrig")} %`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
+  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} %`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
   set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
@@ -1360,7 +1372,7 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,maxMin:num("maxMin"),useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,maxMin:num("maxMin"),timeTol:parseFloat($("timeTol").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
