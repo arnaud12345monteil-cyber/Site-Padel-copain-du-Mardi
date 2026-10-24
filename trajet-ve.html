@@ -1,4 +1,12 @@
 <!doctype html>
+<!--
+  Trajet VE — planificateur de trajet en voiture électrique
+  Fichier unique, hébergé sur GitHub Pages.
+
+  Version : voir la constante CHANGELOG dans le script (la première entrée est la version affichée sur le site).
+  À chaque modification : ajouter une entrée en tête de CHANGELOG avec le numéro, la date et la liste des changements.
+  Numérotation : X.0 = refonte, 1.X = nouvelles fonctions, 1.X.Y = correctif.
+-->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -38,6 +46,15 @@ h2{font-size:1.15rem;font-weight:600}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
 header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1400px;margin:0 auto 14px}
 header.top p{margin:0;color:var(--muted)}
+header.top{position:relative}
+.top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.ver{font:600 .78rem var(--f-mono);padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
+.ver[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+.changelog{position:absolute;right:0;top:100%;z-index:1000;width:min(420px,100%);max-height:60vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.changelog h3{font-size:.95rem;display:flex;justify-content:space-between;gap:8px}
+.changelog h3 span{font:400 .78rem var(--f-mono);color:var(--muted)}
+.changelog ul{margin:4px 0 12px;padding-left:18px;font-size:.86rem}
+.changelog section:last-child ul{margin-bottom:0}
 form{display:grid;gap:14px}
 fieldset{border:0;padding:0;margin:0;display:grid;gap:10px}
 legend{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
@@ -92,13 +109,36 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .leaflet-container{font:inherit}
 .pin{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font:700 12px var(--f-mono);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .pin.s{background:#16202c}.pin.e{background:#b3261e}.pin.c{background:#0d8a5f}
+.field{display:grid;gap:4px}
+.field>label{font-size:.88rem;font-weight:500}
+.place{display:flex;gap:6px}
+.place input{flex:1}
+.star{flex:none;width:42px;font-size:1.2rem;line-height:1;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--muted);cursor:pointer}
+.star[aria-pressed="true"]{color:var(--warn);border-color:var(--warn)}
+.favbar{display:flex;gap:6px;flex-wrap:wrap}
+.favbar select{flex:1 1 160px}
+.mini{font:500 .85rem var(--f-body);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);cursor:pointer}
+.mini:disabled{opacity:.45;cursor:default}
+.swap{justify-self:start;font:500 .82rem var(--f-body);color:var(--accent);background:none;border:0;padding:0;cursor:pointer}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:block;text-align:center;padding:9px 4px;font:600 .85rem var(--f-mono);cursor:pointer;background:var(--field);border-left:1px solid var(--line)}
+.seg label:first-of-type{border-left:0}
+.seg input:checked+label{background:var(--accent);color:var(--accent-ink)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.toggle:has(input[type=checkbox]:not(:checked)) .inline input{opacity:.45}
+.stat.hl b{color:var(--accent)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <header class="top">
   <h1>Trajet VE</h1>
-  <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+  <div class="top-right">
+    <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+    <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
+  </div>
+  <div class="changelog" id="changelog" hidden></div>
 </header>
 
 <div class="wrap">
@@ -106,12 +146,26 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
     <form id="f" autocomplete="off">
       <fieldset>
         <legend>Trajet</legend>
-        <label>Départ<input id="from" required value="Toulouse"></label>
-        <label>Arrivée<input id="to" required value="Lyon"></label>
-        <div class="row">
-          <label>Heure de départ<input id="dep" type="datetime-local"></label>
-          <label>Batterie au départ <small>%</small><input id="socStart" type="number" min="1" max="100" value="85"></label>
+        <div class="favbar">
+          <select id="favTrip" aria-label="Trajets favoris"><option value="">Trajets favoris…</option></select>
+          <button type="button" class="mini" id="saveTrip">Enregistrer</button>
+          <button type="button" class="mini" id="delTrip" disabled>Supprimer</button>
         </div>
+        <div class="field">
+          <label for="from">Départ</label>
+          <div class="place"><input id="from" list="favPlaces" required value="Toulouse"><button type="button" class="star" data-for="from" aria-pressed="false" title="Lieu favori">☆</button></div>
+        </div>
+        <button type="button" class="swap" id="swap">⇅ Inverser départ et arrivée</button>
+        <div class="field">
+          <label for="to">Arrivée</label>
+          <div class="place"><input id="to" list="favPlaces" required value="Lyon"><button type="button" class="star" data-for="to" aria-pressed="false" title="Lieu favori">☆</button></div>
+        </div>
+        <datalist id="favPlaces"></datalist>
+        <div class="row">
+          <label>Batterie au départ <small>%</small><input id="socStart" type="number" min="1" max="100" value="85"></label>
+          <label>Batterie à l'arrivée <small>% souhaité</small><input id="arrival" type="number" min="0" max="100" value="20"></label>
+        </div>
+        <label>Heure de départ<input id="dep" type="datetime-local"></label>
       </fieldset>
       <hr>
       <fieldset>
@@ -141,26 +195,46 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <div class="body">
             <label for="useSoc" style="display:block">Arrêt quand la batterie descend à</label>
             <div class="inline"><input id="socTrig" type="number" min="5" max="80" value="20"> %</div>
-            <p class="note">Ignoré si l'arrivée est atteignable sans passer sous la réserve.</p>
+            <p class="note">Ignoré si tu peux finir le trajet avec la batterie d'arrivée souhaitée.</p>
           </div>
         </div>
-        <div class="row">
-          <label>Réserve minimale <small>%</small><input id="floor" type="number" min="0" max="50" value="10"></label>
-          <label>Recharger jusqu'à <small>%</small><input id="target" type="number" min="30" max="100" value="80"></label>
+        <div class="toggle">
+          <input type="checkbox" id="useTarget" checked>
+          <div class="body">
+            <label for="useTarget" style="display:block">Recharger jusqu'à</label>
+            <div class="inline"><input id="target" type="number" min="30" max="100" value="80"> %</div>
+            <p class="note">Décoché : recharge juste ce qu'il faut pour arriver avec le % souhaité (jusqu'à 100 % si nécessaire).</p>
+          </div>
         </div>
-        <label>Durée minimale d'un arrêt <small>minutes</small><input id="minStop" type="number" min="0" max="120" value="15"></label>
+        <div class="toggle">
+          <input type="checkbox" id="useMinStop" checked>
+          <div class="body">
+            <label for="useMinStop" style="display:block">Arrêt d'au moins</label>
+            <div class="inline"><input id="minStop" type="number" min="1" max="120" value="15"> minutes</div>
+          </div>
+        </div>
+        <label>Réserve minimale en route <small>%, jamais en dessous</small><input id="floor" type="number" min="0" max="50" value="10"></label>
       </fieldset>
-      <details>
-        <summary>Options des bornes</summary>
-        <div style="display:grid;gap:10px;margin-top:10px">
-          <div class="row">
-            <label>Distance max de la route <small>km</small><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2"></label>
-            <label>Puissance supposée si inconnue <small>kW</small><input id="unknownKW" type="number" min="7" max="350" value="50"></label>
-          </div>
-          <label class="toggle" style="display:flex"><input type="checkbox" id="fastOnly" checked><span>Bornes rapides seulement (CCS / ≥ 40 kW)</span></label>
-          <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes trouvées sur la carte</span></label>
+      <hr>
+      <fieldset>
+        <legend>Bornes</legend>
+        <div class="seg" role="radiogroup" aria-label="Puissance minimale des bornes">
+          <input type="radio" name="pmin" id="pmin0" value="0"><label for="pmin0">Toutes</label>
+          <input type="radio" name="pmin" id="pmin50" value="50" checked><label for="pmin50">50 kW+</label>
+          <input type="radio" name="pmin" id="pmin100" value="100"><label for="pmin100">100 kW+</label>
+          <input type="radio" name="pmin" id="pmin150" value="150"><label for="pmin150">150 kW+</label>
         </div>
-      </details>
+        <details>
+          <summary>Plus d'options</summary>
+          <div style="display:grid;gap:10px;margin-top:10px">
+            <div class="row">
+              <label>Distance max de la route <small>km</small><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2"></label>
+              <label>Puissance supposée si inconnue <small>kW</small><input id="unknownKW" type="number" min="7" max="350" value="50"></label>
+            </div>
+            <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes retenues sur la carte</span></label>
+          </div>
+        </details>
+      </fieldset>
       <button class="go" id="go" type="submit">Calculer le trajet</button>
       <div class="status" id="status" role="status"></div>
     </form>
@@ -184,6 +258,30 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 "use strict";
+// ---------- Historique des versions (la plus récente en premier) ----------
+const CHANGELOG=[
+  {v:"1.5", d:"24/10/2026", c:[
+    "Numéro de version affiché en haut à droite, historique consultable en cliquant dessus",
+    "Historique des évolutions tenu dans le fichier source (constante CHANGELOG)"]},
+  {v:"1.4", d:"24/10/2026", c:[
+    "Batterie à l'arrivée souhaitée, à côté de la batterie au départ",
+    "« Recharger jusqu'à » facultatif : décoché, recharge juste ce qu'il faut pour arriver (jusqu'à 100 %)",
+    "Durée minimale d'arrêt facultative",
+    "Choix de la puissance des bornes : toutes, 50, 100 ou 150 kW et plus",
+    "Affichage du % de batterie nécessaire pour le trajet et du % à recharger en route",
+    "Trajets favoris et lieux favoris (enregistrés dans le navigateur), bouton pour inverser départ et arrivée"]},
+  {v:"1.3", d:"24/10/2026", c:[
+    "Recherche des bornes par tronçons de 60 km, requêtes plus légères",
+    "Délai max de 30 s par requête, 3 serveurs Overpass et nouvelles tentatives automatiques",
+    "Un tronçon en échec n'arrête plus le calcul"]},
+  {v:"1.2", d:"24/10/2026", c:[
+    "Fond de carte Plan IGN, avec Esri en secours (CARTO demandait une clé)"]},
+  {v:"1.1", d:"24/10/2026", c:[
+    "Recherche d'adresse via Photon et Base Adresse Nationale à la place de Nominatim",
+    "Remplacement des tuiles OpenStreetMap, refusées quand le fichier est ouvert en local"]},
+  {v:"1.0", d:"24/10/2026", c:[
+    "Première version : itinéraire, bornes le long du trajet, règles d'arrêt par temps et par % de batterie, courbe de charge, carte et feuille de route"]}
+];
 // ---------- Modèles (valeurs indicatives, à ajuster) ----------
 const CARS = [
   {n:"Personnalisé", cap:60, conso:18, dc:100, ac:11},
@@ -349,11 +447,17 @@ function project(chargers,R){
 function simulate(R,C,p){
   const n=R.km.length, kwhKm=p.conso/100, pct=k=>k/p.cap*100, endKm=R.km[n-1];
   const DET_KMH=40;
+  const arr=Math.max(p.arrival,p.floor);            // % visé à l'arrivée
+  const ceil=p.useTarget ? p.target : 100;          // plafond de charge
   let i=0, soc=p.socStart, t=0, chargeSec=0, driveSec=0, kwh=0;
   const steps=[{type:"start", t:0, soc, km:0}], curve=[[0,soc]];
   const chOf = c => ({dc:c.dc, kw: c.dc ? (c.kw ?? p.unknownKW) : (c.kw ?? 22), carKW: c.dc ? p.dcmax : p.acmax});
   const effKW = c => { const ch=chOf(c); return Math.min(ch.kw, ch.carKW); };
+  const tripPct=pct(endKm*kwhKm);
+  const base={tripPct, toCharge:Math.max(0,tripPct+arr-p.socStart)};
   if(soc<=p.floor) return {error:`La batterie au départ (${soc} %) est déjà sous la réserve minimale (${p.floor} %).`};
+  // km atteint après une durée donnée depuis le point idx
+  const kmAfter=(idx,secs)=>{ for(let j=idx;j<n;j++) if(R.sec[j]-R.sec[idx]>secs) return R.km[j]; return endKm; };
 
   for(let guard=0; guard<40; guard++){
     let trig=-1, reason="";
@@ -365,16 +469,18 @@ function simulate(R,C,p){
       if(s<=p.floor){ trig=j; reason="floor"; break; }
       if(p.useSoc && s<=p.socTrig){
         const sEnd = s - pct((endKm-R.km[j])*kwhKm);
-        if(sEnd < p.floor){ trig=j; reason="soc"; break; }
+        if(sEnd < arr){ trig=j; reason="soc"; break; }
       }
     }
+    // la route passe sans arrêt mais on arriverait sous le % souhaité : il faut un arrêt avant l'arrivée
+    if(trig<0 && soc-pct((endKm-R.km[i])*kwhKm) < arr-0.01){ trig=n-1; reason="arrival"; }
     if(trig<0){
       const d=endKm-R.km[i], dt=R.sec[n-1]-R.sec[i];
       soc-=pct(d*kwhKm); t+=dt; driveSec+=dt; kwh+=d*kwhKm;
       steps.push({type:"drive", km:d, sec:dt});
       steps.push({type:"end", t, soc, km:endKm});
       curve.push([endKm,soc]);
-      return {steps, curve, summary:{km:endKm, driveSec, chargeSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
+      return {steps, curve, summary:{...base, km:endKm, driveSec, chargeSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
     }
     const lo=R.km[i]+1, hi=R.km[trig];
     const reachOK = c => soc - pct((c.km-R.km[i]+c.det)*kwhKm) >= p.floor-0.01;
@@ -385,7 +491,7 @@ function simulate(R,C,p){
     if(!cand.length){
       const where = fmtKm(hi)+" après le départ";
       const why = reason==="time" ? `dans la limite de ${p.maxMin} min de route` : "avant de passer sous la réserve";
-      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'augmenter la distance max de la route, d'allonger l'intervalle d'arrêt ou de décocher « bornes rapides seulement ».`, partial:steps};
+      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie de baisser la puissance minimale des bornes, d'augmenter la distance max de la route ou d'allonger l'intervalle d'arrêt.`, partial:steps};
     }
     const maxK=Math.max(...cand.map(c=>c.km));
     const pool=cand.filter(c=>c.km>=maxK-25);
@@ -401,15 +507,25 @@ function simulate(R,C,p){
 
     // combien charger
     const remKm=endKm-c.km+c.det, remSec=R.sec[n-1]-R.sec[c.idx];
-    const need=p.floor+pct(remKm*kwhKm)+3;
-    const lastLeg = need<=p.target && (!p.useTime || remSec<=p.maxMin*60*1.1);
-    let socOut = lastLeg ? Math.min(p.target, Math.max(soc, Math.ceil(need))) : Math.max(soc, p.target);
+    const need=arr+pct(remKm*kwhKm)+2;               // de quoi finir avec le % souhaité
+    const finishInTime=!p.useTime || remSec<=p.maxMin*60*1.1;
+    const lastLeg = need<=ceil && finishInTime;
+    let socOut;
+    if(lastLeg) socOut=Math.max(soc, Math.ceil(need));
+    else if(p.useTarget) socOut=Math.max(soc, p.target);
+    else {
+      // sans cible : assez pour finir, ou, si la règle de temps impose un autre arrêt, assez pour atteindre ce prochain arrêt
+      const nextKm=kmAfter(c.idx,p.maxMin*60);
+      const keep=p.useSoc ? Math.max(p.socTrig,p.floor) : p.floor;
+      const needNext=keep+pct((nextKm-c.km+c.det)*kwhKm)+2;
+      socOut=Math.max(soc, Math.min(100, Math.ceil(finishInTime ? need : Math.min(need,needNext))));
+    }
     const ch=chOf(c);
-    let cm=chargeMinutes(soc,socOut,ch,p.cap);
-    let dur=Math.max(cm,p.minStop);
-    if(dur>cm && socOut<p.target) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,p.target));
-    if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à ».", partial:steps};
-    kwh+=0; soc=socOut; t+=dur*60; chargeSec+=dur*60;
+    const cm=chargeMinutes(soc,socOut,ch,p.cap);
+    const dur=p.useMinStop ? Math.max(cm,p.minStop) : cm;
+    if(dur>cm && socOut<ceil) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,ceil));
+    if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
+    soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
     steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
@@ -454,7 +570,7 @@ function drawMap(R,C,res,a,b,showAll){
 }
 
 // ---------- Rendu ----------
-const REASON={time:"limite de temps",soc:"seuil batterie",floor:"autonomie"};
+const REASON={time:"limite de temps",soc:"seuil batterie",floor:"autonomie",arrival:"% d'arrivée"};
 function render(res,p,a,b){
   const road=$("road"), dep=p.dep;
   const at = s => fmtClock(new Date(dep.getTime()+s*1000));
@@ -471,7 +587,7 @@ function render(res,p,a,b){
       if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
-      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>`);
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>`);
     }
     else if(s.type==="end") html+=li(at(s.t),"",`<h3>Arrivée</h3><p>${esc(short(b.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
   }
@@ -479,16 +595,19 @@ function render(res,p,a,b){
   if(res.error) html+=`<p class="status err" style="margin-top:8px">${esc(res.error)}</p>`;
   road.innerHTML=html;
 
+  const N=need(p), tiles=[[Math.round(N.tripPct)+" %","batterie pour le trajet",1],[Math.round(N.toCharge)+" %","à recharger en route",1]];
   if(res.summary){
     const S=res.summary;
-    $("stats").innerHTML=[
-      [fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont arrêts"],
-      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[Math.round(S.kwh)+" kWh","énergie consommée"]
-    ].map(([v,l])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
-    $("stats").hidden=false;
+    tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont arrêts"],
+      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"]);
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
-  } else { $("stats").hidden=true; $("chartPanel").hidden=true; }
+  } else $("chartPanel").hidden=true;
+  $("stats").innerHTML=tiles.map(([v,l,h])=>`<div class="stat${h?" hl":""}"><b>${v}</b><span>${l}</span></div>`).join("");
+  $("stats").hidden=false;
+
 }
+// % de batterie que représente le trajet, et ce qu'il faudra ajouter en route pour arriver avec le % souhaité
+function need(p){ const tripPct=p.routeKm*p.conso/100/p.cap*100; return {tripPct, toCharge:Math.max(0,tripPct+Math.max(p.arrival,p.floor)-p.socStart)}; }
 const li=(clock,cls,body)=>`<li><div class="clock">${clock}</div><div class="rail"><span class="dot ${cls}"></span></div><div class="item">${body}</div></li>`;
 const short=l=>l.split(",").slice(0,2).join(",");
 
@@ -509,9 +628,10 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","conso","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","target","minStop","radius","unknownKW","fastOnly","showAll"];
-function save(){ try{ const o={}; for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
-function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } return true; }catch(e){ return false; } }
+const FIELDS=["from","to","socStart","car","conso","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival"];
+const pminVal=()=>+(document.querySelector('input[name="pmin"]:checked')?.value||0);
+function save(){ try{ const o={pmin:pminVal()}; for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
+function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } const r=document.querySelector(`input[name="pmin"][value="${o.pmin}"]`); if(r) r.checked=true; return true; }catch(e){ return false; } }
 function applyCar(){ const c=CARS[$("car").value]; if(!c||$("car").value==="0") return; $("conso").value=c.conso; $("cap").value=c.cap; $("dcmax").value=c.dc; $("acmax").value=c.ac; }
 
 $("car").innerHTML=CARS.map((c,i)=>`<option value="${i}">${esc(c.n)}</option>`).join("");
@@ -522,18 +642,68 @@ if(!load()){ $("car").value="5"; applyCar(); }
   $("dep").value=`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
 initMap();
 
+// ---------- Version ----------
+{ const v=$("ver"), box=$("changelog");
+  v.textContent="v"+CHANGELOG[0].v; v.title="Version "+CHANGELOG[0].v+" du "+CHANGELOG[0].d;
+  box.innerHTML=CHANGELOG.map(r=>`<section><h3>Version ${r.v}<span>${r.d}</span></h3><ul>${r.c.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></section>`).join("");
+  v.addEventListener("click",()=>{ box.hidden=!box.hidden; v.setAttribute("aria-expanded",!box.hidden); });
+  document.addEventListener("click",e=>{ if(!box.hidden && !box.contains(e.target) && e.target!==v){ box.hidden=true; v.setAttribute("aria-expanded","false"); } });
+}
+
+// ---------- Favoris (enregistrés dans ce navigateur) ----------
+const FKEY="trajetve-favoris";
+let favs={trips:[],places:[]};
+try{ const f=JSON.parse(localStorage.getItem(FKEY)||"null"); if(f&&Array.isArray(f.trips)&&Array.isArray(f.places)) favs=f; }catch(e){}
+const storeFavs=()=>{ try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){ setStatus("Impossible d'enregistrer les favoris dans ce navigateur.",true); } };
+const same=(a,b)=>a.trim().toLowerCase()===b.trim().toLowerCase();
+function renderFavs(){
+  const sel=$("favTrip"), cur=sel.value;
+  sel.innerHTML='<option value="">'+(favs.trips.length?"Trajets favoris…":"Aucun trajet favori")+'</option>'+favs.trips.map((t,i)=>`<option value="${i}">${esc(t.from)} → ${esc(t.to)}</option>`).join("");
+  const match=favs.trips.findIndex(t=>same(t.from,$("from").value)&&same(t.to,$("to").value));
+  sel.value = match>=0 ? String(match) : (cur && favs.trips[cur] ? cur : "");
+  $("delTrip").disabled = sel.value==="";
+  $("favPlaces").innerHTML=favs.places.map(pl=>`<option value="${esc(pl)}"></option>`).join("");
+  document.querySelectorAll(".star").forEach(b=>{ const on=favs.places.some(pl=>same(pl,$(b.dataset.for).value)); b.textContent=on?"★":"☆"; b.setAttribute("aria-pressed",on); b.title=on?"Retirer des lieux favoris":"Ajouter aux lieux favoris"; });
+}
+$("favTrip").addEventListener("change",e=>{
+  const t=favs.trips[e.target.value]; if(t){ $("from").value=t.from; $("to").value=t.to; }
+  renderFavs();
+});
+$("saveTrip").addEventListener("click",()=>{
+  const from=$("from").value.trim(), to=$("to").value.trim();
+  if(!from||!to) return setStatus("Renseigne un départ et une arrivée avant d'enregistrer.",true);
+  if(!favs.trips.some(t=>same(t.from,from)&&same(t.to,to))){ favs.trips.push({from,to}); storeFavs(); }
+  renderFavs(); setStatus(`Trajet ${from} → ${to} enregistré.`);
+});
+$("delTrip").addEventListener("click",()=>{
+  const i=$("favTrip").value; if(i==="") return;
+  const t=favs.trips.splice(+i,1)[0]; storeFavs(); $("favTrip").value=""; renderFavs();
+  setStatus(`Trajet ${t.from} → ${t.to} retiré des favoris.`);
+});
+document.querySelectorAll(".star").forEach(b=>b.addEventListener("click",()=>{
+  const v=$(b.dataset.for).value.trim(); if(!v) return;
+  const k=favs.places.findIndex(pl=>same(pl,v));
+  if(k>=0) favs.places.splice(k,1); else favs.places.push(v);
+  favs.places.sort((a,b)=>a.localeCompare(b,"fr")); storeFavs(); renderFavs();
+}));
+["from","to"].forEach(id=>$(id).addEventListener("input",renderFavs));
+$("swap").addEventListener("click",()=>{ const a=$("from").value; $("from").value=$("to").value; $("to").value=a; renderFavs(); });
+renderFavs();
+
 let cache={};
 $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={socStart:num("socStart"),conso:num("conso"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
     useTime:$("useTime").checked,maxMin:num("maxMin"),useSoc:$("useSoc").checked,socTrig:num("socTrig"),
-    floor:num("floor"),target:num("target"),minStop:num("minStop")||0,radius:num("radius"),unknownKW:num("unknownKW"),
+    floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
+    useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
   for(const [k,v] of Object.entries(p)) if(typeof v==="number" && !isFinite(v)) return setStatus("Un champ numérique est vide ou invalide.",true);
-  if(p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
+  if(p.arrival>100||p.arrival<0||p.socStart>100) return setStatus("Les pourcentages de batterie doivent être entre 0 et 100.",true);
+  if(p.useTarget && p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
   if(p.useSoc && p.socTrig<=p.floor) return setStatus("Le seuil d'arrêt doit être au-dessus de la réserve minimale.",true);
-  if(p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
+  if(p.useTarget && p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
   const btn=$("go"); btn.disabled=true;
   try{
     const fq=$("from").value.trim(), tq=$("to").value.trim();
@@ -546,8 +716,9 @@ $("f").addEventListener("submit", async e=>{
     if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,(k,t)=>setStatus(`Recherche des bornes : tronçon ${k} sur ${t}…`)); }
     const raw=cache[ck], miss=raw.failed; if(miss) delete cache[ck]; // on retentera les tronçons manquants au prochain calcul
     let C=raw.map(parseCharger).filter(c=>!["private","no"].includes(c.access));
-    if($("fastOnly").checked) C=C.filter(c=>c.dc);
+    if(p.pmin>0) C=C.filter(c=>(c.kw ?? (c.dc?p.unknownKW:22))>=p.pmin);
     C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
+    p.routeKm=R.km[R.km.length-1];
     const res=simulate(R,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
