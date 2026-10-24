@@ -343,6 +343,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"1.10.2", d:"24/10/2026", c:[
+    "Messages de synchronisation détaillés avec le code d'erreur Firebase, pour diagnostiquer une connexion qui échoue",
+    "Connexion par redirection si la fenêtre de connexion Google est bloquée"]},
   {v:"1.10.1", d:"24/10/2026", c:[
     "Synchronisation activée sur le projet Firebase « trajet-ve »"]},
   {v:"1.10", d:"24/10/2026", c:[
@@ -1114,15 +1117,25 @@ async function initSync(){
     const V="10.12.2", base=`https://www.gstatic.com/firebasejs/${V}/`;
     await loadScript(base+"firebase-app-compat.js");
     await Promise.all([loadScript(base+"firebase-auth-compat.js"),loadScript(base+"firebase-firestore-compat.js")]);
-  }catch(e){ txt.textContent="Synchronisation indisponible (chargement impossible)"; btn.hidden=true; return; }
+  }catch(e){ txt.textContent="Synchronisation indisponible : impossible de charger Firebase (bloqueur de pubs ?)"; btn.hidden=true; return; }
   firebase.initializeApp(FIREBASE_CONFIG);
   const auth=firebase.auth(), db=firebase.firestore();
   let unsub=null, timer=0;
   btn.addEventListener("click",async()=>{
     if(auth.currentUser){ await auth.signOut(); return; }
-    try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-    catch(e){ txt.textContent= e.code==="auth/unauthorized-domain" ? "Domaine non autorisé dans Firebase Authentication" : "Connexion annulée ou impossible"; }
+    const prov=new firebase.auth.GoogleAuthProvider();
+    try{ await auth.signInWithPopup(prov); }
+    catch(e){
+      console.error(e);
+      if(["auth/popup-blocked","auth/operation-not-supported-in-this-environment"].includes(e.code)){ try{ await auth.signInWithRedirect(prov); return; }catch(e2){ e=e2; } }
+      const known={"auth/unauthorized-domain":"Domaine non autorisé dans Authentication → Paramètres",
+        "auth/operation-not-allowed":"Connexion Google non activée dans Authentication → Sign-in method",
+        "auth/popup-closed-by-user":"Fenêtre de connexion fermée","auth/cancelled-popup-request":"Connexion annulée",
+        "auth/configuration-not-found":"Authentication n'est pas initialisé dans la console Firebase"};
+      txt.textContent=(known[e.code]||"Connexion impossible")+` (${e.code||e.message})`;
+    }
   });
+  auth.getRedirectResult().catch(e=>{ console.error(e); txt.textContent=`Connexion impossible (${e.code||e.message})`; });
   auth.onAuthStateChanged(async user=>{
     unsub?.(); unsub=null; syncPush=()=>{};
     if(!user){ bar.classList.remove("on"); txt.textContent="Favoris enregistrés sur cet appareil"; btn.textContent="Se connecter"; return; }
@@ -1130,7 +1143,7 @@ async function initSync(){
     const ref=db.collection("trajetve").doc(user.uid);
     const push=()=>ref.set({...localState(), device:DEVICE_ID, updatedAt:Date.now(), email:user.email||""})
       .then(()=>{ bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; })
-      .catch(()=>{ bar.classList.remove("on"); txt.textContent="Échec de l'enregistrement en ligne"; });
+      .catch(e=>{ console.error(e); bar.classList.remove("on"); txt.textContent=`Échec de l'enregistrement en ligne (${e.code||e.message})`; });
     try{
       const snap=await ref.get(), mergedKey="trajetve-merged-"+user.uid;
       if(!snap.exists) await push();
@@ -1146,7 +1159,14 @@ async function initSync(){
         } else { applyState(r); bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; }
         try{ localStorage.setItem(mergedKey,"1"); }catch(e){}
       }
-    }catch(e){ txt.textContent= e.code==="permission-denied" ? "Accès refusé : vérifie les règles Firestore" : "Synchronisation indisponible"; return; }
+    }catch(e){
+      console.error(e);
+      const known={"permission-denied":"Accès refusé : vérifie les règles Firestore",
+        "unavailable":"Base injoignable : la base Firestore est-elle créée ?",
+        "failed-precondition":"Base Firestore non créée ou non prête",
+        "not-found":"Base Firestore introuvable : crée-la dans la console"};
+      txt.textContent=(known[e.code]||"Synchronisation indisponible")+` (${e.code||e.message})`; return;
+    }
     syncPush=()=>{ clearTimeout(timer); timer=setTimeout(push,800); };
     unsub=ref.onSnapshot(d=>{ if(d.metadata.hasPendingWrites || !d.exists) return; const r=d.data(); if(r.device===DEVICE_ID) return; applyState(r); });
   });
