@@ -343,6 +343,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"1.10.1", d:"24/10/2026", c:[
+    "Synchronisation activée sur le projet Firebase « trajet-ve »"]},
   {v:"1.10", d:"24/10/2026", c:[
     "Sections du panneau de gauche repliables, avec « Tout réduire / Tout développer » et un résumé visible quand une section est fermée",
     "Export de l'itinéraire vers Google Maps (départ, bornes, arrivée)",
@@ -1088,7 +1090,14 @@ $("copyBtn").addEventListener("click",async()=>{
 // Pour l'activer : renseigne la configuration Firebase de ton projet ci-dessous (Console Firebase → Paramètres du projet → Vos applications).
 // Il faut aussi activer la connexion Google (Authentication) et ajouter cette règle Firestore :
 //   match /trajetve/{uid} { allow read, write: if request.auth != null && request.auth.uid == uid; }
-const FIREBASE_CONFIG=null; // ex. { apiKey:"…", authDomain:"…firebaseapp.com", projectId:"…", appId:"…" }
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyBfgDleVkrC2Wskz0e0CdcNgbpA4j4T13U",
+  authDomain:"trajet-ve.firebaseapp.com",
+  projectId:"trajet-ve",
+  storageBucket:"trajet-ve.firebasestorage.app",
+  messagingSenderId:"524164609254",
+  appId:"1:524164609254:web:c64eb461f8a8e1c1b9f727"
+};
 const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
 function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
 const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st}; };
