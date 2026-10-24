@@ -269,35 +269,51 @@ async function getRoute(a,b){
   }
   return {lat,lon,km,sec,line:coords.map(c=>[c[1],c[0]])};
 }
-const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// Chaque serveur est essayé avec un délai max de 30 s ; on refait un tour après une pause si tout échoue
 async function overpass(q){
   let last;
-  for(const ep of OVERPASS){
-    try{
-      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
-      if(r.ok) return await r.json();
-      last=new Error("Overpass "+r.status);
-    }catch(e){ last=e; }
+  for(let round=0; round<3; round++){
+    for(const ep of OVERPASS){
+      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),30000);
+      try{
+        const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"},signal:ctl.signal});
+        if(r.ok) return await r.json();
+        last=new Error("Overpass "+r.status);
+      }catch(e){ last=e; }
+      finally{ clearTimeout(to); }
+    }
+    await sleep(4000*(round+1));
   }
   throw last||new Error("Overpass indisponible");
 }
+// Découpe le trajet en tronçons d'environ 60 km et interroge un rectangle par tronçon (requêtes légères).
+// Les bornes trop loin de la route sont écartées ensuite. Un tronçon en échec n'arrête pas tout.
 async function getChargers(R, radiusKm, onProgress){
-  // points tous les ~3 km, requêtes par tronçons d'environ 240 km
-  const pts=[]; let lastK=-99;
-  for(let i=0;i<R.km.length;i++) if(R.km[i]-lastK>=3||i===R.km.length-1){ pts.push([R.lat[i],R.lon[i]]); lastK=R.km[i]; }
-  const chunk=80, out=new Map();
-  for(let s=0;s<pts.length;s+=chunk-1){
-    const part=pts.slice(s,s+chunk); if(part.length<2&&s>0) break;
-    const ls=(part.length===1?[part[0],part[0]]:part).map(p=>p[0].toFixed(5)+","+p[1].toFixed(5)).join(",");
-    const q=`[out:json][timeout:90];nwr["amenity"="charging_station"](around:${Math.round(radiusKm*1000)},${ls});out center tags;`;
-    onProgress && onProgress(Math.min(100,Math.round((s+part.length)/pts.length*100)));
-    const j=await overpass(q);
-    for(const el of j.elements||[]){
-      const la=el.lat??el.center?.lat, lo=el.lon??el.center?.lon; if(la==null) continue;
-      out.set(el.type+el.id,{id:el.type+el.id,lat:la,lon:lo,tags:el.tags||{}});
-    }
+  const segs=[]; let start=0;
+  for(let i=1;i<R.km.length;i++) if(R.km[i]-R.km[start]>=60 || i===R.km.length-1){ segs.push([start,i]); start=i; }
+  if(!segs.length) segs.push([0,R.km.length-1]);
+  const out=new Map(); let failed=0;
+  for(let k=0;k<segs.length;k++){
+    const [i0,i1]=segs[k];
+    let s=90,w=180,n=-90,e=-180;
+    for(let i=i0;i<=i1;i++){ s=Math.min(s,R.lat[i]); n=Math.max(n,R.lat[i]); w=Math.min(w,R.lon[i]); e=Math.max(e,R.lon[i]); }
+    const dLat=radiusKm/111, dLon=radiusKm/(111*Math.cos((s+n)/2*Math.PI/180));
+    const bb=[s-dLat,w-dLon,n+dLat,e+dLon].map(v=>v.toFixed(4)).join(",");
+    onProgress && onProgress(k+1,segs.length);
+    try{
+      const j=await overpass(`[out:json][timeout:25][bbox:${bb}];nwr["amenity"="charging_station"];out center tags;`);
+      for(const el of j.elements||[]){
+        const la=el.lat??el.center?.lat, lo=el.lon??el.center?.lon; if(la==null) continue;
+        out.set(el.type+el.id,{id:el.type+el.id,lat:la,lon:lo,tags:el.tags||{}});
+      }
+    }catch(err){ failed++; }
+    if(k<segs.length-1) await sleep(600);
   }
-  return [...out.values()];
+  if(failed===segs.length) throw new Error("Le service des bornes (Overpass) ne répond pas. Réessaie dans quelques minutes.");
+  const list=[...out.values()]; list.failed=failed; list.total=segs.length;
+  return list;
 }
 function parseCharger(c){
   const t=c.tags; let kw=0, dc=false;
@@ -527,14 +543,15 @@ $("f").addEventListener("submit", async e=>{
     setStatus("Calcul de l'itinéraire…");
     const rk="r:"+fq+"|"+tq; const R = cache[rk] ||= await getRoute(a,b);
     const ck="c:"+rk+"|"+p.radius;
-    if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,pc=>setStatus(`Recherche des bornes le long du trajet… ${pc} %`)); }
-    let C=cache[ck].map(parseCharger).filter(c=>!["private","no"].includes(c.access));
+    if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,(k,t)=>setStatus(`Recherche des bornes : tronçon ${k} sur ${t}…`)); }
+    const raw=cache[ck], miss=raw.failed; if(miss) delete cache[ck]; // on retentera les tronçons manquants au prochain calcul
+    let C=raw.map(parseCharger).filter(c=>!["private","no"].includes(c.access));
     if($("fastOnly").checked) C=C.filter(c=>c.dc);
-    C=project(C,R);
+    C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
     const res=simulate(R,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
-    setStatus(res.error?"":`${C.length} bornes trouvées le long du trajet.`, false);
+    setStatus(miss?`${miss} tronçon(s) sans réponse du service des bornes : relance le calcul pour les compléter.`:(res.error?"":`${C.length} bornes trouvées le long du trajet.`), !!miss);
   }catch(err){
     console.error(err);
     setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
