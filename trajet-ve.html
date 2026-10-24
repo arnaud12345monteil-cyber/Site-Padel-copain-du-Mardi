@@ -260,6 +260,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"1.6", d:"24/10/2026", c:[
+    "Calcul plus rapide : bornes cherchées sur deux tronçons à la fois",
+    "Adresses, itinéraires et bornes gardés en mémoire dans le navigateur (30 jours pour les adresses, 7 jours pour le reste) : un trajet déjà calculé repart presque instantanément",
+    "Délais d'attente réduits quand le service des bornes ne répond pas",
+    "Durée du calcul affichée par étape sous le bouton"]},
   {v:"1.5", d:"24/10/2026", c:[
     "Numéro de version affiché en haut à droite, historique consultable en cliquant dessus",
     "Historique des évolutions tenu dans le fichier source (constante CHANGELOG)"]},
@@ -367,14 +372,35 @@ async function getRoute(a,b){
   }
   return {lat,lon,km,sec,line:coords.map(c=>[c[1],c[0]])};
 }
+// ---------- Cache local (navigateur) : évite de redemander ce qui a déjà été récupéré ----------
+const LS_PREFIX="trajetve-cache:", DAY=86400000;
+function lsGet(key,maxAge){
+  try{ const o=JSON.parse(localStorage.getItem(LS_PREFIX+key)||"null"); if(o && Date.now()-o.t<maxAge) return o.v; }catch(e){}
+  return null;
+}
+function lsSet(key,v){
+  const put=()=>localStorage.setItem(LS_PREFIX+key,JSON.stringify({t:Date.now(),v}));
+  try{ put(); }catch(e){
+    // stockage plein : on supprime les entrées de cache les plus anciennes puis on réessaie une fois
+    try{
+      const ks=Object.keys(localStorage).filter(k=>k.startsWith(LS_PREFIX))
+        .map(k=>{ let t=0; try{ t=JSON.parse(localStorage.getItem(k)).t; }catch(_){} return [k,t]; }).sort((a,b)=>a[1]-b[1]);
+      ks.slice(0,Math.ceil(ks.length/2)).forEach(([k])=>localStorage.removeItem(k)); put();
+    }catch(_){}
+  }
+}
+// On ne garde que les tags utiles au calcul, pour alléger le cache
+const KEEP_TAG=/^(name|brand|operator|network|access|maxpower|socket:[^:]+(:output)?|charging_station:output)$/;
+const slimTags=t=>{ const o={}; for(const k in t) if(KEEP_TAG.test(k)) o[k]=t[k]; return o; };
+
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-// Chaque serveur est essayé avec un délai max de 30 s ; on refait un tour après une pause si tout échoue
+// Chaque serveur est essayé avec un délai max de 20 s ; un second tour après 3 s de pause si tout échoue
 async function overpass(q){
   let last;
-  for(let round=0; round<3; round++){
+  for(let round=0; round<2; round++){
     for(const ep of OVERPASS){
-      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),30000);
+      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),20000);
       try{
         const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"},signal:ctl.signal});
         if(r.ok) return await r.json();
@@ -382,35 +408,47 @@ async function overpass(q){
       }catch(e){ last=e; }
       finally{ clearTimeout(to); }
     }
-    await sleep(4000*(round+1));
+    if(round===0) await sleep(3000);
   }
   throw last||new Error("Overpass indisponible");
 }
 // Découpe le trajet en tronçons d'environ 60 km et interroge un rectangle par tronçon (requêtes légères).
+// Deux requêtes en parallèle (limite tolérée par Overpass), résultats gardés 7 jours dans le navigateur.
 // Les bornes trop loin de la route sont écartées ensuite. Un tronçon en échec n'arrête pas tout.
 async function getChargers(R, radiusKm, onProgress){
   const segs=[]; let start=0;
   for(let i=1;i<R.km.length;i++) if(R.km[i]-R.km[start]>=60 || i===R.km.length-1){ segs.push([start,i]); start=i; }
   if(!segs.length) segs.push([0,R.km.length-1]);
-  const out=new Map(); let failed=0;
-  for(let k=0;k<segs.length;k++){
-    const [i0,i1]=segs[k];
+  const jobs=segs.map(([i0,i1])=>{
     let s=90,w=180,n=-90,e=-180;
     for(let i=i0;i<=i1;i++){ s=Math.min(s,R.lat[i]); n=Math.max(n,R.lat[i]); w=Math.min(w,R.lon[i]); e=Math.max(e,R.lon[i]); }
     const dLat=radiusKm/111, dLon=radiusKm/(111*Math.cos((s+n)/2*Math.PI/180));
-    const bb=[s-dLat,w-dLon,n+dLat,e+dLon].map(v=>v.toFixed(4)).join(",");
-    onProgress && onProgress(k+1,segs.length);
-    try{
-      const j=await overpass(`[out:json][timeout:25][bbox:${bb}];nwr["amenity"="charging_station"];out center tags;`);
-      for(const el of j.elements||[]){
-        const la=el.lat??el.center?.lat, lo=el.lon??el.center?.lon; if(la==null) continue;
-        out.set(el.type+el.id,{id:el.type+el.id,lat:la,lon:lo,tags:el.tags||{}});
-      }
-    }catch(err){ failed++; }
-    if(k<segs.length-1) await sleep(600);
-  }
-  if(failed===segs.length) throw new Error("Le service des bornes (Overpass) ne répond pas. Réessaie dans quelques minutes.");
-  const list=[...out.values()]; list.failed=failed; list.total=segs.length;
+    return [s-dLat,w-dLon,n+dLat,e+dLon].map(v=>v.toFixed(3)).join(",");
+  });
+  const out=new Map(); let failed=0, done=0, fromCache=0;
+  const add=list=>{ for(const c of list) out.set(c.id,c); };
+  const todo=[];
+  for(const bb of jobs){ const hit=lsGet("bornes:"+bb,7*DAY); if(hit){ add(hit); fromCache++; done++; } else todo.push(bb); }
+  onProgress && onProgress(done,jobs.length);
+  let next=0;
+  const worker=async()=>{
+    while(next<todo.length){
+      const bb=todo[next++];
+      try{
+        const j=await overpass(`[out:json][timeout:25][bbox:${bb}];nwr["amenity"="charging_station"];out center tags;`);
+        const list=[];
+        for(const el of j.elements||[]){
+          const la=el.lat??el.center?.lat, lo=el.lon??el.center?.lon; if(la==null) continue;
+          list.push({id:el.type+el.id,lat:+la.toFixed(6),lon:+lo.toFixed(6),tags:slimTags(el.tags||{})});
+        }
+        lsSet("bornes:"+bb,list); add(list);
+      }catch(err){ failed++; }
+      done++; onProgress && onProgress(done,jobs.length);
+    }
+  };
+  await Promise.all([worker(),worker()]);
+  if(failed===jobs.length) throw new Error("Le service des bornes (Overpass) ne répond pas. Réessaie dans quelques minutes.");
+  const list=[...out.values()]; list.failed=failed; list.total=jobs.length; list.fromCache=fromCache;
   return list;
 }
 function parseCharger(c){
@@ -708,12 +746,17 @@ $("f").addEventListener("submit", async e=>{
   try{
     const fq=$("from").value.trim(), tq=$("to").value.trim();
     setStatus("Recherche des adresses…");
-    const a = cache["g:"+fq] ||= await geocode(fq);
-    const b = cache["g:"+tq] ||= await geocode(tq);
+    const T={}, t0=performance.now(), lap=k=>{ T[k]=(performance.now()-t0)/1000; };
+    const geo=async q=>{ const k="adr:"+q.toLowerCase(); const hit=lsGet(k,30*DAY); if(hit) return hit; const g=await geocode(q); lsSet(k,g); return g; };
+    const [a,b]=await Promise.all([geo(fq),geo(tq)]);
+    lap("adr");
     setStatus("Calcul de l'itinéraire…");
-    const rk="r:"+fq+"|"+tq; const R = cache[rk] ||= await getRoute(a,b);
+    const rk="r:"+fq+"|"+tq;
+    const R = cache[rk] ||= (lsGet("route:"+rk.toLowerCase(),7*DAY) || await getRoute(a,b).then(r=>{ lsSet("route:"+rk.toLowerCase(),r); return r; }));
+    lap("route");
     const ck="c:"+rk+"|"+p.radius;
-    if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,(k,t)=>setStatus(`Recherche des bornes : tronçon ${k} sur ${t}…`)); }
+    if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,(k,t)=>setStatus(`Recherche des bornes : ${k} tronçon${k>1?"s":""} sur ${t}…`)); }
+    lap("bornes");
     const raw=cache[ck], miss=raw.failed; if(miss) delete cache[ck]; // on retentera les tronçons manquants au prochain calcul
     let C=raw.map(parseCharger).filter(c=>!["private","no"].includes(c.access));
     if(p.pmin>0) C=C.filter(c=>(c.kw ?? (c.dc?p.unknownKW:22))>=p.pmin);
@@ -722,7 +765,9 @@ $("f").addEventListener("submit", async e=>{
     const res=simulate(R,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
-    setStatus(miss?`${miss} tronçon(s) sans réponse du service des bornes : relance le calcul pour les compléter.`:(res.error?"":`${C.length} bornes trouvées le long du trajet.`), !!miss);
+    lap("total");
+    const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
+    setStatus(miss?`${miss} tronçon(s) sans réponse du service des bornes : relance le calcul pour les compléter.`:(res.error?"":`${C.length} bornes le long du trajet. ${timing}`), !!miss);
   }catch(err){
     console.error(err);
     setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
