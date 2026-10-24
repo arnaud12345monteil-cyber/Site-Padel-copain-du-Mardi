@@ -121,6 +121,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .mini:disabled{opacity:.45;cursor:default}
 .swap{justify-self:start;font:500 .82rem var(--f-body);color:var(--accent);background:none;border:0;padding:0;cursor:pointer}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg3{grid-template-columns:repeat(3,1fr)}
+.flabel{font-size:.88rem;font-weight:500}
 .seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label{display:block;text-align:center;padding:9px 4px;font:600 .85rem var(--f-mono);cursor:pointer;background:var(--field);border-left:1px solid var(--line)}
 .seg label:first-of-type{border-left:0}
@@ -172,12 +174,34 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         <legend>Voiture</legend>
         <label>Modèle<select id="car"></select></label>
         <div class="row">
-          <label>Consommation <small>kWh/100 km</small><input id="conso" type="number" step="0.1" min="5" max="50"></label>
-          <label>Batterie utile <small>kWh</small><input id="cap" type="number" step="0.1" min="10" max="200"></label>
+          <label>Conso à 90 km/h <small>kWh/100 km</small><input id="c90" type="number" step="0.1" min="5" max="50"></label>
+          <label>Conso à 130 km/h <small>kWh/100 km</small><input id="c130" type="number" step="0.1" min="5" max="60"></label>
         </div>
+        <label>Batterie utile <small>kWh</small><input id="cap" type="number" step="0.1" min="10" max="200"></label>
         <div class="row">
           <label>Charge rapide max <small>kW</small><input id="dcmax" type="number" min="20" max="400"></label>
           <label>Charge AC max <small>kW</small><input id="acmax" type="number" min="3" max="22"></label>
+        </div>
+      </fieldset>
+      <hr>
+      <fieldset>
+        <legend>Conduite</legend>
+        <div class="field">
+          <span class="flabel">Vitesse sur autoroute</span>
+          <div class="seg seg3" role="radiogroup" aria-label="Vitesse sur autoroute">
+            <input type="radio" name="hw" id="hw110" value="110"><label for="hw110">110</label>
+            <input type="radio" name="hw" id="hw120" value="120"><label for="hw120">120</label>
+            <input type="radio" name="hw" id="hw130" value="130" checked><label for="hw130">130</label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="flabel">Saison</span>
+          <div class="seg seg3" role="radiogroup" aria-label="Saison">
+            <input type="radio" name="season" id="sEte" value="1" checked><label for="sEte">Été</label>
+            <input type="radio" name="season" id="sMid" value="1.1"><label for="sMid">Mi-saison</label>
+            <input type="radio" name="season" id="sHiv" value="1.25"><label for="sHiv">Hiver</label>
+          </div>
+          <p class="note">Hiver : +25 % de consommation, mi-saison : +10 %. Moyennes à affiner selon ta voiture.</p>
         </div>
       </fieldset>
       <hr>
@@ -231,8 +255,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
               <label>Distance max de la route <small>km</small><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2"></label>
               <label>Puissance supposée si inconnue <small>kW</small><input id="unknownKW" type="number" min="7" max="350" value="50"></label>
             </div>
-            <label>Clé Open Charge Map <small>facultative, recommandée</small><input id="ocmKey" type="text" spellcheck="false" autocapitalize="off" placeholder="Colle ta clé ici"></label>
-            <p class="note">Avec une clé, les bornes viennent d'Open Charge Map (plus rapide et plus fiable) ; sans clé, d'OpenStreetMap via Overpass. Clé gratuite : crée un compte sur <a href="https://openchargemap.org" target="_blank" rel="noopener">openchargemap.org</a>, puis « My profile » → « My apps » → « Register an application ».</p>
+            <label>Clé Open Charge Map <small>facultative</small><input id="ocmKey" type="text" spellcheck="false" autocapitalize="off" placeholder="Vide : clé intégrée au site"></label>
+            <p class="note">Les bornes viennent d'Open Charge Map avec la clé intégrée au site, ou avec celle saisie ici si tu en mets une autre. Overpass (OpenStreetMap) prend le relais si Open Charge Map ne répond pas. Clé gratuite : crée un compte sur <a href="https://openchargemap.org" target="_blank" rel="noopener">openchargemap.org</a>, puis « My profile » → « My apps » → « Register an application ».</p>
             <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes retenues sur la carte</span></label>
           </div>
         </details>
@@ -253,7 +277,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       <h2 style="margin-bottom:8px">Niveau de batterie sur le trajet</h2>
       <div class="chart-box" id="chart"></div>
     </div>
-    <p class="note">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation supposée constante : pas de prise en compte du relief, de la météo ni de la vitesse réelle. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
+    <p class="note">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation calculée selon la vitesse de chaque portion et la saison ; le relief, le vent et la pluie ne sont pas pris en compte. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
   </section>
 </div>
 
@@ -262,6 +286,13 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"1.8.1", d:"24/10/2026", c:[
+    "Clé Open Charge Map intégrée au site : plus besoin de la saisir, le champ sert seulement à en utiliser une autre"]},
+  {v:"1.8", d:"24/10/2026", c:[
+    "Consommation selon la vitesse : deux valeurs par voiture (à 90 et à 130 km/h), courbe calculée pour chaque portion du trajet",
+    "Choix de la vitesse sur autoroute (110, 120 ou 130) : modifie la consommation et la durée du trajet",
+    "Correctif saison : été, mi-saison (+10 %), hiver (+25 %)",
+    "Consommation moyenne du trajet affichée dans le résumé"]},
   {v:"1.7", d:"24/10/2026", c:[
     "Nouvelle source de bornes : Open Charge Map, avec une clé gratuite à renseigner dans Bornes → Plus d'options",
     "Overpass (OpenStreetMap) reste utilisé sans clé, et en secours si Open Charge Map ne répond pas",
@@ -294,23 +325,24 @@ const CHANGELOG=[
     "Première version : itinéraire, bornes le long du trajet, règles d'arrêt par temps et par % de batterie, courbe de charge, carte et feuille de route"]}
 ];
 // ---------- Modèles (valeurs indicatives, à ajuster) ----------
+// c90 / c130 : consommation estimée en kWh/100 km à 90 et 130 km/h stabilisés, temps doux. À remplacer par tes relevés.
 const CARS = [
-  {n:"Personnalisé", cap:60, conso:18, dc:100, ac:11},
-  {n:"Tesla Model 3 Propulsion", cap:57.5, conso:16, dc:170, ac:11},
-  {n:"Tesla Model 3 Grande Autonomie", cap:75, conso:16.5, dc:250, ac:11},
-  {n:"Tesla Model Y Grande Autonomie", cap:75, conso:18, dc:250, ac:11},
-  {n:"Renault 5 E-Tech 52 kWh", cap:52, conso:16, dc:100, ac:11},
-  {n:"Renault Mégane E-Tech EV60", cap:60, conso:17.5, dc:130, ac:22},
-  {n:"Renault Scénic E-Tech 87 kWh", cap:87, conso:18.5, dc:150, ac:22},
-  {n:"Peugeot e-208 (51 kWh)", cap:48, conso:16, dc:100, ac:11},
-  {n:"Peugeot e-3008 (73 kWh)", cap:73, conso:18.5, dc:160, ac:11},
-  {n:"Volkswagen ID.3 Pro", cap:59, conso:17, dc:120, ac:11},
-  {n:"Skoda Enyaq 85", cap:77, conso:19, dc:135, ac:11},
-  {n:"Kia EV6 77 kWh", cap:74, conso:19, dc:230, ac:11},
-  {n:"Hyundai Ioniq 5 84 kWh", cap:80, conso:19, dc:230, ac:11},
-  {n:"BYD Atto 3", cap:60, conso:18, dc:88, ac:11},
-  {n:"MG4 Long Range", cap:61.7, conso:17.5, dc:135, ac:11},
-  {n:"Dacia Spring", cap:25, conso:14, dc:30, ac:7}
+  {n:"Personnalisé", cap:60, c90:15, c130:21, dc:100, ac:11},
+  {n:"Tesla Model 3 Propulsion", cap:57.5, c90:13.5, c130:18.5, dc:170, ac:11},
+  {n:"Tesla Model 3 Grande Autonomie", cap:75, c90:14, c130:19, dc:250, ac:11},
+  {n:"Tesla Model Y Grande Autonomie", cap:75, c90:15.5, c130:21, dc:250, ac:11},
+  {n:"Renault 5 E-Tech 52 kWh", cap:52, c90:14, c130:20, dc:100, ac:11},
+  {n:"Renault Mégane E-Tech EV60", cap:60, c90:15, c130:21, dc:130, ac:22},
+  {n:"Renault Scénic E-Tech 87 kWh", cap:87, c90:15.5, c130:21.5, dc:150, ac:22},
+  {n:"Peugeot e-208 (51 kWh)", cap:48, c90:14, c130:20.5, dc:100, ac:11},
+  {n:"Peugeot e-3008 (73 kWh)", cap:73, c90:16, c130:22.5, dc:160, ac:11},
+  {n:"Volkswagen ID.3 Pro", cap:59, c90:14.5, c130:20.5, dc:120, ac:11},
+  {n:"Skoda Enyaq 85", cap:77, c90:16, c130:22.5, dc:135, ac:11},
+  {n:"Kia EV6 77 kWh", cap:74, c90:16, c130:22.5, dc:230, ac:11},
+  {n:"Hyundai Ioniq 5 84 kWh", cap:80, c90:16.5, c130:23, dc:230, ac:11},
+  {n:"BYD Atto 3", cap:60, c90:16, c130:23, dc:88, ac:11},
+  {n:"MG4 Long Range", cap:61.7, c90:15, c130:21.5, dc:135, ac:11},
+  {n:"Dacia Spring", cap:25, c90:12.5, c130:19, dc:30, ac:7}
 ];
 
 // ---------- Utilitaires ----------
@@ -419,6 +451,8 @@ async function overpass(q){
   throw last||new Error("Overpass indisponible");
 }
 // ---------- Open Charge Map ----------
+// Clé intégrée, utilisée quand le champ « Clé Open Charge Map » est vide. Visible par toute personne qui lit ce fichier.
+const OCM_DEFAULT_KEY="c7d8b3a8-7892-4fd7-adfd-a5b8292d6ff1";
 const OCM_CONN={33:"CCS",32:"CCS",2:"CHAdeMO",27:"Tesla",30:"Tesla",25:"Type 2",1036:"Type 2"};
 async function ocmBox(bb,key){
   const [s,w,n,e]=bb.split(",");
@@ -530,9 +564,30 @@ function project(chargers,R){
   }).sort((a,b)=>a.km-b.km);
 }
 
+// ---------- Consommation selon la vitesse ----------
+// Modèle c(v) = a + b·v² (kWh/100 km), calé sur la conso à 90 et à 130 km/h. Plancher à 80 % de la conso à 90
+// pour la ville (arrêts, chauffage, équipements). Multiplié ensuite par le coefficient de saison.
+function consModel(c90,c130,season){
+  const b=(c130-c90)/(130*130-90*90), a=c90-b*90*90;
+  return v=>Math.max(a+b*v*v, c90*0.8)*season/100;   // kWh par km
+}
+// Recalcule temps et énergie le long du trajet. Les portions où OSRM roule à 95 km/h ou plus sont traitées comme
+// de l'autoroute et parcourues à la vitesse choisie (un peu en dessous, pour les ralentissements).
+function applyDriving(R,p){
+  const k=consModel(p.c90,p.c130,p.season), n=R.km.length;
+  const sec=[0], E=[0];
+  for(let i=1;i<n;i++){
+    const d=R.km[i]-R.km[i-1], dt0=Math.max(1,R.sec[i]-R.sec[i-1]);
+    let v=d/dt0*3600;
+    if(v>=95) v=p.hw*0.97;
+    sec.push(sec[i-1]+d/v*3600); E.push(E[i-1]+d*k(v));
+  }
+  return {...R, sec, E};
+}
+
 // ---------- Simulation ----------
 function simulate(R,C,p){
-  const n=R.km.length, kwhKm=p.conso/100, pct=k=>k/p.cap*100, endKm=R.km[n-1];
+  const n=R.km.length, kDet=p.kDet, pct=k=>k/p.cap*100, endKm=R.km[n-1], E=R.E;
   const DET_KMH=40;
   const arr=Math.max(p.arrival,p.floor);            // % visé à l'arrivée
   const ceil=p.useTarget ? p.target : 100;          // plafond de charge
@@ -540,37 +595,37 @@ function simulate(R,C,p){
   const steps=[{type:"start", t:0, soc, km:0}], curve=[[0,soc]];
   const chOf = c => ({dc:c.dc, kw: c.dc ? (c.kw ?? p.unknownKW) : (c.kw ?? 22), carKW: c.dc ? p.dcmax : p.acmax});
   const effKW = c => { const ch=chOf(c); return Math.min(ch.kw, ch.carKW); };
-  const tripPct=pct(endKm*kwhKm);
+  const tripPct=pct(E[n-1]);
   const base={tripPct, toCharge:Math.max(0,tripPct+arr-p.socStart)};
   if(soc<=p.floor) return {error:`La batterie au départ (${soc} %) est déjà sous la réserve minimale (${p.floor} %).`};
   // km atteint après une durée donnée depuis le point idx
-  const kmAfter=(idx,secs)=>{ for(let j=idx;j<n;j++) if(R.sec[j]-R.sec[idx]>secs) return R.km[j]; return endKm; };
+  const idxAfter=(idx,secs)=>{ for(let j=idx;j<n;j++) if(R.sec[j]-R.sec[idx]>secs) return j; return n-1; };
 
   for(let guard=0; guard<40; guard++){
     let trig=-1, reason="";
     // tolérance de 10 % : on ne s'arrête pas juste avant d'arriver
     const timeOn = p.useTime && (R.sec[n-1]-R.sec[i]) > p.maxMin*60*1.1;
     for(let j=i+1;j<n;j++){
-      const s=soc-pct((R.km[j]-R.km[i])*kwhKm), dt=R.sec[j]-R.sec[i];
+      const s=soc-pct(E[j]-E[i]), dt=R.sec[j]-R.sec[i];
       if(timeOn && dt>p.maxMin*60){ trig=j; reason="time"; break; }
       if(s<=p.floor){ trig=j; reason="floor"; break; }
       if(p.useSoc && s<=p.socTrig){
-        const sEnd = s - pct((endKm-R.km[j])*kwhKm);
+        const sEnd = s - pct(E[n-1]-E[j]);
         if(sEnd < arr){ trig=j; reason="soc"; break; }
       }
     }
     // la route passe sans arrêt mais on arriverait sous le % souhaité : il faut un arrêt avant l'arrivée
-    if(trig<0 && soc-pct((endKm-R.km[i])*kwhKm) < arr-0.01){ trig=n-1; reason="arrival"; }
+    if(trig<0 && soc-pct(E[n-1]-E[i]) < arr-0.01){ trig=n-1; reason="arrival"; }
     if(trig<0){
       const d=endKm-R.km[i], dt=R.sec[n-1]-R.sec[i];
-      soc-=pct(d*kwhKm); t+=dt; driveSec+=dt; kwh+=d*kwhKm;
+      const en=E[n-1]-E[i]; soc-=pct(en); t+=dt; driveSec+=dt; kwh+=en;
       steps.push({type:"drive", km:d, sec:dt});
       steps.push({type:"end", t, soc, km:endKm});
       curve.push([endKm,soc]);
-      return {steps, curve, summary:{...base, km:endKm, driveSec, chargeSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
+      return {steps, curve, summary:{...base, km:endKm, avg:E[n-1]/endKm*100, driveSec, chargeSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
     }
     const lo=R.km[i]+1, hi=R.km[trig];
-    const reachOK = c => soc - pct((c.km-R.km[i]+c.det)*kwhKm) >= p.floor-0.01;
+    const reachOK = c => soc - pct(E[c.idx]-E[i]+c.det*kDet) >= p.floor-0.01;
     const timeOK  = c => !p.useTime || (R.sec[c.idx]-R.sec[i] + c.det/DET_KMH*3600) <= p.maxMin*60+60;
     let cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
     let late=false;
@@ -587,14 +642,14 @@ function simulate(R,C,p){
 
     // rouler jusqu'à la borne (détour aller inclus)
     const dRoute=c.km-R.km[i], dt=R.sec[c.idx]-R.sec[i]+c.det/DET_KMH*3600;
-    soc-=pct((dRoute+c.det)*kwhKm); kwh+=(dRoute+c.det)*kwhKm; t+=dt; driveSec+=dt;
+    const en=E[c.idx]-E[i]+c.det*kDet; soc-=pct(en); kwh+=en; t+=dt; driveSec+=dt;
     steps.push({type:"drive", km:dRoute+c.det, sec:dt});
     curve.push([c.km,soc]);
     const arrive=t, socIn=soc;
 
     // combien charger
-    const remKm=endKm-c.km+c.det, remSec=R.sec[n-1]-R.sec[c.idx];
-    const need=arr+pct(remKm*kwhKm)+2;               // de quoi finir avec le % souhaité
+    const remSec=R.sec[n-1]-R.sec[c.idx];
+    const need=arr+pct(E[n-1]-E[c.idx]+c.det*kDet)+2;               // de quoi finir avec le % souhaité
     const finishInTime=!p.useTime || remSec<=p.maxMin*60*1.1;
     const lastLeg = need<=ceil && finishInTime;
     let socOut;
@@ -602,9 +657,9 @@ function simulate(R,C,p){
     else if(p.useTarget) socOut=Math.max(soc, p.target);
     else {
       // sans cible : assez pour finir, ou, si la règle de temps impose un autre arrêt, assez pour atteindre ce prochain arrêt
-      const nextKm=kmAfter(c.idx,p.maxMin*60);
+      const nextIdx=idxAfter(c.idx,p.maxMin*60);
       const keep=p.useSoc ? Math.max(p.socTrig,p.floor) : p.floor;
-      const needNext=keep+pct((nextKm-c.km+c.det)*kwhKm)+2;
+      const needNext=keep+pct(E[nextIdx]-E[c.idx]+c.det*kDet)+2;
       socOut=Math.max(soc, Math.min(100, Math.ceil(finishInTime ? need : Math.min(need,needNext))));
     }
     const ch=chOf(c);
@@ -616,7 +671,7 @@ function simulate(R,C,p){
     curve.push([c.km,soc]);
     steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
-    soc-=pct(c.det*kwhKm); kwh+=c.det*kwhKm; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
+    soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx;
   }
   return {error:"Trop d'arrêts nécessaires (plus de 40). Vérifie la consommation et la capacité de batterie.", partial:steps};
@@ -686,7 +741,7 @@ function render(res,p,a,b){
   if(res.summary){
     const S=res.summary;
     tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont arrêts"],
-      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"]);
+      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[S.avg.toFixed(1).replace(".",",")+" kWh","conso moyenne /100 km"]);
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
   } else $("chartPanel").hidden=true;
   $("stats").innerHTML=tiles.map(([v,l,h])=>`<div class="stat${h?" hl":""}"><b>${v}</b><span>${l}</span></div>`).join("");
@@ -694,7 +749,7 @@ function render(res,p,a,b){
 
 }
 // % de batterie que représente le trajet, et ce qu'il faudra ajouter en route pour arriver avec le % souhaité
-function need(p){ const tripPct=p.routeKm*p.conso/100/p.cap*100; return {tripPct, toCharge:Math.max(0,tripPct+Math.max(p.arrival,p.floor)-p.socStart)}; }
+function need(p){ const tripPct=p.tripKwh/p.cap*100; return {tripPct, toCharge:Math.max(0,tripPct+Math.max(p.arrival,p.floor)-p.socStart)}; }
 const li=(clock,cls,body)=>`<li><div class="clock">${clock}</div><div class="rail"><span class="dot ${cls}"></span></div><div class="item">${body}</div></li>`;
 const short=l=>l.split(",").slice(0,2).join(",");
 
@@ -715,16 +770,20 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","conso","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey"];
-const pminVal=()=>+(document.querySelector('input[name="pmin"]:checked')?.value||0);
-function save(){ try{ const o={pmin:pminVal()}; for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
-function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } const r=document.querySelector(`input[name="pmin"][value="${o.pmin}"]`); if(r) r.checked=true; return true; }catch(e){ return false; } }
-function applyCar(){ const c=CARS[$("car").value]; if(!c||$("car").value==="0") return; $("conso").value=c.conso; $("cap").value=c.cap; $("dcmax").value=c.dc; $("acmax").value=c.ac; }
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey"];
+const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
+const pminVal=()=>radioVal("pmin");
+const RADIOS=["pmin","hw","season"];
+function save(){ try{ const o={}; for(const r of RADIOS) o[r]=radioVal(r); for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
+function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } for(const n of RADIOS){ const r=document.querySelector(`input[name="${n}"][value="${o[n]}"]`); if(r) r.checked=true; } return true; }catch(e){ return false; } }
+function applyCar(){ const c=CARS[$("car").value]; if(!c||$("car").value==="0") return; $("c90").value=c.c90; $("c130").value=c.c130; $("cap").value=c.cap; $("dcmax").value=c.dc; $("acmax").value=c.ac; }
 
 $("car").innerHTML=CARS.map((c,i)=>`<option value="${i}">${esc(c.n)}</option>`).join("");
 $("car").addEventListener("change",applyCar);
-["conso","cap","dcmax","acmax"].forEach(id=>$(id).addEventListener("input",()=>{ $("car").value="0"; }));
+["c90","c130","cap","dcmax","acmax"].forEach(id=>$(id).addEventListener("input",()=>{ $("car").value="0"; }));
 if(!load()){ $("car").value="5"; applyCar(); }
+// réglages enregistrés avant la v1.8 : pas encore de conso à 90 / 130
+if(!$("c90").value || !$("c130").value){ if($("car").value!=="0") applyCar(); else { $("c90").value=15; $("c130").value=21; } }
 { const d=new Date(); d.setMinutes(Math.ceil(d.getMinutes()/15)*15,0,0); const z=n=>String(n).padStart(2,"0");
   $("dep").value=`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
 initMap();
@@ -781,12 +840,14 @@ let cache={};
 $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
-  const p={socStart:num("socStart"),conso:num("conso"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
+  const p={socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
     useTime:$("useTime").checked,maxMin:num("maxMin"),useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
   for(const [k,v] of Object.entries(p)) if(typeof v==="number" && !isFinite(v)) return setStatus("Un champ numérique est vide ou invalide.",true);
+  if(p.c130<p.c90) return setStatus("La consommation à 130 km/h doit être supérieure ou égale à celle à 90 km/h.",true);
+  p.kDet=consModel(p.c90,p.c130,p.season)(50);
   if(p.arrival>100||p.arrival<0||p.socStart>100) return setStatus("Les pourcentages de batterie doivent être entre 0 et 100.",true);
   if(p.useTarget && p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
   if(p.useSoc && p.socTrig<=p.floor) return setStatus("Le seuil d'arrêt doit être au-dessus de la réserve minimale.",true);
@@ -803,7 +864,7 @@ $("f").addEventListener("submit", async e=>{
     const rk="r:"+fq+"|"+tq;
     const R = cache[rk] ||= (lsGet("route:"+rk.toLowerCase(),7*DAY) || await getRoute(a,b).then(r=>{ lsSet("route:"+rk.toLowerCase(),r); return r; }));
     lap("route");
-    const key=$("ocmKey").value.trim();
+    const key=$("ocmKey").value.trim() || OCM_DEFAULT_KEY;
     const ck="c:"+rk+"|"+p.radius+"|"+(key?"ocm":"osm");
     if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,key,(k,t)=>setStatus(`Recherche des bornes : ${k} tronçon${k>1?"s":""} sur ${t}…`)); }
     lap("bornes");
@@ -811,8 +872,9 @@ $("f").addEventListener("submit", async e=>{
     let C=raw.filter(c=>!["private","no"].includes(c.access));
     if(p.pmin>0) C=C.filter(c=>(c.kw ?? (c.dc?p.unknownKW:22))>=p.pmin);
     C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
-    p.routeKm=R.km[R.km.length-1];
-    const res=simulate(R,C,p);
+    const RD=applyDriving(R,p);
+    p.tripKwh=RD.E[RD.E.length-1];
+    const res=simulate(RD,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
     lap("total");
