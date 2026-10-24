@@ -372,6 +372,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.0.1", d:"24/10/2026", c:[
+    "Correctif synchronisation : l'enregistrement en ligne échouait dès qu'une feuille de route était enregistrée (Firestore refuse les tableaux imbriqués), ce qui bloquait aussi les favoris",
+    "Heure de la dernière synchronisation affichée dans le bandeau"]},
   {v:"2.0", d:"24/10/2026", c:[
     "Application web installable, distincte des autres sites du dépôt (icône sur l'écran d'accueil, plein écran) ; fichiers préfixés trajetve- pour ne rien écraser",
     "Recalcul automatique dès qu'un réglage change, une fois le premier calcul fait",
@@ -1145,6 +1148,8 @@ function applyState(st){
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
   renderFavs(); updateSums(); if(lastOps.length) renderOps([]);
 }
+// Lit un document distant : format 2 = état en JSON ; ancien format = champs directs
+function decodeRemote(r){ if(r && typeof r.data==="string"){ try{ return JSON.parse(r.data); }catch(e){ return {}; } } return r||{}; }
 async function initSync(){
   if(!FIREBASE_CONFIG) return;
   const bar=$("syncbar"), txt=$("syncTxt"), btn=$("syncBtn"); bar.hidden=false;
@@ -1176,14 +1181,15 @@ async function initSync(){
     if(!user){ bar.classList.remove("on"); txt.textContent="Favoris enregistrés sur cet appareil"; btn.textContent="Se connecter"; return; }
     btn.textContent="Déconnexion"; txt.textContent="Synchronisation…";
     const ref=db.collection("trajetve").doc(user.uid);
-    const push=()=>ref.set({...localState(), device:DEVICE_ID, updatedAt:Date.now(), email:user.email||""})
-      .then(()=>{ bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; })
+    // Firestore refuse les tableaux imbriqués (tracés, courbes) : tout l'état est stocké en une chaîne JSON
+    const push=()=>ref.set({data:JSON.stringify(localState()), format:2, device:DEVICE_ID, updatedAt:Date.now(), email:user.email||""})
+      .then(()=>{ bar.classList.add("on"); txt.textContent=`Synchronisé à ${fmtClock(new Date())} · ${user.email||"compte Google"}`; })
       .catch(e=>{ console.error(e); bar.classList.remove("on"); txt.textContent=`Échec de l'enregistrement en ligne (${e.code||e.message})`; });
     try{
       const snap=await ref.get(), mergedKey="trajetve-merged-"+user.uid;
       if(!snap.exists) await push();
       else{
-        const r=snap.data();
+        const r=decodeRemote(snap.data());
         let first=true; try{ first=!localStorage.getItem(mergedKey); }catch(e){}
         if(first){
           // premier passage sur cet appareil : on fusionne les favoris locaux avec ceux du compte
@@ -1205,7 +1211,7 @@ async function initSync(){
       txt.textContent=(known[e.code]||"Synchronisation indisponible")+` (${e.code||e.message})`; return;
     }
     syncPush=()=>{ clearTimeout(timer); timer=setTimeout(push,800); };
-    unsub=ref.onSnapshot(d=>{ if(d.metadata.hasPendingWrites || !d.exists) return; const r=d.data(); if(r.device===DEVICE_ID) return; applyState(r); });
+    unsub=ref.onSnapshot(d=>{ if(d.metadata.hasPendingWrites || !d.exists) return; const raw=d.data(); if(raw.device===DEVICE_ID) return; applyState(decodeRemote(raw)); });
   });
 }
 
