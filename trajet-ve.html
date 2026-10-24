@@ -56,8 +56,25 @@ header.top{position:relative}
 .changelog ul{margin:4px 0 12px;padding-left:18px;font-size:.86rem}
 .changelog section:last-child ul{margin-bottom:0}
 form{display:grid;gap:14px}
-fieldset{border:0;padding:0;margin:0;display:grid;gap:10px}
-legend{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+form{gap:0}
+.export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.export .note{flex-basis:100%}
+.secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
+details.sec{border-top:1px solid var(--line)}
+details.sec:first-of-type{border-top:0}
+details.sec>summary{list-style:none;display:flex;align-items:baseline;gap:10px;padding:12px 0;cursor:pointer}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::after{content:"";margin-left:auto;align-self:center;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+details.sec[open]>summary::after{transform:rotate(-135deg)}
+.sec-t{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);flex:none}
+.sec-s{font-size:.82rem;color:var(--ink);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+details.sec[open] .sec-s{display:none}
+.sec-b{display:grid;gap:10px;padding-bottom:14px}
+.syncbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.84rem}
+.syncbar.on{border-color:var(--charge)}
+.syncbar.on #syncTxt::before{content:"● ";color:var(--charge)}
+button.go{margin-top:6px}
+.status{margin-top:8px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 label{display:grid;gap:4px;font-size:.88rem;font-weight:500}
 label small{color:var(--muted);font-weight:400}
@@ -163,8 +180,14 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 <div class="wrap">
   <aside class="panel">
     <form id="f" autocomplete="off">
-      <fieldset>
-        <legend>Trajet</legend>
+      <div class="syncbar" id="syncbar" hidden>
+        <span id="syncTxt">Favoris enregistrés sur cet appareil</span>
+        <button type="button" class="mini" id="syncBtn">Se connecter</button>
+      </div>
+      <div class="secctl"><button type="button" class="swap" id="secOpen">Tout développer</button><button type="button" class="swap" id="secClose">Tout réduire</button></div>
+      <details class="sec" data-sec="trajet" open>
+        <summary><span class="sec-t">Trajet</span><span class="sec-s" id="sum-trajet"></span></summary>
+        <div class="sec-b">
         <div class="favbar">
           <select id="favTrip" aria-label="Trajets favoris"><option value="">Trajets favoris…</option></select>
           <button type="button" class="mini" id="saveTrip">Enregistrer</button>
@@ -186,10 +209,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <label>Batterie à l'arrivée <small>% souhaité</small><input id="arrival" type="number" min="0" max="100" value="20"></label>
         </div>
         <label>Heure de départ<input id="dep" type="datetime-local"></label>
-      </fieldset>
-      <hr>
-      <fieldset>
-        <legend>Voiture</legend>
+        </div>
+      </details>
+      <details class="sec" data-sec="voiture" open>
+        <summary><span class="sec-t">Voiture</span><span class="sec-s" id="sum-voiture"></span></summary>
+        <div class="sec-b">
         <label>Modèle<select id="car"></select></label>
         <p class="note" id="curveInfo"></p>
         <div class="row">
@@ -201,10 +225,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <label>Charge rapide max <small>kW</small><input id="dcmax" type="number" min="20" max="400"></label>
           <label>Charge AC max <small>kW</small><input id="acmax" type="number" min="3" max="22"></label>
         </div>
-      </fieldset>
-      <hr>
-      <fieldset>
-        <legend>Conduite</legend>
+        </div>
+      </details>
+      <details class="sec" data-sec="conduite" open>
+        <summary><span class="sec-t">Conduite</span><span class="sec-s" id="sum-conduite"></span></summary>
+        <div class="sec-b">
         <div class="field">
           <span class="flabel">Vitesse sur autoroute</span>
           <div class="seg seg3" role="radiogroup" aria-label="Vitesse sur autoroute">
@@ -222,10 +247,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           </div>
           <p class="note">Hiver : +25 % de consommation, mi-saison : +10 %. Moyennes à affiner selon ta voiture.</p>
         </div>
-      </fieldset>
-      <hr>
-      <fieldset>
-        <legend>Règles d'arrêt</legend>
+        </div>
+      </details>
+      <details class="sec" data-sec="regles" open>
+        <summary><span class="sec-t">Règles d'arrêt</span><span class="sec-s" id="sum-regles"></span></summary>
+        <div class="sec-b">
         <div class="toggle">
           <input type="checkbox" id="useTime" checked>
           <div class="body">
@@ -257,10 +283,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           </div>
         </div>
         <label>Réserve minimale en route <small>%, jamais en dessous</small><input id="floor" type="number" min="0" max="50" value="10"></label>
-      </fieldset>
-      <hr>
-      <fieldset>
-        <legend>Bornes</legend>
+        </div>
+      </details>
+      <details class="sec" data-sec="bornes" open>
+        <summary><span class="sec-t">Bornes</span><span class="sec-s" id="sum-bornes"></span></summary>
+        <div class="sec-b">
         <div class="seg" role="radiogroup" aria-label="Puissance minimale des bornes">
           <input type="radio" name="pmin" id="pmin0" value="0"><label for="pmin0">Toutes</label>
           <input type="radio" name="pmin" id="pmin50" value="50" checked><label for="pmin50">50 kW+</label>
@@ -283,7 +310,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
             <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes retenues sur la carte</span></label>
           </div>
         </details>
-      </fieldset>
+        </div>
+      </details>
       <button class="go" id="go" type="submit">Calculer le trajet</button>
       <div class="status" id="status" role="status"></div>
     </form>
@@ -292,6 +320,12 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <section class="main">
     <div id="map"></div>
     <div class="stats" id="stats" hidden></div>
+    <div class="export" id="exportBar" hidden>
+      <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
+      <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
+      <button type="button" class="mini" id="copyBtn">Copier la feuille de route</button>
+      <p class="note" id="exportNote"></p>
+    </div>
     <div class="panel">
       <h2 style="margin-bottom:12px">Feuille de route</h2>
       <div id="road"><p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l'heure, la borne et le temps de charge.</p></div>
@@ -309,6 +343,12 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"1.10", d:"24/10/2026", c:[
+    "Sections du panneau de gauche repliables, avec « Tout réduire / Tout développer » et un résumé visible quand une section est fermée",
+    "Export de l'itinéraire vers Google Maps (départ, bornes, arrivée)",
+    "Export KML pour Google My Maps : chaque borne porte un libellé avec le % estimé à l'arrivée",
+    "Copie de la feuille de route en texte",
+    "Synchronisation des favoris et réglages via Firebase et connexion Google (à configurer dans le code)"]},
   {v:"1.9", d:"24/10/2026", c:[
     "Courbes de charge réelles pour chaque modèle de la liste (source EVKX), à la place de la courbe générique",
     "Temps de charge 10 → 80 % du modèle affiché sous le choix de la voiture",
@@ -814,8 +854,11 @@ const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","u
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
-function save(){ try{ const o={}; for(const r of RADIOS) o[r]=radioVal(r); for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
-function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } for(const n of RADIOS){ const r=document.querySelector(`input[name="${n}"][value="${o[n]}"]`); if(r) r.checked=true; } return true; }catch(e){ return false; } }
+function readSettings(){ const o={}; for(const r of RADIOS) o[r]=radioVal(r); for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } return o; }
+function applySettings(o,skip=[]){ for(const f of FIELDS) if(f in o && !skip.includes(f)){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } for(const n of RADIOS){ const r=document.querySelector(`input[name="${n}"][value="${o[n]}"]`); if(r) r.checked=true; } }
+let syncPush=()=>{};   // remplacée par la synchronisation serveur une fois connecté
+function save(){ try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} syncPush(); }
+function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; applySettings(o); return true; }catch(e){ return false; } }
 function showCurve(){
   const c=CARS[$("car").value], el=$("curveInfo");
   if(!c || $("car").value==="0" || !c.curve){ el.textContent="Courbe de charge générique (pleine puissance jusqu'à 50 %, puis baisse). Choisis un modèle pour sa courbe réelle."; return; }
@@ -849,7 +892,7 @@ showCurve();
 const OPS_KEY="trajetve-operateurs";
 let opsSel={mode:"all",list:[]};
 try{ const o=JSON.parse(localStorage.getItem(OPS_KEY)||"null"); if(o&&Array.isArray(o.list)) opsSel=o; }catch(e){}
-const storeOps=()=>{ try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} };
+const storeOps=()=>{ try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} syncPush(); };
 const UNKNOWN_OP="Opérateur non renseigné";
 const opOf=c=>(c.operator||"").trim()||UNKNOWN_OP;
 const opAllowed=name=>opsSel.mode==="all" || opsSel.list.includes(name);
@@ -935,7 +978,7 @@ attachAC("from"); attachAC("to");
 const FKEY="trajetve-favoris";
 let favs={trips:[],places:[]};
 try{ const f=JSON.parse(localStorage.getItem(FKEY)||"null"); if(f&&Array.isArray(f.trips)&&Array.isArray(f.places)) favs=f; }catch(e){}
-const storeFavs=()=>{ try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){ setStatus("Impossible d'enregistrer les favoris dans ce navigateur.",true); } };
+const storeFavs=()=>{ try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){ setStatus("Impossible d'enregistrer les favoris dans ce navigateur.",true); } syncPush(); };
 const same=(a,b)=>a.trim().toLowerCase()===b.trim().toLowerCase();
 function renderFavs(){
   const sel=$("favTrip"), cur=sel.value;
@@ -970,6 +1013,135 @@ document.querySelectorAll(".star").forEach(b=>b.addEventListener("click",()=>{
 $("swap").addEventListener("click",()=>{ const a=$("from").value; $("from").value=$("to").value; $("to").value=a;
   const oa=$("from-ok"), ob=$("to-ok"), t=[oa.textContent,oa.className]; oa.textContent=ob.textContent; oa.className=ob.className; ob.textContent=t[0]; ob.className=t[1]; renderFavs(); });
 renderFavs();
+
+// ---------- Sections repliables ----------
+const SEC_KEY="trajetve-sections";
+try{ const st=JSON.parse(localStorage.getItem(SEC_KEY)||"{}"); document.querySelectorAll("details.sec").forEach(d=>{ if(st[d.dataset.sec]===false) d.open=false; }); }catch(e){}
+const storeSecs=()=>{ try{ const st={}; document.querySelectorAll("details.sec").forEach(d=>st[d.dataset.sec]=d.open); localStorage.setItem(SEC_KEY,JSON.stringify(st)); }catch(e){} };
+document.querySelectorAll("details.sec").forEach(d=>d.addEventListener("toggle",storeSecs));
+$("secOpen").addEventListener("click",()=>document.querySelectorAll("details.sec").forEach(d=>d.open=true));
+$("secClose").addEventListener("click",()=>document.querySelectorAll("details.sec").forEach(d=>d.open=false));
+// Résumé affiché à côté du titre quand une section est réduite
+function updateSums(){
+  const v=id=>$(id).value, on=id=>$(id).checked, set=(k,t)=>{ $("sum-"+k).textContent=t; };
+  set("trajet",`${v("from")||"?"} → ${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
+  set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
+  set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
+  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min`:"", on("useSoc")?`à ${v("socTrig")} %`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
+  set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
+}
+$("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
+
+// ---------- Export : Google Maps, KML, texte ----------
+let lastRun=null;
+const xmlEsc=t=>String(t).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&apos;"}[c]));
+function runStops(){ return lastRun.res.steps.filter(s=>s.type==="stop"); }
+const clockAt=sec=>fmtClock(new Date(lastRun.p.dep.getTime()+sec*1000));
+$("gmapsBtn").addEventListener("click",()=>{
+  if(!lastRun) return;
+  const {a,b}=lastRun, st=runStops(), ll=o=>`${(+o.lat).toFixed(6)},${(+o.lon).toFixed(6)}`;
+  const wps=st.slice(0,9).map(s=>ll(s.c));
+  let url=`https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${ll(a)}&destination=${ll(b)}`;
+  if(wps.length) url+="&waypoints="+encodeURIComponent(wps.join("|"));
+  window.open(url,"_blank","noopener");
+  $("exportNote").textContent = (st.length>9?"Google Maps accepte 9 étapes au maximum : seules les 9 premières bornes ont été transmises. ":"")
+    + "Google Maps n'affiche pas de libellé personnalisé sur les étapes d'un itinéraire ; pour voir le nom des bornes et le % estimé, utilise le fichier KML dans Google My Maps.";
+});
+$("kmlBtn").addEventListener("click",()=>{
+  if(!lastRun) return;
+  const {res,a,b,R,fq,tq}=lastRun, st=runStops(), S=res.summary;
+  const pm=(name,desc,lat,lon,style)=>`<Placemark><name>${xmlEsc(name)}</name><description>${xmlEsc(desc)}</description><styleUrl>#${style}</styleUrl><Point><coordinates>${lon},${lat},0</coordinates></Point></Placemark>`;
+  const marks=[pm(`Départ · ${res.steps[0].soc.toFixed(0)} %`,`${a.label} — départ à ${clockAt(0)}`,a.lat,a.lon,"dep")];
+  st.forEach((s,i)=>marks.push(pm(`Arrêt ${i+1} · ${s.c.name} · arrivée ${Math.round(s.socIn)} %`,
+    `Arrivée vers ${clockAt(s.t)} avec ${Math.round(s.socIn)} %, recharge jusqu'à ${Math.round(s.socOut)} % (${Math.round(s.dur)} min). `+
+    `${s.c.kw?Math.round(s.c.kw)+" kW":"puissance non renseignée"}${s.c.operator?" · "+s.c.operator:""}`, s.c.lat, s.c.lon, "stop")));
+  marks.push(pm(`Arrivée · ${Math.round(S.soc)} %`,`${b.label} — arrivée vers ${clockAt(S.totalSec)}`,b.lat,b.lon,"end"));
+  const step=Math.max(1,Math.ceil(R.line.length/3000));
+  const coords=R.line.filter((_,i)=>i%step===0||i===R.line.length-1).map(([la,lo])=>`${lo.toFixed(5)},${la.toFixed(5)},0`).join(" ");
+  const kml=`<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xmlEsc(`Trajet VE ${fq} → ${tq}`)}</name>
+<Style id="dep"><IconStyle><color>ff2c2016</color></IconStyle></Style>
+<Style id="stop"><IconStyle><color>ff5f8a0d</color></IconStyle></Style>
+<Style id="end"><IconStyle><color>ff1e26b3</color></IconStyle></Style>
+<Style id="route"><LineStyle><color>ffd84f1f</color><width>4</width></LineStyle></Style>
+<Placemark><name>Itinéraire</name><styleUrl>#route</styleUrl><LineString><tessellate>1</tessellate><coordinates>${coords}</coordinates></LineString></Placemark>
+${marks.join("\n")}
+</Document></kml>`;
+  const blob=new Blob([kml],{type:"application/vnd.google-earth.kml+xml"});
+  const link=document.createElement("a"); link.href=URL.createObjectURL(blob);
+  link.download=`trajet-ve-${(fq+"-"+tq).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-")}.kml`;
+  document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(link.href),5000);
+  $("exportNote").textContent="Fichier téléchargé. Dans Google My Maps (mymaps.google.com) : Créer une carte → Importer → choisis le fichier. La carte apparaît ensuite dans l'appli Google Maps, onglet Enregistrés → Cartes.";
+});
+$("copyBtn").addEventListener("click",async()=>{
+  if(!lastRun) return;
+  const {res,fq,tq}=lastRun, S=res.summary, st=runStops();
+  const lines=[`Trajet VE — ${fq} → ${tq}`, `Départ ${clockAt(0)} avec ${Math.round(res.steps[0].soc)} %`];
+  st.forEach((s,i)=>lines.push(`${i+1}. ${clockAt(s.t)} — ${s.c.name}${s.c.kw?" ("+Math.round(s.c.kw)+" kW)":""} : arrivée ${Math.round(s.socIn)} %, recharge à ${Math.round(s.socOut)} % en ${Math.round(s.dur)} min — https://www.google.com/maps/search/?api=1&query=${s.c.lat},${s.c.lon}`));
+  lines.push(`Arrivée ${clockAt(S.totalSec)} avec ${Math.round(S.soc)} % — ${fmtKm(S.km)}, ${fmtH(S.totalSec)}`);
+  const txt=lines.join("\n");
+  try{ await navigator.clipboard.writeText(txt); $("exportNote").textContent="Feuille de route copiée."; }
+  catch(e){ $("exportNote").textContent="Copie impossible dans ce navigateur."; }
+});
+
+// ---------- Synchronisation des favoris et réglages (Firebase) ----------
+// Pour l'activer : renseigne la configuration Firebase de ton projet ci-dessous (Console Firebase → Paramètres du projet → Vos applications).
+// Il faut aussi activer la connexion Google (Authentication) et ajouter cette règle Firestore :
+//   match /trajetve/{uid} { allow read, write: if request.auth != null && request.auth.uid == uid; }
+const FIREBASE_CONFIG=null; // ex. { apiKey:"…", authDomain:"…firebaseapp.com", projectId:"…", appId:"…" }
+const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
+function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
+const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st}; };
+function applyState(st){
+  if(st.favs){ favs={trips:st.favs.trips||[],places:st.favs.places||[]}; try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){} }
+  if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
+  if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
+  renderFavs(); updateSums(); if(lastOps.length) renderOps([]);
+}
+async function initSync(){
+  if(!FIREBASE_CONFIG) return;
+  const bar=$("syncbar"), txt=$("syncTxt"), btn=$("syncBtn"); bar.hidden=false;
+  try{
+    const V="10.12.2", base=`https://www.gstatic.com/firebasejs/${V}/`;
+    await loadScript(base+"firebase-app-compat.js");
+    await Promise.all([loadScript(base+"firebase-auth-compat.js"),loadScript(base+"firebase-firestore-compat.js")]);
+  }catch(e){ txt.textContent="Synchronisation indisponible (chargement impossible)"; btn.hidden=true; return; }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const auth=firebase.auth(), db=firebase.firestore();
+  let unsub=null, timer=0;
+  btn.addEventListener("click",async()=>{
+    if(auth.currentUser){ await auth.signOut(); return; }
+    try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    catch(e){ txt.textContent= e.code==="auth/unauthorized-domain" ? "Domaine non autorisé dans Firebase Authentication" : "Connexion annulée ou impossible"; }
+  });
+  auth.onAuthStateChanged(async user=>{
+    unsub?.(); unsub=null; syncPush=()=>{};
+    if(!user){ bar.classList.remove("on"); txt.textContent="Favoris enregistrés sur cet appareil"; btn.textContent="Se connecter"; return; }
+    btn.textContent="Déconnexion"; txt.textContent="Synchronisation…";
+    const ref=db.collection("trajetve").doc(user.uid);
+    const push=()=>ref.set({...localState(), device:DEVICE_ID, updatedAt:Date.now(), email:user.email||""})
+      .then(()=>{ bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; })
+      .catch(()=>{ bar.classList.remove("on"); txt.textContent="Échec de l'enregistrement en ligne"; });
+    try{
+      const snap=await ref.get(), mergedKey="trajetve-merged-"+user.uid;
+      if(!snap.exists) await push();
+      else{
+        const r=snap.data();
+        let first=true; try{ first=!localStorage.getItem(mergedKey); }catch(e){}
+        if(first){
+          // premier passage sur cet appareil : on fusionne les favoris locaux avec ceux du compte
+          const k=t=>(t.from+"|"+t.to).toLowerCase();
+          const trips=[...(r.favs?.trips||[])]; for(const t of favs.trips) if(!trips.some(x=>k(x)===k(t))) trips.push(t);
+          const places=[...new Set([...(r.favs?.places||[]),...favs.places])].sort((x,y)=>x.localeCompare(y,"fr"));
+          applyState({...r, favs:{trips,places}}); await push();
+        } else { applyState(r); bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; }
+        try{ localStorage.setItem(mergedKey,"1"); }catch(e){}
+      }
+    }catch(e){ txt.textContent= e.code==="permission-denied" ? "Accès refusé : vérifie les règles Firestore" : "Synchronisation indisponible"; return; }
+    syncPush=()=>{ clearTimeout(timer); timer=setTimeout(push,800); };
+    unsub=ref.onSnapshot(d=>{ if(d.metadata.hasPendingWrites || !d.exists) return; const r=d.data(); if(r.device===DEVICE_ID) return; applyState(r); });
+  });
+}
 
 let cache={};
 $("f").addEventListener("submit", async e=>{
@@ -1016,6 +1188,7 @@ $("f").addEventListener("submit", async e=>{
     const res=simulate(RD,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
+    lastRun = res.summary ? {res,p,a,b,R,fq,tq} : null; $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
     setStatus(miss?`${miss} tronçon(s) sans réponse du service des bornes : relance le calcul pour les compléter.`:(res.error?"":`${raw.warn?raw.warn+" ":""}${C.length} bornes le long du trajet (${raw.source}). ${timing}`), !!miss||!!raw.warn);
@@ -1025,6 +1198,8 @@ $("f").addEventListener("submit", async e=>{
     setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
   }finally{ btn.disabled=false; }
 });
+updateSums();
+initSync();
 </script>
 </body>
 </html>
