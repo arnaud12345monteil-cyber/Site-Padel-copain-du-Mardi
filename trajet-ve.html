@@ -1,7 +1,10 @@
 <!doctype html>
 <!--
   Trajet VE — planificateur de trajet en voiture électrique
-  Fichier unique, hébergé sur GitHub Pages.
+  Application web installable, hébergée sur GitHub Pages dans le dépôt Site-Padel-copain-du-Mardi, à côté des autres sites.
+  Fichiers propres à Trajet VE (tous préfixés pour ne rien écraser) : trajet-ve.html (ce fichier), trajetve.webmanifest,
+  trajetve-sw.js, trajetve-icon-192.png, trajetve-icon-512.png, trajetve-icon-maskable-512.png.
+  À chaque nouvelle version : mettre à jour CHANGELOG ci-dessous ET la constante CACHE dans trajetve-sw.js.
 
   Version : voir la constante CHANGELOG dans le script (la première entrée est la version affichée sur le site).
   À chaque modification : ajouter une entrée en tête de CHANGELOG avec le numéro, la date et la liste des changements.
@@ -15,6 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="manifest" href="trajetve.webmanifest">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="icon" href="trajetve-icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="trajetve-icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trajet VE">
 <style>
 /* Mise en page : panneau de saisie à gauche, carte + feuille de route à droite ; empilé sur mobile */
 :root{
@@ -57,6 +66,14 @@ header.top{position:relative}
 .changelog section:last-child ul{margin-bottom:0}
 form{display:grid;gap:14px}
 form{gap:0}
+.sheets{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.sheets li{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.sheets li.cur{border-color:var(--accent)}
+.sheets .open{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;font:inherit}
+.sheets .open b{display:block;font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheets .open span{font-size:.78rem;color:var(--muted)}
+.sheets .del{flex:none;border:0;background:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:6px}
+.sheets .del:hover{color:var(--bad)}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .export .note{flex-basis:100%}
 .secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
@@ -73,7 +90,9 @@ details.sec[open] .sec-s{display:none}
 .syncbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.84rem}
 .syncbar.on{border-color:var(--charge)}
 .syncbar.on #syncTxt::before{content:"● ";color:var(--charge)}
-button.go{margin-top:6px}
+.actions{display:flex;gap:8px;margin-top:6px}
+.actions .go{flex:1}
+.actions .mini{padding:0 16px}
 .status{margin-top:8px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 label{display:grid;gap:4px;font-size:.88rem;font-weight:500}
@@ -172,6 +191,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <h1>Trajet VE</h1>
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+    <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
   </div>
   <div class="changelog" id="changelog" hidden></div>
@@ -185,6 +205,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         <button type="button" class="mini" id="syncBtn">Se connecter</button>
       </div>
       <div class="secctl"><button type="button" class="swap" id="secOpen">Tout développer</button><button type="button" class="swap" id="secClose">Tout réduire</button></div>
+      <details class="sec" data-sec="feuilles" open>
+        <summary><span class="sec-t">Feuilles de route</span><span class="sec-s" id="sum-feuilles"></span></summary>
+        <div class="sec-b"><div id="sheetList"></div></div>
+      </details>
       <details class="sec" data-sec="trajet" open>
         <summary><span class="sec-t">Trajet</span><span class="sec-s" id="sum-trajet"></span></summary>
         <div class="sec-b">
@@ -312,7 +336,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         </details>
         </div>
       </details>
-      <button class="go" id="go" type="submit">Calculer le trajet</button>
+      <div class="actions">
+        <button class="go" id="go" type="submit">Calculer le trajet</button>
+        <button type="button" class="mini" id="clearBtn">Effacer</button>
+      </div>
+      <p class="note">Après un premier calcul, chaque modification de réglage relance le calcul automatiquement.</p>
       <div class="status" id="status" role="status"></div>
     </form>
   </aside>
@@ -323,6 +351,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
     <div class="export" id="exportBar" hidden>
       <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
       <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
+      <button type="button" class="mini" id="saveSheetBtn">Enregistrer la feuille de route</button>
       <button type="button" class="mini" id="copyBtn">Copier la feuille de route</button>
       <p class="note" id="exportNote"></p>
     </div>
@@ -343,6 +372,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.0", d:"24/10/2026", c:[
+    "Application web installable, distincte des autres sites du dépôt (icône sur l'écran d'accueil, plein écran) ; fichiers préfixés trajetve- pour ne rien écraser",
+    "Recalcul automatique dès qu'un réglage change, une fois le premier calcul fait",
+    "Bouton « Effacer » pour vider le trajet et la feuille de route",
+    "Enregistrement des feuilles de route et réouverture sans recalcul, synchronisées avec le compte Google"]},
   {v:"1.10.2", d:"24/10/2026", c:[
     "Messages de synchronisation détaillés avec le code d'erreur Firebase, pour diagnostiquer une connexion qui échoue",
     "Connexion par redirection si la fenêtre de connexion Google est bloquée"]},
@@ -949,7 +983,7 @@ function attachAC(id){
     inp.value=it.value; close();
     if(it.lat!=null){ lsSet("adr:"+it.value.toLowerCase(),{lat:it.lat,lon:it.lon,label:[it.main,it.sub].filter(Boolean).join(", ")}); ok.textContent="✓ "+[it.main,it.sub].filter(Boolean).join(", "); ok.classList.remove("warn"); }
     else ok.textContent="";
-    renderFavs();
+    renderFavs(); autoCalc();
   };
   const search=async()=>{
     const q=inp.value.trim();
@@ -995,7 +1029,7 @@ function renderFavs(){
 }
 $("favTrip").addEventListener("change",e=>{
   const t=favs.trips[e.target.value]; if(t){ $("from").value=t.from; $("to").value=t.to; $("from-ok").textContent=""; $("to-ok").textContent=""; }
-  renderFavs();
+  renderFavs(); if(t) autoCalc();
 });
 $("saveTrip").addEventListener("click",()=>{
   const from=$("from").value.trim(), to=$("to").value.trim();
@@ -1016,7 +1050,7 @@ document.querySelectorAll(".star").forEach(b=>b.addEventListener("click",()=>{
 }));
 ["from","to"].forEach(id=>$(id).addEventListener("input",renderFavs));
 $("swap").addEventListener("click",()=>{ const a=$("from").value; $("from").value=$("to").value; $("to").value=a;
-  const oa=$("from-ok"), ob=$("to-ok"), t=[oa.textContent,oa.className]; oa.textContent=ob.textContent; oa.className=ob.className; ob.textContent=t[0]; ob.className=t[1]; renderFavs(); });
+  const oa=$("from-ok"), ob=$("to-ok"), t=[oa.textContent,oa.className]; oa.textContent=ob.textContent; oa.className=ob.className; ob.textContent=t[0]; ob.className=t[1]; renderFavs(); autoCalc(); });
 renderFavs();
 
 // ---------- Sections repliables ----------
@@ -1103,9 +1137,10 @@ const FIREBASE_CONFIG={
 };
 const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
 function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
-const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st}; };
+const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets}; };
 function applyState(st){
   if(st.favs){ favs={trips:st.favs.trips||[],places:st.favs.places||[]}; try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){} }
+  if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
   renderFavs(); updateSums(); if(lastOps.length) renderOps([]);
@@ -1155,7 +1190,9 @@ async function initSync(){
           const k=t=>(t.from+"|"+t.to).toLowerCase();
           const trips=[...(r.favs?.trips||[])]; for(const t of favs.trips) if(!trips.some(x=>k(x)===k(t))) trips.push(t);
           const places=[...new Set([...(r.favs?.places||[]),...favs.places])].sort((x,y)=>x.localeCompare(y,"fr"));
-          applyState({...r, favs:{trips,places}}); await push();
+          const sh=[...(r.sheets||[])]; for(const x of sheets) if(!sh.some(y=>y.id===x.id)) sh.push(x);
+          sh.sort((x,y)=>y.savedAt-x.savedAt); if(sh.length>SHEETS_MAX) sh.length=SHEETS_MAX;
+          applyState({...r, favs:{trips,places}, sheets:sh}); await push();
         } else { applyState(r); bar.classList.add("on"); txt.textContent=`Synchronisé · ${user.email||"compte Google"}`; }
         try{ localStorage.setItem(mergedKey,"1"); }catch(e){}
       }
@@ -1173,6 +1210,70 @@ async function initSync(){
 }
 
 let cache={};
+// ---------- Recalcul automatique, effacement, feuilles de route enregistrées ----------
+let calcBusy=false, calcAgain=false, autoT=0, curSheet=null;
+const NO_AUTO=["from","to","ocmKey","favTrip"];
+function autoCalc(){ if(!lastCalcOk || !$("from").value.trim() || !$("to").value.trim()) return; clearTimeout(autoT); autoT=setTimeout(()=>$("f").requestSubmit(),500); }
+$("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.includes(e.target.id)) return; autoCalc(); });
+
+function clearResults(){
+  lastRun=null; lastCalcOk=false; curSheet=null;
+  if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
+  $("stats").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
+  $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
+  renderSheets();
+}
+$("clearBtn").addEventListener("click",()=>{
+  clearTimeout(autoT); calcAgain=false;
+  $("from").value=""; $("to").value=""; $("from-ok").textContent=""; $("to-ok").textContent=""; $("favTrip").value="";
+  clearResults(); renderFavs(); updateSums(); setStatus("Trajet et feuille de route effacés.");
+});
+
+const SHEETS_KEY="trajetve-feuilles", SHEETS_MAX=30;
+let sheets=[];
+try{ const o=JSON.parse(localStorage.getItem(SHEETS_KEY)||"[]"); if(Array.isArray(o)) sheets=o; }catch(e){}
+const storeSheets=()=>{ try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){ setStatus("Stockage plein : supprime d'anciennes feuilles de route.",true); } syncPush(); };
+const fmtDate=t=>new Date(t).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+fmtClock(new Date(t));
+function renderSheets(){
+  const box=$("sheetList");
+  $("sum-feuilles").textContent=sheets.length?`${sheets.length} enregistrée${sheets.length>1?"s":""}`:"aucune";
+  if(!sheets.length){ box.innerHTML='<p class="note">Aucune feuille de route enregistrée. Après un calcul, utilise « Enregistrer la feuille de route » sous le résumé.</p>'; return; }
+  box.innerHTML='<ul class="sheets">'+sheets.map(sh=>`<li class="${sh.id===curSheet?"cur":""}"><button type="button" class="open" data-open="${sh.id}"><b>${esc(sh.fq)} → ${esc(sh.tq)}</b><span>Départ ${esc(fmtDate(sh.p.dep))} · ${sh.res.summary.stops} arrêt${sh.res.summary.stops>1?"s":""} · ${fmtH(sh.res.summary.totalSec)}</span></button><button type="button" class="del" data-del="${sh.id}" title="Supprimer" aria-label="Supprimer">×</button></li>`).join("")+"</ul>";
+}
+$("sheetList").addEventListener("click",e=>{
+  const o=e.target.closest("[data-open]"), d=e.target.closest("[data-del]");
+  if(o) openSheet(sheets.find(x=>x.id===o.dataset.open));
+  if(d){ const sh=sheets.find(x=>x.id===d.dataset.del); sheets=sheets.filter(x=>x.id!==d.dataset.del); storeSheets(); if(curSheet===d.dataset.del) curSheet=null; renderSheets(); if(sh) setStatus(`Feuille de route ${sh.fq} → ${sh.tq} supprimée.`); }
+});
+$("saveSheetBtn").addEventListener("click",()=>{
+  if(!lastRun) return;
+  const {res,p,a,b,R,fq,tq}=lastRun;
+  const step=Math.max(1,Math.ceil(R.line.length/400));
+  const slimC=c=>({id:c.id,lat:c.lat,lon:c.lon,name:c.name,operator:c.operator||"",kw:c.kw,dc:c.dc,det:c.det,km:c.km,access:c.access||"",sockets:c.sockets||[]});
+  const sh={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), savedAt:Date.now(), fq, tq,
+    a:{lat:a.lat,lon:a.lon,label:a.label}, b:{lat:b.lat,lon:b.lon,label:b.label},
+    p:{dep:p.dep.toISOString(), cap:p.cap, arrival:p.arrival, floor:p.floor, socStart:p.socStart, socTrig:p.socTrig, useSoc:p.useSoc, tripKwh:p.tripKwh},
+    res:{steps:res.steps.map(s=>s.type==="stop"?{...s,c:slimC(s.c)}:s), curve:res.curve.map(([k,v])=>[+k.toFixed(1),+v.toFixed(1)]), summary:res.summary},
+    line:R.line.filter((_,i)=>i%step===0||i===R.line.length-1).map(([la,lo])=>[+la.toFixed(5),+lo.toFixed(5)]) };
+  sheets.unshift(sh); if(sheets.length>SHEETS_MAX) sheets.length=SHEETS_MAX;
+  curSheet=sh.id; storeSheets(); renderSheets();
+  $("exportNote").textContent="Feuille de route enregistrée : retrouve-la en haut du panneau de gauche.";
+});
+function openSheet(sh){
+  if(!sh) return;
+  clearTimeout(autoT); calcAgain=false;
+  $("from").value=sh.fq; $("to").value=sh.tq;
+  $("from-ok").textContent=""; $("to-ok").textContent="";
+  const p={...sh.p, dep:new Date(sh.p.dep)}, R={line:sh.line};
+  drawMap(R,[],sh.res,sh.a,sh.b,false);
+  render(sh.res,p,sh.a,sh.b);
+  lastRun={res:sh.res,p,a:sh.a,b:sh.b,R,fq:sh.fq,tq:sh.tq}; $("exportBar").hidden=false; $("exportNote").textContent="";
+  lastCalcOk=true; curSheet=sh.id; renderSheets(); renderFavs(); updateSums();
+  setStatus(`Feuille de route enregistrée le ${fmtDate(sh.savedAt)}, affichée telle quelle. Modifie un réglage ou clique sur Calculer pour la recalculer.`);
+  window.scrollTo({top:$("map").getBoundingClientRect().top+scrollY-10,behavior:"smooth"});
+}
+renderSheets();
+
 $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
@@ -1188,7 +1289,8 @@ $("f").addEventListener("submit", async e=>{
   if(p.useTarget && p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
   if(p.useSoc && p.socTrig<=p.floor) return setStatus("Le seuil d'arrêt doit être au-dessus de la réserve minimale.",true);
   if(p.useTarget && p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
-  const btn=$("go"); btn.disabled=true;
+  if(calcBusy){ calcAgain=true; return; }
+  calcBusy=true; const btn=$("go"); btn.textContent="Calcul en cours…";
   try{
     const fq=$("from").value.trim(), tq=$("to").value.trim();
     setStatus("Recherche des adresses…");
@@ -1217,6 +1319,7 @@ $("f").addEventListener("submit", async e=>{
     const res=simulate(RD,C,p);
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
+    curSheet=null; renderSheets();
     lastRun = res.summary ? {res,p,a,b,R,fq,tq} : null; $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
@@ -1225,10 +1328,16 @@ $("f").addEventListener("submit", async e=>{
     console.error(err);
     if(/Open Charge Map/.test(err.message||"")) $("moreOpts").open=true;
     setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
-  }finally{ btn.disabled=false; }
+  }finally{ calcBusy=false; btn.textContent="Calculer le trajet"; if(calcAgain){ calcAgain=false; setTimeout(()=>$("f").requestSubmit(),0); } }
 });
 updateSums();
 initSync();
+// ---------- Application installable (PWA) ----------
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("trajetve-sw.js",{scope:"./trajet-ve.html"}).catch(()=>{});   // portée limitée à cette page : les autres sites du dépôt ne sont pas concernés
+let installEvt=null;
+addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; $("installBtn").hidden=false; });
+$("installBtn").addEventListener("click",async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(()=>{}); installEvt=null; $("installBtn").hidden=true; });
+addEventListener("appinstalled",()=>{ $("installBtn").hidden=true; });
 </script>
 </body>
 </html>
