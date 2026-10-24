@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Trajet VE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Mise en page : panneau de saisie à gauche, carte + feuille de route à droite ; empilé sur mobile */
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --ink:#16202c; --muted:#5b6878; --line:#d5dbe3;
+  --accent:#1f4fd8; --accent-ink:#ffffff; --charge:#0d8a5f; --warn:#b4570a; --bad:#b3261e;
+  --field:#f6f8fb;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3443;
+  --accent:#6b93ff; --accent-ink:#0b1020; --charge:#3cc78f; --warn:#f0a050; --bad:#ff7a70; --field:#1d2531;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3443;
+  --accent:#6b93ff; --accent-ink:#0b1020; --charge:#3cc78f; --warn:#f0a050; --bad:#ff7a70; --field:#1d2531;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h1{font-size:1.7rem;font-weight:700}
+h2{font-size:1.15rem;font-weight:600}
+.wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:16px;max-width:1400px;margin:0 auto}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1400px;margin:0 auto 14px}
+header.top p{margin:0;color:var(--muted)}
+form{display:grid;gap:14px}
+fieldset{border:0;padding:0;margin:0;display:grid;gap:10px}
+legend{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:grid;gap:4px;font-size:.88rem;font-weight:500}
+label small{color:var(--muted);font-weight:400}
+input,select{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=number]{font-family:var(--f-mono);font-size:.92rem}
+.toggle{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.toggle input[type=checkbox]{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--accent)}
+.toggle .body{display:grid;gap:6px;flex:1;min-width:0}
+.toggle .inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toggle .inline input{width:84px}
+hr{border:0;border-top:1px solid var(--line);margin:2px 0}
+button.go{font:600 1rem var(--f-display);letter-spacing:.04em;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:12px;cursor:pointer}
+button.go:disabled{opacity:.55;cursor:progress}
+.status{font-size:.88rem;color:var(--muted);min-height:1.3em}
+.status.err{color:var(--bad)}
+details{font-size:.88rem}
+summary{cursor:pointer;color:var(--muted)}
+.main{display:grid;gap:16px;min-width:0;align-content:start}
+#map{height:430px;border-radius:10px;border:1px solid var(--line);background:var(--field)}
+@media (max-width:860px){#map{height:320px}}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{background:var(--panel);padding:10px 12px}
+.stat b{display:block;font:600 1.25rem var(--f-mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+ol.road{list-style:none;margin:0;padding:0;display:grid}
+ol.road li{display:grid;grid-template-columns:64px 22px 1fr;gap:10px;align-items:start}
+.clock{font:600 .95rem var(--f-mono);font-variant-numeric:tabular-nums;padding-top:2px;text-align:right}
+.rail{position:relative;align-self:stretch;display:flex;justify-content:center}
+.rail::before{content:"";position:absolute;top:0;bottom:0;width:3px;background:var(--line)}
+li:first-child .rail::before{top:10px}
+li:last-child .rail::before{bottom:calc(100% - 10px)}
+.dot{position:relative;margin-top:4px;width:16px;height:16px;border-radius:50%;background:var(--panel);border:3px solid var(--ink)}
+.dot.charge{border-color:var(--charge);background:var(--charge)}
+.dot.drive{width:8px;height:8px;border:0;background:var(--muted);margin-top:9px}
+.item{padding-bottom:16px;min-width:0}
+.item h3{font-size:1.02rem;font-weight:600}
+.item p{margin:2px 0 0;color:var(--muted);font-size:.9rem}
+.drive .item p{margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font:500 .78rem var(--f-mono);padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--field);white-space:nowrap}
+.chip.kw{border-color:var(--charge);color:var(--charge)}
+.chip.why{color:var(--warn);border-color:var(--warn)}
+.socbar{display:inline-flex;align-items:center;gap:6px;font:500 .85rem var(--f-mono);font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);padding:24px 8px;text-align:center}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+.chart-box{overflow-x:auto}
+svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.leaflet-container{font:inherit}
+.pin{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font:700 12px var(--f-mono);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.pin.s{background:#16202c}.pin.e{background:#b3261e}.pin.c{background:#0d8a5f}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Trajet VE</h1>
+  <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+</header>
+
+<div class="wrap">
+  <aside class="panel">
+    <form id="f" autocomplete="off">
+      <fieldset>
+        <legend>Trajet</legend>
+        <label>Départ<input id="from" required value="Toulouse"></label>
+        <label>Arrivée<input id="to" required value="Lyon"></label>
+        <div class="row">
+          <label>Heure de départ<input id="dep" type="datetime-local"></label>
+          <label>Batterie au départ <small>%</small><input id="socStart" type="number" min="1" max="100" value="85"></label>
+        </div>
+      </fieldset>
+      <hr>
+      <fieldset>
+        <legend>Voiture</legend>
+        <label>Modèle<select id="car"></select></label>
+        <div class="row">
+          <label>Consommation <small>kWh/100 km</small><input id="conso" type="number" step="0.1" min="5" max="50"></label>
+          <label>Batterie utile <small>kWh</small><input id="cap" type="number" step="0.1" min="10" max="200"></label>
+        </div>
+        <div class="row">
+          <label>Charge rapide max <small>kW</small><input id="dcmax" type="number" min="20" max="400"></label>
+          <label>Charge AC max <small>kW</small><input id="acmax" type="number" min="3" max="22"></label>
+        </div>
+      </fieldset>
+      <hr>
+      <fieldset>
+        <legend>Règles d'arrêt</legend>
+        <div class="toggle">
+          <input type="checkbox" id="useTime" checked>
+          <div class="body">
+            <label for="useTime" style="display:block">Arrêt au plus tard toutes les</label>
+            <div class="inline"><input id="maxMin" type="number" min="30" max="600" value="120"> minutes de route</div>
+          </div>
+        </div>
+        <div class="toggle">
+          <input type="checkbox" id="useSoc" checked>
+          <div class="body">
+            <label for="useSoc" style="display:block">Arrêt quand la batterie descend à</label>
+            <div class="inline"><input id="socTrig" type="number" min="5" max="80" value="20"> %</div>
+            <p class="note">Ignoré si l'arrivée est atteignable sans passer sous la réserve.</p>
+          </div>
+        </div>
+        <div class="row">
+          <label>Réserve minimale <small>%</small><input id="floor" type="number" min="0" max="50" value="10"></label>
+          <label>Recharger jusqu'à <small>%</small><input id="target" type="number" min="30" max="100" value="80"></label>
+        </div>
+        <label>Durée minimale d'un arrêt <small>minutes</small><input id="minStop" type="number" min="0" max="120" value="15"></label>
+      </fieldset>
+      <details>
+        <summary>Options des bornes</summary>
+        <div style="display:grid;gap:10px;margin-top:10px">
+          <div class="row">
+            <label>Distance max de la route <small>km</small><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2"></label>
+            <label>Puissance supposée si inconnue <small>kW</small><input id="unknownKW" type="number" min="7" max="350" value="50"></label>
+          </div>
+          <label class="toggle" style="display:flex"><input type="checkbox" id="fastOnly" checked><span>Bornes rapides seulement (CCS / ≥ 40 kW)</span></label>
+          <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes trouvées sur la carte</span></label>
+        </div>
+      </details>
+      <button class="go" id="go" type="submit">Calculer le trajet</button>
+      <div class="status" id="status" role="status"></div>
+    </form>
+  </aside>
+
+  <section class="main">
+    <div id="map"></div>
+    <div class="stats" id="stats" hidden></div>
+    <div class="panel">
+      <h2 style="margin-bottom:12px">Feuille de route</h2>
+      <div id="road"><p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l'heure, la borne et le temps de charge.</p></div>
+    </div>
+    <div class="panel" id="chartPanel" hidden>
+      <h2 style="margin-bottom:8px">Niveau de batterie sur le trajet</h2>
+      <div class="chart-box" id="chart"></div>
+    </div>
+    <p class="note">Sources : géocodage Photon et Base Adresse Nationale, fond de carte CARTO, itinéraire OSRM, bornes OpenStreetMap (Overpass). Consommation supposée constante : pas de prise en compte du relief, de la météo ni de la vitesse réelle. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+// ---------- Modèles (valeurs indicatives, à ajuster) ----------
+const CARS = [
+  {n:"Personnalisé", cap:60, conso:18, dc:100, ac:11},
+  {n:"Tesla Model 3 Propulsion", cap:57.5, conso:16, dc:170, ac:11},
+  {n:"Tesla Model 3 Grande Autonomie", cap:75, conso:16.5, dc:250, ac:11},
+  {n:"Tesla Model Y Grande Autonomie", cap:75, conso:18, dc:250, ac:11},
+  {n:"Renault 5 E-Tech 52 kWh", cap:52, conso:16, dc:100, ac:11},
+  {n:"Renault Mégane E-Tech EV60", cap:60, conso:17.5, dc:130, ac:22},
+  {n:"Renault Scénic E-Tech 87 kWh", cap:87, conso:18.5, dc:150, ac:22},
+  {n:"Peugeot e-208 (51 kWh)", cap:48, conso:16, dc:100, ac:11},
+  {n:"Peugeot e-3008 (73 kWh)", cap:73, conso:18.5, dc:160, ac:11},
+  {n:"Volkswagen ID.3 Pro", cap:59, conso:17, dc:120, ac:11},
+  {n:"Skoda Enyaq 85", cap:77, conso:19, dc:135, ac:11},
+  {n:"Kia EV6 77 kWh", cap:74, conso:19, dc:230, ac:11},
+  {n:"Hyundai Ioniq 5 84 kWh", cap:80, conso:19, dc:230, ac:11},
+  {n:"BYD Atto 3", cap:60, conso:18, dc:88, ac:11},
+  {n:"MG4 Long Range", cap:61.7, conso:17.5, dc:135, ac:11},
+  {n:"Dacia Spring", cap:25, conso:14, dc:30, ac:7}
+];
+
+// ---------- Utilitaires ----------
+const $ = id => document.getElementById(id);
+const R_EARTH = 6371;
+function hav(la1,lo1,la2,lo2){
+  const r=Math.PI/180, dLa=(la2-la1)*r, dLo=(lo2-lo1)*r;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)**2;
+  return 2*R_EARTH*Math.asin(Math.sqrt(a));
+}
+const fmtH = s => { const m=Math.round(s/60); const h=Math.floor(m/60); return h? `${h} h ${String(m%60).padStart(2,"0")}` : `${m} min`; };
+const fmtKm = k => k<10 ? k.toFixed(1).replace(".",",")+" km" : Math.round(k).toLocaleString("fr-FR")+" km";
+const fmtClock = d => d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function setStatus(msg, err){ const s=$("status"); s.textContent=msg||""; s.classList.toggle("err",!!err); }
+
+// ---------- Courbe de charge ----------
+// Puissance acceptée par la voiture selon le % : plein régime jusqu'à 50 %, baisse jusqu'à 80 %, faible ensuite.
+function rate(soc, ch){
+  if(!ch.dc) return Math.min(ch.kw, ch.carKW);
+  const f = soc<50 ? 1 : soc<80 ? 1-0.5*(soc-50)/30 : 0.5-0.3*(soc-80)/20;
+  return Math.max(3, Math.min(ch.kw, ch.carKW*f));
+}
+const EFF = 0.92; // pertes de charge
+function chargeMinutes(a,b,ch,cap){
+  let m=0;
+  for(let p=a;p<b-1e-9;p+=0.5){ const st=Math.min(0.5,b-p); m += (cap*st/100/EFF)/rate(p+st/2,ch)*60; }
+  return m;
+}
+function socAfterMinutes(a,minutes,ch,cap,max){
+  let p=a,m=0;
+  while(p<max-1e-9){ const st=Math.min(0.5,max-p); const dm=(cap*st/100/EFF)/rate(p+st/2,ch)*60; if(m+dm>minutes) break; m+=dm; p+=st; }
+  return p;
+}
+
+// ---------- Réseau ----------
+// Photon (monde) puis Base Adresse Nationale (France) : aucun des deux n'exige de référent HTTP
+async function geocode(q){
+  const tries=[
+    async()=>{ const r=await fetch("https://photon.komoot.io/api/?limit=1&lang=fr&q="+encodeURIComponent(q)); if(!r.ok) throw 0;
+      const f=(await r.json()).features?.[0]; if(!f) return null; const pr=f.properties;
+      return {lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0], label:[pr.name,pr.city||pr.county,pr.state].filter(Boolean).join(", ")}; },
+    async()=>{ const r=await fetch("https://api-adresse.data.gouv.fr/search/?limit=1&q="+encodeURIComponent(q)); if(!r.ok) throw 0;
+      const f=(await r.json()).features?.[0]; if(!f) return null;
+      return {lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0], label:f.properties.label+", "+(f.properties.context||"")}; }
+  ];
+  let reached=false;
+  for(const t of tries){ try{ const g=await t(); reached=true; if(g) return g; }catch(e){} }
+  throw new Error(reached?`Lieu introuvable : « ${q} »`:"Recherche d'adresse indisponible, vérifie ta connexion.");
+}
+async function getRoute(a,b){
+  const u=`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson&annotations=distance,duration`;
+  const r=await fetch(u);
+  if(!r.ok) throw new Error("Calcul d'itinéraire indisponible ("+r.status+")");
+  const j=await r.json();
+  if(j.code!=="Ok"||!j.routes?.length) throw new Error("Aucun itinéraire routier trouvé entre ces deux lieux.");
+  const rt=j.routes[0], coords=rt.geometry.coordinates;
+  const an=rt.legs[0].annotation;
+  // Échantillonnage ~1 km
+  const lat=[coords[0][1]], lon=[coords[0][0]], km=[0], sec=[0];
+  let cKm=0, cSec=0, lastKm=0;
+  for(let i=1;i<coords.length;i++){
+    cKm += (an.distance[i-1]||0)/1000; cSec += an.duration[i-1]||0;
+    if(cKm-lastKm>=1 || i===coords.length-1){ lat.push(coords[i][1]); lon.push(coords[i][0]); km.push(cKm); sec.push(cSec); lastKm=cKm; }
+  }
+  return {lat,lon,km,sec,line:coords.map(c=>[c[1],c[0]])};
+}
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+async function overpass(q){
+  let last;
+  for(const ep of OVERPASS){
+    try{
+      const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      if(r.ok) return await r.json();
+      last=new Error("Overpass "+r.status);
+    }catch(e){ last=e; }
+  }
+  throw last||new Error("Overpass indisponible");
+}
+async function getChargers(R, radiusKm, onProgress){
+  // points tous les ~3 km, requêtes par tronçons d'environ 240 km
+  const pts=[]; let lastK=-99;
+  for(let i=0;i<R.km.length;i++) if(R.km[i]-lastK>=3||i===R.km.length-1){ pts.push([R.lat[i],R.lon[i]]); lastK=R.km[i]; }
+  const chunk=80, out=new Map();
+  for(let s=0;s<pts.length;s+=chunk-1){
+    const part=pts.slice(s,s+chunk); if(part.length<2&&s>0) break;
+    const ls=(part.length===1?[part[0],part[0]]:part).map(p=>p[0].toFixed(5)+","+p[1].toFixed(5)).join(",");
+    const q=`[out:json][timeout:90];nwr["amenity"="charging_station"](around:${Math.round(radiusKm*1000)},${ls});out center tags;`;
+    onProgress && onProgress(Math.min(100,Math.round((s+part.length)/pts.length*100)));
+    const j=await overpass(q);
+    for(const el of j.elements||[]){
+      const la=el.lat??el.center?.lat, lo=el.lon??el.center?.lon; if(la==null) continue;
+      out.set(el.type+el.id,{id:el.type+el.id,lat:la,lon:lo,tags:el.tags||{}});
+    }
+  }
+  return [...out.values()];
+}
+function parseCharger(c){
+  const t=c.tags; let kw=0, dc=false;
+  for(const k in t){
+    if(/^socket:(type2_combo|chademo|tesla_supercharger|ccs|type2_cable_dc)/.test(k)) dc=true;
+    if(/output$/.test(k)||k==="maxpower"){
+      for(const m of String(t[k]).matchAll(/([\d]+(?:[.,]\d+)?)\s*(kw|kva|w)?/gi)){
+        let v=parseFloat(m[1].replace(",",".")); const u=(m[2]||"").toLowerCase();
+        if(u==="w"||(!u&&v>1000)) v/=1000;
+        if(v>0&&v<1000) kw=Math.max(kw,v);
+      }
+    }
+  }
+  if(/supercharger/i.test((t.name||"")+(t.brand||""))) dc=true;
+  if(kw>=40) dc=true;
+  return {
+    ...c, kw: kw||null, dc,
+    name: t.name || t.brand || t.operator || "Borne sans nom",
+    operator: t.operator || t.network || t.brand || "",
+    access: t.access || "",
+    sockets: Object.keys(t).filter(k=>/^socket:[^:]+$/.test(k)).map(k=>k.slice(7).replace("type2_combo","CCS").replace("type2","Type 2").replace("chademo","CHAdeMO").replace("tesla_supercharger","Tesla")).filter(s=>!/schuko|typee/i.test(s))
+  };
+}
+function project(chargers,R){
+  return chargers.map(c=>{
+    let best=1e9, idx=0;
+    for(let i=0;i<R.lat.length;i++){ const d=hav(c.lat,c.lon,R.lat[i],R.lon[i]); if(d<best){best=d;idx=i;} }
+    return {...c, idx, km:R.km[idx], det:best*1.4};
+  }).sort((a,b)=>a.km-b.km);
+}
+
+// ---------- Simulation ----------
+function simulate(R,C,p){
+  const n=R.km.length, kwhKm=p.conso/100, pct=k=>k/p.cap*100, endKm=R.km[n-1];
+  const DET_KMH=40;
+  let i=0, soc=p.socStart, t=0, chargeSec=0, driveSec=0, kwh=0;
+  const steps=[{type:"start", t:0, soc, km:0}], curve=[[0,soc]];
+  const chOf = c => ({dc:c.dc, kw: c.dc ? (c.kw ?? p.unknownKW) : (c.kw ?? 22), carKW: c.dc ? p.dcmax : p.acmax});
+  const effKW = c => { const ch=chOf(c); return Math.min(ch.kw, ch.carKW); };
+  if(soc<=p.floor) return {error:`La batterie au départ (${soc} %) est déjà sous la réserve minimale (${p.floor} %).`};
+
+  for(let guard=0; guard<40; guard++){
+    let trig=-1, reason="";
+    // tolérance de 10 % : on ne s'arrête pas juste avant d'arriver
+    const timeOn = p.useTime && (R.sec[n-1]-R.sec[i]) > p.maxMin*60*1.1;
+    for(let j=i+1;j<n;j++){
+      const s=soc-pct((R.km[j]-R.km[i])*kwhKm), dt=R.sec[j]-R.sec[i];
+      if(timeOn && dt>p.maxMin*60){ trig=j; reason="time"; break; }
+      if(s<=p.floor){ trig=j; reason="floor"; break; }
+      if(p.useSoc && s<=p.socTrig){
+        const sEnd = s - pct((endKm-R.km[j])*kwhKm);
+        if(sEnd < p.floor){ trig=j; reason="soc"; break; }
+      }
+    }
+    if(trig<0){
+      const d=endKm-R.km[i], dt=R.sec[n-1]-R.sec[i];
+      soc-=pct(d*kwhKm); t+=dt; driveSec+=dt; kwh+=d*kwhKm;
+      steps.push({type:"drive", km:d, sec:dt});
+      steps.push({type:"end", t, soc, km:endKm});
+      curve.push([endKm,soc]);
+      return {steps, curve, summary:{km:endKm, driveSec, chargeSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
+    }
+    const lo=R.km[i]+1, hi=R.km[trig];
+    const reachOK = c => soc - pct((c.km-R.km[i]+c.det)*kwhKm) >= p.floor-0.01;
+    const timeOK  = c => !p.useTime || (R.sec[c.idx]-R.sec[i] + c.det/DET_KMH*3600) <= p.maxMin*60+60;
+    let cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
+    let late=false;
+    if(!cand.length && reason==="soc"){ cand=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)).slice(0,1); late=cand.length>0; }
+    if(!cand.length){
+      const where = fmtKm(hi)+" après le départ";
+      const why = reason==="time" ? `dans la limite de ${p.maxMin} min de route` : "avant de passer sous la réserve";
+      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'augmenter la distance max de la route, d'allonger l'intervalle d'arrêt ou de décocher « bornes rapides seulement ».`, partial:steps};
+    }
+    const maxK=Math.max(...cand.map(c=>c.km));
+    const pool=cand.filter(c=>c.km>=maxK-25);
+    pool.sort((a,b)=> effKW(b)-effKW(a) || b.km-a.km);
+    const c=pool[0];
+
+    // rouler jusqu'à la borne (détour aller inclus)
+    const dRoute=c.km-R.km[i], dt=R.sec[c.idx]-R.sec[i]+c.det/DET_KMH*3600;
+    soc-=pct((dRoute+c.det)*kwhKm); kwh+=(dRoute+c.det)*kwhKm; t+=dt; driveSec+=dt;
+    steps.push({type:"drive", km:dRoute+c.det, sec:dt});
+    curve.push([c.km,soc]);
+    const arrive=t, socIn=soc;
+
+    // combien charger
+    const remKm=endKm-c.km+c.det, remSec=R.sec[n-1]-R.sec[c.idx];
+    const need=p.floor+pct(remKm*kwhKm)+3;
+    const lastLeg = need<=p.target && (!p.useTime || remSec<=p.maxMin*60*1.1);
+    let socOut = lastLeg ? Math.min(p.target, Math.max(soc, Math.ceil(need))) : Math.max(soc, p.target);
+    const ch=chOf(c);
+    let cm=chargeMinutes(soc,socOut,ch,p.cap);
+    let dur=Math.max(cm,p.minStop);
+    if(dur>cm && socOut<p.target) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,p.target));
+    if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à ».", partial:steps};
+    kwh+=0; soc=socOut; t+=dur*60; chargeSec+=dur*60;
+    curve.push([c.km,soc]);
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    // détour retour
+    soc-=pct(c.det*kwhKm); kwh+=c.det*kwhKm; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
+    i=c.idx;
+  }
+  return {error:"Trop d'arrêts nécessaires (plus de 40). Vérifie la consommation et la capacité de batterie.", partial:steps};
+}
+
+// ---------- Carte ----------
+let map, layers;
+function initMap(){
+  if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
+  map=L.map("map",{zoomControl:true}).setView([46.6,2.4],6);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{maxZoom:19,subdomains:"abcd",attribution:"© OpenStreetMap, © CARTO"}).addTo(map);
+  layers=L.layerGroup().addTo(map);
+}
+const pinIcon=(cls,txt)=>L.divIcon({className:"",html:`<div class="pin ${cls}">${txt}</div>`,iconSize:[26,26],iconAnchor:[13,13]});
+function drawMap(R,C,res,a,b,showAll){
+  if(!map) return;
+  layers.clearLayers();
+  const accent=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1f4fd8";
+  const line=L.polyline(R.line,{color:accent,weight:5,opacity:.85}).addTo(layers);
+  if(showAll) for(const c of C) L.circleMarker([c.lat,c.lon],{radius:4,color:"#5b6878",weight:1,fillOpacity:.5})
+    .bindPopup(`<b>${esc(c.name)}</b><br>${c.kw?Math.round(c.kw)+" kW":"puissance inconnue"}${c.operator?"<br>"+esc(c.operator):""}`).addTo(layers);
+  L.marker([a.lat,a.lon],{icon:pinIcon("s","D")}).bindPopup("Départ").addTo(layers);
+  L.marker([b.lat,b.lon],{icon:pinIcon("e","A")}).bindPopup("Arrivée").addTo(layers);
+  let k=0;
+  for(const s of (res.steps||res.partial||[])) if(s.type==="stop"){ k++;
+    L.marker([s.c.lat,s.c.lon],{icon:pinIcon("c",k),zIndexOffset:1000}).bindPopup(`<b>Arrêt ${k}</b><br>${esc(s.c.name)}<br>${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %, ${Math.round(s.dur)} min`).addTo(layers);
+  }
+  map.fitBounds(line.getBounds(),{padding:[20,20]});
+}
+
+// ---------- Rendu ----------
+const REASON={time:"limite de temps",soc:"seuil batterie",floor:"autonomie"};
+function render(res,p,a,b){
+  const road=$("road"), dep=p.dep;
+  const at = s => fmtClock(new Date(dep.getTime()+s*1000));
+  if(res.error && !res.partial){ road.innerHTML=`<p class="empty">${esc(res.error)}</p>`; $("stats").hidden=true; $("chartPanel").hidden=true; return; }
+  const steps=res.steps||res.partial; let html='<ol class="road">', k=0;
+  for(const s of steps){
+    if(s.type==="start") html+=li(at(0),"",`<h3>Départ</h3><p>${esc(short(a.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
+    else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p></div>`}</li>`;
+    else if(s.type==="stop"){ k++;
+      const c=s.c;
+      const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
+        `<span class="chip kw">${c.kw?Math.round(c.kw)+" kW":"~"+Math.round(s.effKW)+" kW (non renseigné)"}</span>`,
+        `<span class="chip why">${REASON[s.reason]}${s.late?" (dépassé)":""}</span>`];
+      if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
+      if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
+      const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>`);
+    }
+    else if(s.type==="end") html+=li(at(s.t),"",`<h3>Arrivée</h3><p>${esc(short(b.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
+  }
+  html+="</ol>";
+  if(res.error) html+=`<p class="status err" style="margin-top:8px">${esc(res.error)}</p>`;
+  road.innerHTML=html;
+
+  if(res.summary){
+    const S=res.summary;
+    $("stats").innerHTML=[
+      [fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont arrêts"],
+      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[Math.round(S.kwh)+" kWh","énergie consommée"]
+    ].map(([v,l])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+    $("stats").hidden=false;
+    drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
+  } else { $("stats").hidden=true; $("chartPanel").hidden=true; }
+}
+const li=(clock,cls,body)=>`<li><div class="clock">${clock}</div><div class="rail"><span class="dot ${cls}"></span></div><div class="item">${body}</div></li>`;
+const short=l=>l.split(",").slice(0,2).join(",");
+
+function drawChart(curve,p,totalKm){
+  const W=720,H=200,ml=40,mr=12,mt=10,mb=26, iw=W-ml-mr, ih=H-mt-mb;
+  const x=k=>ml+k/totalKm*iw, y=s=>mt+(1-s/100)*ih;
+  let g="";
+  for(const v of [0,25,50,75,100]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${ml-6}" y="${y(v)+4}" text-anchor="end">${v}%</text>`;
+  const step=totalKm>600?200:totalKm>250?100:50;
+  for(let k=0;k<=totalKm;k+=step) g+=`<text x="${x(k)}" y="${H-6}" text-anchor="middle">${k} km</text>`;
+  g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(p.floor)}" y2="${y(p.floor)}" stroke="var(--bad)" stroke-dasharray="4 4"/>`;
+  if(p.useSoc) g+=`<line x1="${ml}" x2="${W-mr}" y1="${y(p.socTrig)}" y2="${y(p.socTrig)}" stroke="var(--warn)" stroke-dasharray="2 4"/>`;
+  const pts=curve.map(([k,s])=>`${x(k).toFixed(1)},${y(Math.max(0,s)).toFixed(1)}`).join(" ");
+  const area=`${x(curve[0][0])},${y(0)} ${pts} ${x(curve[curve.length-1][0])},${y(0)}`;
+  g+=`<polygon points="${area}" fill="var(--accent)" fill-opacity=".12"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  const last=curve[curve.length-1]; g+=`<circle cx="${x(last[0])}" cy="${y(last[1])}" r="4" fill="var(--accent)"/>`;
+  $("chart").innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:480px" role="img" aria-label="Niveau de batterie en fonction de la distance">${g}</svg>`;
+}
+
+// ---------- Formulaire ----------
+const FIELDS=["from","to","socStart","car","conso","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","target","minStop","radius","unknownKW","fastOnly","showAll"];
+function save(){ try{ const o={}; for(const f of FIELDS){ const e=$(f); o[f]=e.type==="checkbox"?e.checked:e.value; } localStorage.setItem("trajetve",JSON.stringify(o)); }catch(e){} }
+function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; for(const f of FIELDS) if(f in o){ const e=$(f); if(e.type==="checkbox") e.checked=o[f]; else e.value=o[f]; } return true; }catch(e){ return false; } }
+function applyCar(){ const c=CARS[$("car").value]; if(!c||$("car").value==="0") return; $("conso").value=c.conso; $("cap").value=c.cap; $("dcmax").value=c.dc; $("acmax").value=c.ac; }
+
+$("car").innerHTML=CARS.map((c,i)=>`<option value="${i}">${esc(c.n)}</option>`).join("");
+$("car").addEventListener("change",applyCar);
+["conso","cap","dcmax","acmax"].forEach(id=>$(id).addEventListener("input",()=>{ $("car").value="0"; }));
+if(!load()){ $("car").value="5"; applyCar(); }
+{ const d=new Date(); d.setMinutes(Math.ceil(d.getMinutes()/15)*15,0,0); const z=n=>String(n).padStart(2,"0");
+  $("dep").value=`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; }
+initMap();
+
+let cache={};
+$("f").addEventListener("submit", async e=>{
+  e.preventDefault(); save();
+  const num=id=>parseFloat($(id).value);
+  const p={socStart:num("socStart"),conso:num("conso"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
+    useTime:$("useTime").checked,maxMin:num("maxMin"),useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    floor:num("floor"),target:num("target"),minStop:num("minStop")||0,radius:num("radius"),unknownKW:num("unknownKW"),
+    dep:$("dep").value?new Date($("dep").value):new Date()};
+  for(const [k,v] of Object.entries(p)) if(typeof v==="number" && !isFinite(v)) return setStatus("Un champ numérique est vide ou invalide.",true);
+  if(p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
+  if(p.useSoc && p.socTrig<=p.floor) return setStatus("Le seuil d'arrêt doit être au-dessus de la réserve minimale.",true);
+  if(p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
+  const btn=$("go"); btn.disabled=true;
+  try{
+    const fq=$("from").value.trim(), tq=$("to").value.trim();
+    setStatus("Recherche des adresses…");
+    const a = cache["g:"+fq] ||= await geocode(fq);
+    const b = cache["g:"+tq] ||= await geocode(tq);
+    setStatus("Calcul de l'itinéraire…");
+    const rk="r:"+fq+"|"+tq; const R = cache[rk] ||= await getRoute(a,b);
+    const ck="c:"+rk+"|"+p.radius;
+    if(!cache[ck]){ cache[ck]=await getChargers(R,p.radius,pc=>setStatus(`Recherche des bornes le long du trajet… ${pc} %`)); }
+    let C=cache[ck].map(parseCharger).filter(c=>!["private","no"].includes(c.access));
+    if($("fastOnly").checked) C=C.filter(c=>c.dc);
+    C=project(C,R);
+    const res=simulate(R,C,p);
+    drawMap(R,C,res,a,b,$("showAll").checked);
+    render(res,p,a,b);
+    setStatus(res.error?"":`${C.length} bornes trouvées le long du trajet.`, false);
+  }catch(err){
+    console.error(err);
+    setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
+  }finally{ btn.disabled=false; }
+});
+</script>
+</body>
+</html>
