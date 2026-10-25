@@ -82,8 +82,16 @@ select{min-width:0;max-width:100%}
 [hidden]{display:none!important}
 .resbar{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .resbar .stats{align-self:start}
-.quick{display:grid;gap:10px;padding:12px 14px}
-.quick .qgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 24px}
+.quick{display:grid;gap:0;padding:12px 14px}
+.qsec{border-top:1px solid var(--line);min-width:0}
+.qsec>summary{list-style:none;display:flex;align-items:baseline;gap:10px;padding:10px 0;cursor:pointer;min-width:0}
+.qsec>summary::-webkit-details-marker{display:none}
+.qsec>summary::after{content:"";margin-left:auto;align-self:center;flex:none;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+.qsec[open]>summary::after{transform:rotate(-135deg)}
+.qsec[open] .sec-s{display:none}
+.qbody{display:grid;gap:10px;padding-bottom:12px;min-width:0}
+.quick h2{margin-bottom:6px}
+.quick .qsec[data-q=regles] .qbody{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 24px}
 .quick h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .qrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.86rem}
 .qchk{display:flex;align-items:center;gap:6px;min-width:92px;font-weight:500}
@@ -102,7 +110,7 @@ select{min-width:0;max-width:100%}
 .prio button{flex:none;width:30px;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;font-size:.9rem;line-height:1}
 .prio button:disabled{opacity:.3;cursor:default}
 .qprio{display:grid;gap:6px}
-.qprio .prio small{display:none}
+#quick .prio small{display:none}
 .prow .pref{flex:none;width:34px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);cursor:pointer;font-size:1rem}
 .prow .pref[aria-pressed="true"]{color:var(--warn);border-color:var(--warn)}
 .prices{display:grid;gap:6px}
@@ -217,7 +225,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .seg3{grid-template-columns:repeat(3,1fr)}
 .ops{display:grid;gap:6px}
 .ops-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-#opsList .ops-actions .qlab{display:none}
+#opsList .ops-actions .qlab,#quick .ops-actions .qlab{display:none}
 .ops-grid{display:flex;flex-wrap:wrap;gap:6px}
 .op{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--field);font-size:.85rem;cursor:pointer}
 .op input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
@@ -433,28 +441,37 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       <div class="stats" id="stats"></div>
       <div class="quick panel" id="quick">
         <h2>Ajuster</h2>
-        <div class="qgrid">
-        <div class="qrow">
-          <label class="qchk"><input type="checkbox" data-m="useTime"> Toutes les</label>
-          <span class="qin"><input type="number" data-m="maxMin" min="30" max="600" aria-label="Minutes de route entre deux arrêts"> min</span>
-          <span class="qin"><span>−</span><input type="number" data-m="timeTolLo" min="0" max="120" step="5" aria-label="Tolérance avant"><span>+</span><input type="number" data-m="timeTol" min="0" max="60" step="5" aria-label="Tolérance après"></span>
-        </div>
-        <div class="qrow">
-          <label class="qchk"><input type="checkbox" data-m="useSoc"> À</label>
-          <span class="qin"><input type="number" data-m="socTrig" min="5" max="80" aria-label="Seuil de batterie"> %</span>
-          <span class="qin"><span>−</span><input type="number" data-m="socTolLo" min="0" max="40" aria-label="Tolérance en dessous"><span>+</span><input type="number" data-m="socTolHi" min="0" max="40" aria-label="Tolérance au-dessus"></span>
-        </div>
-        <div class="qrow">
-          <label class="qchk"><input type="checkbox" data-m="usePmax"> Prix max</label>
-          <span class="qin"><input type="number" data-m="pmax" min="0" max="2" step="0.01" aria-label="Prix maximum en euros par kWh"> €/kWh</span>
-        </div>
-        <div class="qprio"><span class="qlab">Priorités</span><div class="prio-target"></div></div>
-        <div class="qrow">
-          <span class="qlab">Bornes</span>
-          <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
-        </div>
-        </div>
-        <div class="ops-target"></div>
+        <details class="qsec" data-q="regles" open>
+          <summary><span class="sec-t">Règles d'arrêt et prix</span><span class="sec-s" id="qsum-regles"></span></summary>
+          <div class="qbody">
+            <div class="qrow">
+              <label class="qchk"><input type="checkbox" data-m="useTime"> Toutes les</label>
+              <span class="qin"><input type="number" data-m="maxMin" min="30" max="600" aria-label="Minutes de route entre deux arrêts"> min</span>
+              <span class="qin"><span>−</span><input type="number" data-m="timeTolLo" min="0" max="120" step="5" aria-label="Tolérance avant"><span>+</span><input type="number" data-m="timeTol" min="0" max="60" step="5" aria-label="Tolérance après"></span>
+            </div>
+            <div class="qrow">
+              <label class="qchk"><input type="checkbox" data-m="useSoc"> À</label>
+              <span class="qin"><input type="number" data-m="socTrig" min="5" max="80" aria-label="Seuil de batterie"> %</span>
+              <span class="qin"><span>−</span><input type="number" data-m="socTolLo" min="0" max="40" aria-label="Tolérance en dessous"><span>+</span><input type="number" data-m="socTolHi" min="0" max="40" aria-label="Tolérance au-dessus"></span>
+            </div>
+            <div class="qrow">
+              <label class="qchk"><input type="checkbox" data-m="usePmax"> Prix max</label>
+              <span class="qin"><input type="number" data-m="pmax" min="0" max="2" step="0.01" aria-label="Prix maximum en euros par kWh"> €/kWh</span>
+            </div>
+            <div class="qrow">
+              <span class="qlab">Bornes</span>
+              <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
+            </div>
+          </div>
+        </details>
+        <details class="qsec" data-q="priorites" open>
+          <summary><span class="sec-t">Priorités</span><span class="sec-s" id="qsum-priorites"></span></summary>
+          <div class="qbody"><div class="prio-target"></div></div>
+        </details>
+        <details class="qsec" data-q="operateurs" open>
+          <summary><span class="sec-t">Opérateurs</span><span class="sec-s" id="qsum-operateurs"></span></summary>
+          <div class="qbody"><div class="ops-target"></div></div>
+        </details>
       </div>
     </div>
     <div class="export" id="exportBar" hidden>
@@ -481,6 +498,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.6", d:"25/10/2026", c:[
+    "Bloc « Ajuster » sous la carte découpé en trois parties repliables (règles d'arrêt et prix, priorités, opérateurs), avec un résumé quand elles sont réduites ; l'état est mémorisé"]},
   {v:"2.5.1", d:"25/10/2026", c:[
     "Correctif : le résumé d'une section réduite (règles d'arrêt, voiture…) élargissait le panneau de gauche, qui recouvrait la carte"]},
   {v:"2.5", d:"25/10/2026", c:[
@@ -1173,6 +1192,7 @@ function renderPrio(){
   const html='<ol class="prio">'+prio.map((k,i)=>`<li><span>${PRIO_LABELS[k][0]}<small>${PRIO_LABELS[k][1]}</small></span><button type="button" data-up="${i}" ${i?"":"disabled"} aria-label="Monter ${PRIO_LABELS[k][0]}">↑</button><button type="button" data-down="${i}" ${i<prio.length-1?"":"disabled"} aria-label="Descendre ${PRIO_LABELS[k][0]}">↓</button></li>`).join("")+"</ol>";
   document.querySelectorAll(".prio-target").forEach(t=>t.innerHTML=html);
   $("sum-priorites").textContent=prio.map(k=>PRIO_LABELS[k][0].toLowerCase()).join(" › ");
+  if(typeof quickSums==="function") try{ quickSums(); }catch(e){}
 }
 document.querySelectorAll(".prio-target").forEach(t=>t.addEventListener("click",e=>{
   const u=e.target.closest("[data-up]"), d=e.target.closest("[data-down]"); if(!u&&!d) return;
@@ -1231,6 +1251,7 @@ function renderOps(chargers=opsChargers){
     <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${prefOps.includes(o)?"★ ":""}${esc(o)} <small>${n} · ${fmtPrice(typeof prices[o]==="number"?prices[o]:priceDef())}</small></label>`).join("")}</div>
     <p class="note">${opsSel.mode==="all"?"Tous les opérateurs sont utilisés.":"Seuls les opérateurs cochés sont utilisés, y compris sur tes prochains trajets."}</p>`;
   $("opsList").innerHTML=html; document.querySelector("#quick .ops-target").innerHTML=html;
+  try{ quickSums(); }catch(e){}
   renderPrices();
 }
 function opsChanged(mode,src){
@@ -1249,6 +1270,15 @@ for(const box of [$("opsList"), document.querySelector("#quick .ops-target")]){
 let lastCalcOk=false;
 
 // ---------- Réglages rapides sous la carte (miroir des champs du panneau de gauche) ----------
+const QSEC_KEY="trajetve-ajuster";
+try{ const st=JSON.parse(localStorage.getItem(QSEC_KEY)||"{}"); document.querySelectorAll("#quick details.qsec").forEach(d=>{ if(st[d.dataset.q]===false) d.open=false; }); }catch(e){}
+document.querySelectorAll("#quick details.qsec").forEach(d=>d.addEventListener("toggle",()=>{ try{ const st={}; document.querySelectorAll("#quick details.qsec").forEach(x=>st[x.dataset.q]=x.open); localStorage.setItem(QSEC_KEY,JSON.stringify(st)); }catch(e){} }));
+function quickSums(){
+  const t=$("sum-regles").textContent, b=$("sum-bornes").textContent;
+  $("qsum-regles").textContent=[t, (radioVal("pmin")?radioVal("pmin")+" kW+":"")].filter(Boolean).join(" · ");
+  $("qsum-priorites").textContent=$("sum-priorites").textContent;
+  $("qsum-operateurs").textContent = opsSel.mode==="all" ? "tous" : `${opsSel.list.length} sélectionné${opsSel.list.length>1?"s":""}`;
+}
 function syncQuick(){
   document.querySelectorAll("#quick [data-m]").forEach(q=>{
     const m=q.dataset.m;
@@ -1399,6 +1429,7 @@ function updateSums(){
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
   set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:""].filter(Boolean).join(" · "));
+  setTimeout(()=>{ try{ quickSums(); }catch(e){} },0);
   set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"}${$("stayHw").checked?" · aires d'autoroute":""} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
