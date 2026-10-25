@@ -121,6 +121,16 @@ select{min-width:0;max-width:100%}
 .adjust{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px;padding:6px 10px;border:1px dashed var(--line);border-radius:8px;font-size:.84rem;color:var(--muted)}
 .adjust label{display:inline-flex;align-items:center;gap:4px}
 .adjust input{width:64px;padding:4px 6px;font-size:.85rem}
+.alts{margin-top:8px;font-size:.86rem}
+.alts>summary{cursor:pointer;color:var(--accent);font-weight:500}
+.altlist{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.altlist li{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.altlist li>div{flex:1;min-width:0;display:grid;gap:2px}
+.altlist b{font-weight:600}
+.altlist span{color:var(--muted);font-size:.8rem}
+.altfl{display:flex;flex-wrap:wrap;gap:4px}
+.altfl i{font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
+.altfl i.ok{border-color:var(--charge);color:var(--charge)}
 .chip.adj{border-color:var(--accent);color:var(--accent)}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
@@ -503,6 +513,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.8", d:"25/10/2026", c:[
+    "« Sur aire d'autoroute » : uniquement si le nom ou la description de la borne mentionne une aire, l'autoroute ou un numéro d'autoroute (A61…), et à moins de 800 m du tracé",
+    "Feuille de route : « Autres bornes possibles » sous chaque arrêt, avec ce qu'il faudrait assouplir (tolérance, prix, opérateur, puissance…) et un bouton pour la choisir",
+    "Bouton « Revenir au choix automatique » sur un arrêt choisi à la main"]},
   {v:"2.7", d:"25/10/2026", c:[
     "Pertes pendant la recharge réglables en % (section Voiture) : temps de charge et coût en tiennent compte",
     "Feuille de route : chaque arrêt de recharge peut être ajusté (charger jusqu'à X % ou rester Y min), avec recalcul de la suite du trajet et bouton « Rétablir »",
@@ -714,7 +728,7 @@ function lsSet(key,v){
   }
 }
 // On ne garde que les tags utiles au calcul, pour alléger le cache
-const KEEP_TAG=/^(name|brand|operator|network|access|maxpower|socket:[^:]+(:output)?|charging_station:output)$/;
+const KEEP_TAG=/^(name|description|brand|operator|network|access|maxpower|socket:[^:]+(:output)?|charging_station:output)$/;
 const slimTags=t=>{ const o={}; for(const k in t) if(KEEP_TAG.test(k)) o[k]=t[k]; return o; };
 
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
@@ -769,7 +783,7 @@ async function ocmBox(bb,key){
       }
       if(kw>=40) dc=true;
       out.push({id:"ocm"+x.ID, lat:a.Latitude, lon:a.Longitude, kw:kw||null, dc,
-        name:a.Title||"Borne sans nom", operatorId:x.OperatorID||0, operator:"", access:[2,6].includes(x.UsageTypeID)?"private":"", sockets:[...sockets]});
+        name:a.Title||"Borne sans nom", desc:[a.AddressLine1,a.AddressLine2,a.AccessComments,x.GeneralComments].filter(Boolean).join(" ").slice(0,300), operatorId:x.OperatorID||0, operator:"", access:[2,6].includes(x.UsageTypeID)?"private":"", sockets:[...sockets]});
     }
     return out;
   } finally{ clearTimeout(to); }
@@ -800,7 +814,7 @@ async function getChargers(R, radiusKm, key, onProgress){
   const out=new Map(); let failed=0, done=0, fromCache=0, badKey=null, usedOsm=false;
   const add=list=>{ for(const c of list) out.set(c.id,c); };
   const todo=[];
-  for(const bb of jobs){ const hit=lsGet(`bornes3:${src}:${bb}`,7*DAY); if(hit){ add(hit); fromCache++; done++; } else todo.push(bb); }
+  for(const bb of jobs){ const hit=lsGet(`bornes4:${src}:${bb}`,7*DAY); if(hit){ add(hit); fromCache++; done++; } else todo.push(bb); }
   onProgress && onProgress(done,jobs.length);
   let next=0;
   const worker=async()=>{
@@ -809,10 +823,10 @@ async function getChargers(R, radiusKm, key, onProgress){
       try{
         let list;
         if(src==="ocm" && !badKey){
-          try{ list=await ocmBox(bb,key); lsSet(`bornes3:ocm:${bb}`,list); }
+          try{ list=await ocmBox(bb,key); lsSet(`bornes4:ocm:${bb}`,list); }
           catch(err){ if(err.badKey) badKey=err; list=null; }
         }
-        if(!list){ list=await osmBox(bb); usedOsm=true; lsSet(`bornes3:osm:${bb}`,list); }
+        if(!list){ list=await osmBox(bb); usedOsm=true; lsSet(`bornes4:osm:${bb}`,list); }
         add(list);
       }catch(err){ failed++; }
       done++; onProgress && onProgress(done,jobs.length);
@@ -846,6 +860,7 @@ function parseCharger(c){
   return {
     ...c, kw: kw||null, dc,
     name: t.name || t.brand || t.operator || "Borne sans nom",
+    desc: t.description || "",
     operator: t.operator || t.network || t.brand || "",
     access: t.access || "",
     sockets: Object.keys(t).filter(k=>/^socket:[^:]+$/.test(k)).map(k=>k.slice(7).replace("type2_combo","CCS").replace("type2","Type 2").replace("chademo","CHAdeMO").replace("tesla_supercharger","Tesla")).filter(s=>!/schuko|typee/i.test(s))
@@ -862,7 +877,9 @@ function distToLine(lat,lon,line){
   }
   return best;
 }
-const AIRE_RX=/\baires?\b|\bservice|\barea\b|\brelais\b|\bstation[- ]service/i;
+// Une borne n'est considérée « sur aire » que si son nom ou sa description le dit (aire, autoroute, A61…)
+const AIRE_RX=/\baires?\b|autoroute|\brelais\b|motorway|service area|autopista|autostrada/i, AROUTE_RX=/\bA\d{1,3}\b/;
+const aireText=c=>{ const t=(c.name||"")+" "+(c.desc||""); return AIRE_RX.test(t) || AROUTE_RX.test(t); };
 function project(chargers,R){
   const n=R.km.length;
   return chargers.map(c=>{
@@ -873,7 +890,7 @@ function project(chargers,R){
     const v=(R.km[i1]-R.km[i0])/Math.max(1,R.sec[i1]-R.sec[i0])*3600;
     const hw=v>=95;
     let onAire=false, dLine=null;
-    if(hw && R.line){ dLine=distToLine(c.lat,c.lon,R.line); onAire = dLine<=0.25 || (AIRE_RX.test(c.name||"") && dLine<=0.7); }
+    if(hw && R.line){ dLine=distToLine(c.lat,c.lon,R.line); onAire = dLine<=0.8 && aireText(c); }
     return {...c, idx, km:R.km[idx], det: onAire ? 0.2 : best*1.4, hw, onAire};
   }).sort((a,b)=>a.km-b.km);
 }
@@ -994,7 +1011,24 @@ function simulate(R,C,p){
     order.forEach((k,r)=>wt[k]=Math.pow(3,-r));
     const score=c=>Object.keys(pen).reduce((s2,k)=>s2+(wt[k]||0)*pen[k](c),0);
     pool.sort((a,b)=> score(a)-score(b) || b.km-a.km);
-    const c=pool[0];
+    let c=pool[0]; const origId=c.id;
+    // Autres bornes possibles autour de cet arrêt, y compris celles écartées par un réglage (tolérance, prix, opérateur…)
+    const winFlag=x=>{
+      const f=[], d=driveFromRef(x), sa=socAt(x);
+      if(p.useTime && reason==="time" && d<tEarly) f.push("tot:"+Math.round(d));
+      if(p.useTime && d>tLate) f.push("tard:"+Math.round(d-p.maxMin));
+      if(p.useSoc && reason==="soc" && sa>sEarly) f.push("socHaut:"+Math.round(sa));
+      if(p.useSoc && sa<sHard) f.push("socBas:"+Math.round(sa));
+      return f;
+    };
+    const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=80 && socAt(x)>=p.floor-0.01);
+    const alts=altsSrc.map(x=>{ const fl=[...(x.flags||[]), ...winFlag(x)]; return {x, fl, sc:score(x)+fl.length*0.5}; })
+      .sort((u,v)=>u.sc-v.sc).slice(0,6)
+      .map(({x,fl})=>({id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, flags:fl}));
+    // Borne choisie à la main depuis la feuille de route
+    let forced=false;
+    const fid=(p.force||{})[c.id];
+    if(fid){ const a2=(p.Call||[]).find(x=>x.id===fid); if(a2 && a2.km>R.km[i]+1 && socAt(a2)>=p.floor-0.01){ c=a2; forced=true; } }
     if(c.idx>vIdx && vIdx<n-1){ goVia(); continue; }     // l'étape arrive avant la borne retenue : on la traite d'abord
 
     // rouler jusqu'à la borne (détour aller inclus)
@@ -1034,7 +1068,7 @@ function simulate(R,C,p){
     curve.push([c.km,soc]);
     const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
     costTot+=cost; kwhCharged+=kwhBilled;
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, alts: forced ? [] : alts, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -1100,10 +1134,18 @@ function render(res,p,a,b){
       if(c.onAire) chips.push(`<span class="chip">sur aire d'autoroute</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
       if(s.ov) chips.push(`<span class="chip adj">ajusté</span>`);
+      if(s.forced) chips.push(`<span class="chip adj">choisie à la main</span>`);
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
       const o=(stopOv||{})[c.id]||{};
       const adj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-cid="${esc(c.id)}"><span>Ajuster :</span><label>jusqu'à <input type="number" min="1" max="100" data-ov="target" value="${o.target??""}" placeholder="${Math.round(s.socOut)}"> %</label><label>ou rester <input type="number" min="0" max="600" step="5" data-ov="dur" value="${o.dur??""}" placeholder="${Math.round(s.dur)}"> min</label>${s.ov?'<button type="button" class="swap" data-ovreset>Rétablir</button>':""}</div>` : "";
-      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}`);
+      const FL={pmin:"puissance sous le minimum",op:"opérateur exclu",price:"prix au-dessus du max",aire:"hors aire d'autoroute"};
+      const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`})[k] || k; };
+      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
+        ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
+        <ul class="altlist">${(s.alts||[]).map(x=>`<li><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
+          <span class="altfl">${x.flags.length?x.flags.map(f=>`<i>${esc(flTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
+          <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
     }
     else if(s.type==="via"){ kv++;
       const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label></div>` : "";
@@ -1609,7 +1651,7 @@ async function initSync(){
 
 let cache={};
 // ---------- Réglages manuels par arrêt (depuis la feuille de route) ----------
-let stopOv={}, ovTrip="", viewingSheet=false;
+let stopOv={}, stopForce={}, ovTrip="", viewingSheet=false;
 $("road").addEventListener("change",e=>{
   const i=e.target;
   if(i.matches("[data-vpause]")){
@@ -1626,6 +1668,10 @@ $("road").addEventListener("change",e=>{
   $("f").requestSubmit();
 });
 $("road").addEventListener("click",e=>{
+  const fz=e.target.closest("[data-force]");
+  if(fz){ const [o,a]=fz.dataset.force.split("|"); stopForce[o]=a; $("f").requestSubmit(); return; }
+  const uf=e.target.closest("[data-unforce]");
+  if(uf){ delete stopForce[uf.dataset.unforce]; $("f").requestSubmit(); return; }
   const b=e.target.closest("[data-ovreset]"); if(!b) return;
   delete stopOv[b.closest("[data-cid]").dataset.cid]; $("f").requestSubmit();
 });
@@ -1636,7 +1682,7 @@ function autoCalc(){ if(!lastCalcOk || !$("from").value.trim() || !$("to").value
 $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.includes(e.target.id) || e.target.classList.contains("vq")) return; autoCalc(); });
 
 function clearResults(){
-  lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; ovTrip="";
+  lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
@@ -1673,7 +1719,7 @@ $("saveSheetBtn").addEventListener("click",()=>{
   const sh={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), savedAt:Date.now(), fq, tq, vq:lastRun.vq||[],
     a:{lat:a.lat,lon:a.lon,label:a.label}, b:{lat:b.lat,lon:b.lon,label:b.label},
     p:{dep:p.dep.toISOString(), cap:p.cap, arrival:p.arrival, floor:p.floor, socStart:p.socStart, socTrig:p.socTrig, useSoc:p.useSoc, tripKwh:p.tripKwh},
-    res:{steps:res.steps.map(s=>s.type==="stop"?{...s,c:slimC(s.c)}:s), curve:res.curve.map(([k,v])=>[+k.toFixed(1),+v.toFixed(1)]), summary:res.summary},
+    res:{steps:res.steps.map(s=>s.type==="stop"?{...s,alts:[],c:slimC(s.c)}:s), curve:res.curve.map(([k,v])=>[+k.toFixed(1),+v.toFixed(1)]), summary:res.summary},
     line:R.line.filter((_,i)=>i%step===0||i===R.line.length-1).map(([la,lo])=>[+la.toFixed(5),+lo.toFixed(5)]) };
   sheets.unshift(sh); if(sheets.length>SHEETS_MAX) sheets.length=SHEETS_MAX;
   curSheet=sh.id; storeSheets(); renderSheets();
@@ -1689,7 +1735,7 @@ function openSheet(sh){
   drawMap(R,[],sh.res,sh.a,sh.b,false);
   render(sh.res,p,sh.a,sh.b);
   lastRun={res:sh.res,p,a:sh.a,b:sh.b,R,fq:sh.fq,tq:sh.tq,vq:sh.vq||[]};
-  viewingSheet=true; stopOv={}; ovTrip=""; $("exportBar").hidden=false; $("exportNote").textContent="";
+  viewingSheet=true; stopOv={}; stopForce={}; ovTrip=""; $("exportBar").hidden=false; $("exportNote").textContent="";
   lastCalcOk=true; curSheet=sh.id; renderSheets(); renderFavs(); updateSums();
   setStatus(`Feuille de route enregistrée le ${fmtDate(sh.savedAt)}, affichée telle quelle. Modifie un réglage ou clique sur Calculer pour la recalculer.`);
   window.scrollTo({top:$("map").getBoundingClientRect().top+scrollY-10,behavior:"smooth"});
@@ -1700,7 +1746,7 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),ov:stopOv,priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),ov:stopOv,force:stopForce,priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
@@ -1720,7 +1766,7 @@ $("f").addEventListener("submit", async e=>{
     const T={}, t0=performance.now(), lap=k=>{ T[k]=(performance.now()-t0)/1000; };
     const geo=async q=>{ const k="adr:"+q.toLowerCase(); const hit=lsGet(k,30*DAY); if(hit) return hit; const g=await geocode(q); lsSet(k,g); return g; };
     const vrows=viaRows().filter(r=>r.querySelector("input.vq").value.trim());
-    { const tk=[fq,...vrows.map(r=>r.querySelector("input.vq").value.trim()),tq].join("|").toLowerCase(); if(tk!==ovTrip){ stopOv={}; ovTrip=tk; } }
+    { const tk=[fq,...vrows.map(r=>r.querySelector("input.vq").value.trim()),tq].join("|").toLowerCase(); if(tk!==ovTrip){ stopOv={}; stopForce={}; ovTrip=tk; } }
     viewingSheet=false;
     const vq=vrows.map(r=>({q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0, id:r.querySelector("input.vq").id}));
     const [a,b,...vg]=await Promise.all([geo(fq),geo(tq),...vq.map(v=>geo(v.q))]);
@@ -1737,13 +1783,21 @@ $("f").addEventListener("submit", async e=>{
     lap("bornes");
     const raw=cache[ck], miss=raw.failed; if(miss) delete cache[ck]; // on retentera les tronçons manquants au prochain calcul
     let C=raw.filter(c=>!["private","no"].includes(c.access));
-    if(p.pmin>0) C=C.filter(c=>(c.kw ?? (c.dc?p.unknownKW:22))>=p.pmin);
     if(key){ const names=await ocmOperators(key); C=C.map(c=>c.operatorId!=null && !c.operator ? {...c, operator: c.operatorId>1 ? (names[c.operatorId]||`Opérateur n°${c.operatorId}`) : ""} : c); }
-    renderOps(C); lastCalcOk=true;
-    C=C.filter(c=>opAllowed(opOf(c)));
-    if(p.usePmax) C=C.filter(c=>priceOf(c)<=p.pmax+1e-9);
-    C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
-    if($("stayHw").checked) C=C.filter(c=>!c.hw || c.onAire);
+    const kwOf=c=>c.kw ?? (c.dc?p.unknownKW:22);
+    renderOps(p.pmin>0 ? C.filter(c=>kwOf(c)>=p.pmin) : C); lastCalcOk=true;
+    // Toutes les bornes proches de la route, avec les réglages qui les écartent (servent aux « autres bornes possibles »)
+    const stayHw=$("stayHw").checked;
+    const Call=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3).map(c=>{
+      const f=[];
+      if(p.pmin>0 && kwOf(c)<p.pmin) f.push("pmin");
+      if(!opAllowed(opOf(c))) f.push("op");
+      if(p.usePmax && priceOf(c)>p.pmax+1e-9) f.push("price");
+      if(stayHw && c.hw && !c.onAire) f.push("aire");
+      return {...c, flags:f};
+    });
+    C=Call.filter(c=>!c.flags.length);
+    p.Call=Call;
     const RD=applyDriving(R,p);
     p.tripKwh=RD.E[RD.E.length-1];
     const res=simulate(RD,C,p);

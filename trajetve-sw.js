@@ -1,7 +1,7 @@
 // Service worker de Trajet VE — enregistré avec la portée "./trajet-ve.html" :
 // il ne contrôle que cette page, jamais les autres sites du dépôt.
 // Changer CACHE à chaque nouvelle version (même numéro que CHANGELOG dans trajet-ve.html).
-const CACHE = "trajetve-2.7";
+const CACHE = "trajetve-2.8";
 const PREFIX = "trajetve-";
 const SHELL = [
   "./trajet-ve.html", "./trajetve.webmanifest",
