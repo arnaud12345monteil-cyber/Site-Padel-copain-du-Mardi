@@ -92,6 +92,12 @@ form{min-width:0}
 .qrow select{flex:1;min-width:0;padding:6px 8px}
 .qrow:has(.qchk input:not(:checked)) .qin{opacity:.45}
 .tol span{color:var(--muted)}
+.prices{display:grid;gap:6px}
+.prow{display:flex;align-items:center;gap:8px}
+.prow span{flex:1;min-width:0;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow input{width:84px;flex:none}
+.prow small{color:var(--muted);flex:none}
+.chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
 .quick .ops-grid{max-height:140px;overflow:auto}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -340,6 +346,25 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           </div>
         </div>
         <label>Réserve minimale en route <small>%, jamais en dessous</small><input id="floor" type="number" min="0" max="50" value="10"></label>
+        <div class="toggle">
+          <input type="checkbox" id="usePmax">
+          <div class="body">
+            <label for="usePmax" style="display:block">Prix maximum de recharge</label>
+            <div class="inline"><input id="pmax" type="number" min="0" max="2" step="0.01" value="0.55"> €/kWh</div>
+            <p class="note">Les bornes plus chères sont ignorées (prix réglés dans la section Tarifs).</p>
+          </div>
+        </div>
+        <label>Dans la fenêtre d'arrêt, choisir
+          <select id="pick"><option value="fast">la borne la plus rapide</option><option value="cheap">la borne la moins chère</option><option value="best">le meilleur compromis prix / vitesse</option></select>
+        </label>
+        </div>
+      </details>
+      <details class="sec" data-sec="tarifs">
+        <summary><span class="sec-t">Tarifs</span><span class="sec-s" id="sum-tarifs"></span></summary>
+        <div class="sec-b">
+          <label>Prix par défaut <small>€/kWh, pour les opérateurs sans prix</small><input id="priceDef" type="number" min="0" max="2" step="0.01" value="0.55"></label>
+          <div id="priceList"></div>
+          <p class="note">Prix au kWh facturé par la borne. Les pertes pendant la charge (environ 8 %) sont comptées : tu paies un peu plus que ce qui entre dans la batterie.</p>
         </div>
       </details>
       <details class="sec" data-sec="bornes" open>
@@ -396,6 +421,14 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <span class="qin"><span>−</span><input type="number" data-m="socTolLo" min="0" max="40" aria-label="Tolérance en dessous"><span>+</span><input type="number" data-m="socTolHi" min="0" max="40" aria-label="Tolérance au-dessus"></span>
         </div>
         <div class="qrow">
+          <label class="qchk"><input type="checkbox" data-m="usePmax"> Prix max</label>
+          <span class="qin"><input type="number" data-m="pmax" min="0" max="2" step="0.01" aria-label="Prix maximum en euros par kWh"> €/kWh</span>
+        </div>
+        <div class="qrow">
+          <span class="qlab">Choix</span>
+          <select data-m="pick" aria-label="Critère de choix de la borne"><option value="fast">La plus rapide</option><option value="cheap">La moins chère</option><option value="best">Compromis prix / vitesse</option></select>
+        </div>
+        <div class="qrow">
           <span class="qlab">Bornes</span>
           <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
         </div>
@@ -427,6 +460,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.3", d:"25/10/2026", c:[
+    "Tarifs : prix au kWh par opérateur et prix par défaut (section Tarifs), synchronisés avec le compte",
+    "Coût de chaque recharge dans la feuille de route (kWh facturés et prix), coût total et coût aux 100 km dans le résumé, et dans les exports",
+    "Critère de prix : prix maximum au kWh, et choix de la borne dans la fenêtre d'arrêt (la plus rapide, la moins chère ou un compromis)",
+    "Prix maximum et critère de choix ajoutés aux réglages rapides sous la carte"]},
   {v:"2.2.3", d:"25/10/2026", c:[
     "Correctif : la liste des opérateurs se vidait (« Aucun opérateur trouvé ») dès qu'une synchronisation arrivait d'un autre appareil"]},
   {v:"2.2.2", d:"25/10/2026", c:[
@@ -552,7 +590,7 @@ function rate(soc, ch){
   const f = soc<50 ? 1 : soc<80 ? 1-0.5*(soc-50)/30 : 0.5-0.3*(soc-80)/20;
   return Math.max(3, Math.min(ch.kw, ch.carKW*f));
 }
-const EFF = 0.92; // pertes de charge
+const EFF = 0.92; // pertes de charge : énergie facturée = énergie stockée / EFF
 function chargeMinutes(a,b,ch,cap){
   let m=0;
   for(let p=a;p<b-1e-9;p+=0.5){ const st=Math.min(0.5,b-p); m += (cap*st/100/EFF)/rate(p+st/2,ch)*60; }
@@ -789,7 +827,7 @@ function simulate(R,C,p){
   const DET_KMH=40;
   const arr=Math.max(p.arrival,p.floor);            // % visé à l'arrivée
   const ceil=p.useTarget ? p.target : 100;          // plafond de charge
-  let i=0, soc=p.socStart, t=0, chargeSec=0, driveSec=0, pauseSec=0, kwh=0, tRef=0, wpi=0;
+  let i=0, soc=p.socStart, t=0, chargeSec=0, driveSec=0, pauseSec=0, kwh=0, tRef=0, wpi=0, costTot=0, kwhCharged=0;
   const W=(R.wp||[]).slice().sort((x,y)=>x.idx-y.idx);   // étapes intermédiaires
   const steps=[{type:"start", t:0, soc, km:0}], curve=[[0,soc]];
   const chOf = c => ({dc:c.dc, kw: c.dc ? (c.kw ?? p.unknownKW) : (c.kw ?? 22), carKW: c.dc ? p.dcmax : p.acmax, curve: c.dc ? p.curve : null});
@@ -844,7 +882,7 @@ function simulate(R,C,p){
       steps.push({type:"drive", km:d, sec:dt});
       steps.push({type:"end", t, soc, km:endKm});
       curve.push([endKm,soc]);
-      return {steps, curve, summary:{...base, km:endKm, avg:E[n-1]/endKm*100, driveSec, chargeSec, pauseSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
+      return {steps, curve, summary:{...base, km:endKm, avg:E[n-1]/endKm*100, driveSec, chargeSec, pauseSec, cost:costTot, kwhCharged, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
     }
     const lo=R.km[i]+1, hi=R.km[trig];
     const reachOK = c => socAt(c) >= p.floor-0.01;
@@ -864,9 +902,18 @@ function simulate(R,C,p){
     if(!pool.length){
       const where = fmtKm(hi)+" après le départ";
       const why = reason==="time" ? `dans la limite de ${p.maxMin}${p.timeTolHi?` (+${p.timeTolHi})`:""} min de route` : "avant de passer sous la réserve";
-      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'ajouter des opérateurs, de baisser la puissance minimale des bornes, d'augmenter la tolérance ou la distance max de la route.`, partial:steps};
+      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'ajouter des opérateurs, de relever le prix maximum, de baisser la puissance minimale des bornes, d'augmenter la tolérance ou la distance max de la route.`, partial:steps};
     }
-    pool.sort((a,b)=> effKW(b)-effKW(a) || b.km-a.km);
+    // Choix de la borne : la plus rapide, la moins chère, ou un compromis (prix pondéré par la vitesse de charge)
+    const pr=c=>p.priceOf ? p.priceOf(c) : 0;
+    if(p.pick==="cheap") pool.sort((a,b)=> pr(a)-pr(b) || effKW(b)-effKW(a) || b.km-a.km);
+    else if(p.pick==="best"){
+      const kmax=Math.max(...pool.map(effKW)), prmin=Math.min(...pool.map(pr));
+      // score : écart de prix (en %) + écart de vitesse (en %) ; le plus bas l'emporte
+      const sc=c=>(prmin>0?(pr(c)-prmin)/prmin:0) + (kmax-effKW(c))/kmax;
+      pool.sort((a,b)=> sc(a)-sc(b) || b.km-a.km);
+    }
+    else pool.sort((a,b)=> effKW(b)-effKW(a) || b.km-a.km);
     const c=pool[0];
     if(c.idx>vIdx && vIdx<n-1){ goVia(); continue; }     // l'étape arrive avant la borne retenue : on la traite d'abord
 
@@ -899,7 +946,9 @@ function simulate(R,C,p){
     if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
     soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
+    costTot+=cost; kwhCharged+=kwhBilled;
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -959,6 +1008,7 @@ function render(res,p,a,b){
       const c=s.c;
       const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
         `<span class="chip kw">${c.kw?Math.round(c.kw)+" kW":"~"+Math.round(s.effKW)+" kW (non renseigné)"}</span>`,
+        ...(s.cost!=null && s.kwhBilled>0.05 ? [`<span class="chip eur">${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}</span>`] : []),
         `<span class="chip why">${REASON[s.reason]}${s.over?` (+${s.over} min)`:s.late?" (dépassé)":""}</span>`];
       if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
@@ -978,7 +1028,7 @@ function render(res,p,a,b){
   if(res.summary){
     const S=res.summary;
     tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont recharges"],...(S.pauseSec?[[fmtH(S.pauseSec),"dont pauses aux étapes"]]:[]),
-      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[S.avg.toFixed(1).replace(".",",")+" kWh","conso moyenne /100 km"]);
+      [String(S.stops),"arrêt"+(S.stops>1?"s":"")],...(S.cost!=null?[[fmtEur(S.cost),"coût des recharges",1],[fmtEur(S.cost/S.km*100),"coût /100 km"]]:[]),[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[S.avg.toFixed(1).replace(".",",")+" kWh","conso moyenne /100 km"]);
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
   } else $("chartPanel").hidden=true;
   $("stats").innerHTML=tiles.map(([v,l,h])=>`<div class="stat${h?" hl":""}"><b>${v}</b><span>${l}</span></div>`).join("");
@@ -1007,7 +1057,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","pick","priceDef"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -1054,6 +1104,31 @@ const UNKNOWN_OP="Opérateur non renseigné";
 const opOf=c=>(c.operator||"").trim()||UNKNOWN_OP;
 const opAllowed=name=>opsSel.mode==="all" || opsSel.list.includes(name);
 let lastOps=[];
+// ---------- Tarifs par opérateur ----------
+const PRICE_KEY="trajetve-prix";
+let prices={};   // { "Electra": 0.49, … } en €/kWh
+try{ const o=JSON.parse(localStorage.getItem(PRICE_KEY)||"{}"); if(o && typeof o==="object") prices=o; }catch(e){}
+const storePrices=()=>{ try{ localStorage.setItem(PRICE_KEY,JSON.stringify(prices)); }catch(e){} syncPush(); };
+const priceDef=()=>{ const v=parseFloat($("priceDef").value); return isFinite(v)?v:0.55; };
+const priceOf=c=>{ const v=prices[opOf(c)]; return typeof v==="number" ? v : priceDef(); };
+const fmtEur=v=>v.toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const fmtPrice=v=>v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:3})+" €";
+function renderPrices(){
+  const names=[...new Set([...lastOps.map(x=>x[0]), ...Object.keys(prices)])].sort((a,b)=>a.localeCompare(b,"fr"));
+  const box=$("priceList");
+  box.innerHTML = names.length ? '<div class="prices">'+names.map(o=>`<div class="prow"><span title="${esc(o)}">${esc(o)}</span><input type="number" min="0" max="2" step="0.01" data-price="${esc(o)}" value="${typeof prices[o]==="number"?prices[o]:""}" placeholder="${priceDef()}" aria-label="Prix ${esc(o)} en €/kWh"><small>€/kWh</small></div>`).join("")+'</div>'
+    : '<p class="note">Les opérateurs du trajet apparaîtront ici après le premier calcul.</p>';
+  priceSum();
+}
+function priceSum(){ const n=Object.keys(prices).length; $("sum-tarifs").textContent=`défaut ${fmtPrice(priceDef())}${n?` · ${n} opérateur${n>1?"s":""} renseigné${n>1?"s":""}`:""}`; }
+$("priceList").addEventListener("input",e=>{
+  const i=e.target.closest("[data-price]"); if(!i) return;
+  const v=parseFloat(i.value), o=i.dataset.price;
+  if(isFinite(v)) prices[o]=v; else delete prices[o];
+  storePrices(); priceSum(); autoCalc();
+});
+$("priceDef").addEventListener("input",()=>{ document.querySelectorAll("#priceList [data-price]").forEach(i=>i.placeholder=priceDef()); priceSum(); });
+
 let opsChargers=[];   // bornes du dernier calcul, pour pouvoir réafficher la liste à tout moment
 function renderOps(chargers=opsChargers){
   opsChargers=chargers;
@@ -1063,9 +1138,10 @@ function renderOps(chargers=opsChargers){
   lastOps=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
   const html = !lastOps.length ? '<p class="note">Aucun opérateur trouvé sur ce trajet.</p>' :
   `<div class="ops-actions"><span class="qlab">Opérateurs</span><button type="button" class="mini" data-ops="all">Tous</button><button type="button" class="mini" data-ops="none">Aucun</button></div>
-    <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${esc(o)} <small>${n}</small></label>`).join("")}</div>
+    <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${esc(o)} <small>${n} · ${fmtPrice(typeof prices[o]==="number"?prices[o]:priceDef())}</small></label>`).join("")}</div>
     <p class="note">${opsSel.mode==="all"?"Tous les opérateurs sont utilisés.":"Seuls les opérateurs cochés sont utilisés, y compris sur tes prochains trajets."}</p>`;
   $("opsList").innerHTML=html; document.querySelector("#quick .ops-target").innerHTML=html;
+  renderPrices();
 }
 function opsChanged(mode,src){
   if(mode==="all") opsSel={mode:"all",list:[]};
@@ -1232,7 +1308,7 @@ function updateSums(){
   const nv=readVias().filter(x=>x.q).length; set("trajet",`${v("from")||"?"} → ${nv?nv+" étape"+(nv>1?"s":"")+" → ":""}${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
-  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
+  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:"", {fast:"plus rapide",cheap:"moins chère",best:"compromis"}[v("pick")]].filter(Boolean).join(" · "));
   set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
@@ -1261,7 +1337,7 @@ $("kmlBtn").addEventListener("click",()=>{
   res.steps.filter(s=>s.type==="via"&&s.lat!=null).forEach((s,i)=>marks.push(pm(`Étape ${i+1} · ${s.name} · arrivée ${Math.round(s.soc)} %`,
     `Arrivée vers ${clockAt(s.t)} avec ${Math.round(s.soc)} %${s.pause?`, pause de ${Math.round(s.pause)} min`:""}`, s.lat, s.lon, "via")));
   st.forEach((s,i)=>marks.push(pm(`Arrêt ${i+1} · ${s.c.name} · arrivée ${Math.round(s.socIn)} %`,
-    `Arrivée vers ${clockAt(s.t)} avec ${Math.round(s.socIn)} %, recharge jusqu'à ${Math.round(s.socOut)} % (${Math.round(s.dur)} min). `+
+    `Arrivée vers ${clockAt(s.t)} avec ${Math.round(s.socIn)} %, recharge jusqu'à ${Math.round(s.socOut)} % (${Math.round(s.dur)} min${s.cost!=null&&s.kwhBilled>0.05?`, environ ${fmtEur(s.cost)}`:""}). `+
     `${s.c.kw?Math.round(s.c.kw)+" kW":"puissance non renseignée"}${s.c.operator?" · "+s.c.operator:""}`, s.c.lat, s.c.lon, "stop")));
   marks.push(pm(`Arrivée · ${Math.round(S.soc)} %`,`${b.label} — arrivée vers ${clockAt(S.totalSec)}`,b.lat,b.lon,"end"));
   const step=Math.max(1,Math.ceil(R.line.length/3000));
@@ -1289,9 +1365,9 @@ $("copyBtn").addEventListener("click",async()=>{
   let ns=0, nv=0;
   res.steps.forEach(s=>{
     if(s.type==="via") lines.push(`Étape ${++nv}. ${clockAt(s.t)} — ${s.name} : ${Math.round(s.soc)} %${s.pause?`, pause ${Math.round(s.pause)} min`:""}`);
-    if(s.type==="stop") lines.push(`${++ns}. ${clockAt(s.t)} — ${s.c.name}${s.c.kw?" ("+Math.round(s.c.kw)+" kW)":""} : arrivée ${Math.round(s.socIn)} %, recharge à ${Math.round(s.socOut)} % en ${Math.round(s.dur)} min — https://www.google.com/maps/search/?api=1&query=${s.c.lat},${s.c.lon}`);
+    if(s.type==="stop") lines.push(`${++ns}. ${clockAt(s.t)} — ${s.c.name}${s.c.kw?" ("+Math.round(s.c.kw)+" kW)":""} : arrivée ${Math.round(s.socIn)} %, recharge à ${Math.round(s.socOut)} % en ${Math.round(s.dur)} min${s.cost!=null&&s.kwhBilled>0.05?` (~${fmtEur(s.cost)})`:""} — https://www.google.com/maps/search/?api=1&query=${s.c.lat},${s.c.lon}`);
   });
-  lines.push(`Arrivée ${clockAt(S.totalSec)} avec ${Math.round(S.soc)} % — ${fmtKm(S.km)}, ${fmtH(S.totalSec)}`);
+  lines.push(`Arrivée ${clockAt(S.totalSec)} avec ${Math.round(S.soc)} % — ${fmtKm(S.km)}, ${fmtH(S.totalSec)}${S.cost!=null?`, recharges ~${fmtEur(S.cost)}`:""}`);
   const txt=lines.join("\n");
   try{ await navigator.clipboard.writeText(txt); $("exportNote").textContent="Feuille de route copiée."; }
   catch(e){ $("exportNote").textContent="Copie impossible dans ce navigateur."; }
@@ -1311,10 +1387,11 @@ const FIREBASE_CONFIG={
 };
 const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
 function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
-const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets}; };
+const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets, prices}; };
 function applyState(st){
   if(st.favs){ favs={trips:st.favs.trips||[],places:st.favs.places||[]}; try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){} }
   if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
+  if(st.prices && typeof st.prices==="object"){ prices=st.prices; try{ localStorage.setItem(PRICE_KEY,JSON.stringify(prices)); }catch(e){} }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
   renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps();
@@ -1455,7 +1532,7 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,pick:$("pick").value,priceOf,maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
@@ -1493,6 +1570,7 @@ $("f").addEventListener("submit", async e=>{
     if(key){ const names=await ocmOperators(key); C=C.map(c=>c.operatorId!=null && !c.operator ? {...c, operator: c.operatorId>1 ? (names[c.operatorId]||`Opérateur n°${c.operatorId}`) : ""} : c); }
     renderOps(C); lastCalcOk=true;
     C=C.filter(c=>opAllowed(opOf(c)));
+    if(p.usePmax) C=C.filter(c=>priceOf(c)<=p.pmax+1e-9);
     C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
     const RD=applyDriving(R,p);
     p.tripKwh=RD.E[RD.E.length-1];
@@ -1512,6 +1590,7 @@ $("f").addEventListener("submit", async e=>{
 });
 updateSums();
 syncQuick();
+renderPrices();
 initSync();
 // ---------- Application installable (PWA) ----------
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("trajetve-sw.js",{scope:"./trajet-ve.html"}).catch(()=>{});   // portée limitée à cette page : les autres sites du dépôt ne sont pas concernés
