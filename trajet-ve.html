@@ -50,6 +50,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
 h1{font-size:1.7rem;font-weight:700}
 h2{font-size:1.15rem;font-weight:600}
+.wrap>*{min-width:0}
 .wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:16px;max-width:1400px;margin:0 auto}
 @media (max-width:860px){.wrap{grid-template-columns:1fr}}
 .panel{overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
@@ -75,10 +76,10 @@ form{gap:0}
 .sheets .del{flex:none;border:0;background:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:6px}
 .sheets .del:hover{color:var(--bad)}
 [hidden]{display:none!important}
-.resbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:16px;align-items:start}
-@media (max-width:1100px){.resbar{grid-template-columns:1fr}}
+.resbar{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .resbar .stats{align-self:start}
 .quick{display:grid;gap:10px;padding:12px 14px}
+.quick .qgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 24px}
 .quick h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .qrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.86rem}
 .qchk{display:flex;align-items:center;gap:6px;min-width:92px;font-weight:500}
@@ -90,7 +91,7 @@ form{gap:0}
 .qrow:has(.qchk input:not(:checked)) .qin{opacity:.45}
 .tol span{color:var(--muted)}
 .tol input{width:64px!important}
-.quick .ops-grid{max-height:180px;overflow:auto}
+.quick .ops-grid{max-height:140px;overflow:auto}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .export .note{flex-basis:100%}
 .secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
@@ -130,7 +131,7 @@ button.go:disabled{opacity:.55;cursor:progress}
 details{font-size:.88rem}
 summary{cursor:pointer;color:var(--muted)}
 .main{display:grid;gap:16px;min-width:0;align-content:start}
-#map{isolation:isolate;z-index:0;height:430px;border-radius:10px;border:1px solid var(--line);background:var(--field)}
+#map{isolation:isolate;z-index:0;position:relative;overflow:hidden;height:430px;border-radius:10px;border:1px solid var(--line);background:var(--field)}
 @media (max-width:860px){#map{height:320px}}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .stat{box-shadow:1px 0 0 var(--line),0 1px 0 var(--line);background:var(--panel);padding:10px 12px}
@@ -381,6 +382,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       <div class="stats" id="stats"></div>
       <div class="quick panel" id="quick">
         <h2>Ajuster</h2>
+        <div class="qgrid">
         <div class="qrow">
           <label class="qchk"><input type="checkbox" data-m="useTime"> Toutes les</label>
           <span class="qin"><input type="number" data-m="maxMin" min="30" max="600" aria-label="Minutes de route entre deux arrêts"> min</span>
@@ -394,6 +396,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         <div class="qrow">
           <span class="qlab">Bornes</span>
           <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
+        </div>
         </div>
         <div class="ops-target"></div>
       </div>
@@ -422,6 +425,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.2.1", d:"25/10/2026", c:[
+    "Réglages rapides placés sous le résumé du trajet, sur toute la largeur",
+    "Carte toujours rognée à son cadre, même si la feuille de style de la carte ne se charge pas"]},
   {v:"2.2", d:"25/10/2026", c:[
     "Tolérance avant et après sur les deux règles d'arrêt (temps de route et % de batterie) : l'arrêt se fait dans la fenêtre, à la borne la plus puissante",
     "Réglages rapides sous la carte, à côté du résumé : règles d'arrêt, tolérances, puissance des bornes et opérateurs, avec recalcul immédiat",
