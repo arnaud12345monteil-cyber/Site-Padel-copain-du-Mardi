@@ -92,6 +92,17 @@ form{min-width:0}
 .qrow select{flex:1;min-width:0;padding:6px 8px}
 .qrow:has(.qchk input:not(:checked)) .qin{opacity:.45}
 .tol span{color:var(--muted)}
+.prio{list-style:none;margin:0;padding:0;display:grid;gap:4px;counter-reset:prio}
+.prio li{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.88rem}
+.prio li::before{counter-increment:prio;content:counter(prio);font:600 .8rem var(--f-mono);color:var(--accent);width:16px;text-align:center}
+.prio li span{flex:1;min-width:0}
+.prio li small{display:block;color:var(--muted);font-size:.76rem}
+.prio button{flex:none;width:30px;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;font-size:.9rem;line-height:1}
+.prio button:disabled{opacity:.3;cursor:default}
+.qprio{display:grid;gap:6px}
+.qprio .prio small{display:none}
+.prow .pref{flex:none;width:34px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--muted);cursor:pointer;font-size:1rem}
+.prow .pref[aria-pressed="true"]{color:var(--warn);border-color:var(--warn)}
 .prices{display:grid;gap:6px}
 .prow{display:flex;align-items:center;gap:8px}
 .prow span{flex:1;min-width:0;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -359,16 +370,21 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
             <p class="note">Les bornes plus chères sont ignorées (prix réglés dans la section Tarifs).</p>
           </div>
         </div>
-        <label>Dans la fenêtre d'arrêt, choisir
-          <select id="pick"><option value="fast">la borne la plus rapide</option><option value="cheap">la borne la moins chère</option><option value="best">le meilleur compromis prix / vitesse</option></select>
-        </label>
+        </div>
+      </details>
+      <details class="sec" data-sec="priorites" open>
+        <summary><span class="sec-t">Priorités</span><span class="sec-s" id="sum-priorites"></span></summary>
+        <div class="sec-b">
+          <div class="prio-target"></div>
+          <p class="note">Ordre utilisé pour choisir la borne à chaque arrêt, parmi celles qui respectent les limites (réserve, prix max, opérateurs exclus, puissance minimale). Chaque critère compte trois fois plus que le suivant.</p>
         </div>
       </details>
       <details class="sec" data-sec="tarifs">
-        <summary><span class="sec-t">Tarifs</span><span class="sec-s" id="sum-tarifs"></span></summary>
+        <summary><span class="sec-t">Tarifs et préférés</span><span class="sec-s" id="sum-tarifs"></span></summary>
         <div class="sec-b">
           <label>Prix par défaut <small>€/kWh, pour les opérateurs sans prix</small><input id="priceDef" type="number" min="0" max="2" step="0.01" value="0.55"></label>
           <div id="priceList"></div>
+          <p class="note">★ : opérateur préféré, utilisé par le critère « Opérateurs préférés » des priorités.</p>
           <p class="note">Prix au kWh facturé par la borne. Les pertes pendant la charge (environ 8 %) sont comptées : tu paies un peu plus que ce qui entre dans la batterie.</p>
         </div>
       </details>
@@ -430,10 +446,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <label class="qchk"><input type="checkbox" data-m="usePmax"> Prix max</label>
           <span class="qin"><input type="number" data-m="pmax" min="0" max="2" step="0.01" aria-label="Prix maximum en euros par kWh"> €/kWh</span>
         </div>
-        <div class="qrow">
-          <span class="qlab">Choix</span>
-          <select data-m="pick" aria-label="Critère de choix de la borne"><option value="fast">La plus rapide</option><option value="cheap">La moins chère</option><option value="best">Compromis prix / vitesse</option></select>
-        </div>
+        <div class="qprio"><span class="qlab">Priorités</span><div class="prio-target"></div></div>
         <div class="qrow">
           <span class="qlab">Bornes</span>
           <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
@@ -466,6 +479,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.5", d:"25/10/2026", c:[
+    "Ordre de priorité des critères de choix des bornes (règles d'arrêt, vitesse, prix, opérateurs préférés, détour), réglable avec ↑ ↓ dans le panneau de gauche et sous la carte",
+    "Opérateurs préférés (★) dans la section Tarifs et préférés",
+    "Remplace le choix « plus rapide / moins chère / compromis » de la v2.3"]},
   {v:"2.4", d:"25/10/2026", c:[
     "Boutons Calculer et Effacer aussi en haut du panneau de gauche",
     "Option « Rester sur l'autoroute » (Bornes → Plus d'options) : sur les portions d'autoroute, seules les bornes sur une aire sont retenues",
@@ -917,32 +934,34 @@ function simulate(R,C,p){
     const reachOK = c => socAt(c) >= p.floor-0.01;
     const timeOK  = c => !p.useTime || driveFromRef(c) <= tLate+1;
     const cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
-    // Bornes dans la fenêtre de la règle qui déclenche l'arrêt : on y prend la plus puissante
-    const inWin = reason==="time" ? (c=>driveFromRef(c)>=tEarly)
-                : reason==="soc"  ? (c=>socAt(c)<=sEarly)
-                : null;
-    let pool = inWin ? cand.filter(inWin) : [];
-    let late=false;
-    if(!pool.length && cand.length){
-      // rien dans la fenêtre : la borne la plus tardive possible (arrêt plus tôt que voulu)
-      const maxK=Math.max(...cand.map(c=>c.km)); pool=cand.filter(c=>c.km>=maxK-25);
-    }
+    // Toutes les bornes possibles avant la limite sont candidates ; on les classe selon l'ordre de priorité choisi
+    let pool=cand.slice(), late=false;
     if(!pool.length && reason==="soc"){ pool=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)).slice(0,1); late=pool.length>0; }
     if(!pool.length){
       const where = fmtKm(hi)+" après le départ";
       const why = reason==="time" ? `dans la limite de ${p.maxMin}${p.timeTolHi?` (+${p.timeTolHi})`:""} min de route` : "avant de passer sous la réserve";
       return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'ajouter des opérateurs, de relever le prix maximum, de baisser la puissance minimale des bornes, d'augmenter la tolérance ou la distance max de la route.`, partial:steps};
     }
-    // Choix de la borne : la plus rapide, la moins chère, ou un compromis (prix pondéré par la vitesse de charge)
     const pr=c=>p.priceOf ? p.priceOf(c) : 0;
-    if(p.pick==="cheap") pool.sort((a,b)=> pr(a)-pr(b) || effKW(b)-effKW(a) || b.km-a.km);
-    else if(p.pick==="best"){
-      const kmax=Math.max(...pool.map(effKW)), prmin=Math.min(...pool.map(pr));
-      // score : écart de prix (en %) + écart de vitesse (en %) ; le plus bas l'emporte
-      const sc=c=>(prmin>0?(pr(c)-prmin)/prmin:0) + (kmax-effKW(c))/kmax;
-      pool.sort((a,b)=> sc(a)-sc(b) || b.km-a.km);
-    }
-    else pool.sort((a,b)=> effKW(b)-effKW(a) || b.km-a.km);
+    const isPref=c=>p.isPref ? p.isPref(c) : false;
+    // Pénalités de 0 (idéal) à 1 pour chaque critère
+    const kmax=Math.max(...pool.map(effKW)), prmin=Math.min(...pool.map(pr)), anyPref=pool.some(isPref);
+    const maxK=Math.max(...pool.map(c=>c.km)), minK=Math.min(...pool.map(c=>c.km));
+    const pen={
+      // hors de la fenêtre d'arrêt : 0,5 minimum, pour qu'une règle placée en tête l'emporte toujours
+      regle: c=> reason==="time" ? (driveFromRef(c)>=tEarly ? 0 : 0.5+0.5*Math.min(1,(tEarly-driveFromRef(c))/Math.max(1,tEarly)))
+               : reason==="soc"  ? (socAt(c)<=sEarly ? 0 : 0.5+0.5*Math.min(1,(socAt(c)-sEarly)/Math.max(1,100-sEarly)))
+               : (maxK-c.km)/Math.max(1,maxK-minK),
+      vitesse: c=> (kmax-effKW(c))/kmax,
+      prix: c=> prmin>0 ? Math.min(1,(pr(c)-prmin)/prmin) : 0,
+      operateur: c=> anyPref && !isPref(c) ? 1 : 0,
+      detour: c=> Math.min(1,c.det/2)
+    };
+    // Poids décroissants selon le rang : 1, 1/3, 1/9… (le critère suivant ne peut pas renverser le précédent sauf écart net)
+    const order=(p.prio&&p.prio.length?p.prio:PRIO_DEFAULT), wt={};
+    order.forEach((k,r)=>wt[k]=Math.pow(3,-r));
+    const score=c=>Object.keys(pen).reduce((s2,k)=>s2+(wt[k]||0)*pen[k](c),0);
+    pool.sort((a,b)=> score(a)-score(b) || b.km-a.km);
     const c=pool[0];
     if(c.idx>vIdx && vIdx<n-1){ goVia(); continue; }     // l'étape arrive avant la borne retenue : on la traite d'abord
 
@@ -1087,7 +1106,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","pick","priceDef","stayHw"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -1134,6 +1153,37 @@ const UNKNOWN_OP="Opérateur non renseigné";
 const opOf=c=>(c.operator||"").trim()||UNKNOWN_OP;
 const opAllowed=name=>opsSel.mode==="all" || opsSel.list.includes(name);
 let lastOps=[];
+// ---------- Priorités de choix des bornes ----------
+const PRIO_LABELS={
+  regle:["Règles d'arrêt","s'arrêter dans la fenêtre de temps ou de batterie"],
+  vitesse:["Vitesse de charge","la borne la plus puissante"],
+  prix:["Prix","le kWh le moins cher (section Tarifs)"],
+  operateur:["Opérateurs préférés","ceux marqués ★ dans Tarifs"],
+  detour:["Détour","la borne la plus proche de la route"]
+};
+const PRIO_DEFAULT=["regle","vitesse","prix","operateur","detour"];
+const PRIO_KEY="trajetve-priorites";
+let prio=PRIO_DEFAULT.slice();
+try{ const o=JSON.parse(localStorage.getItem(PRIO_KEY)||"null"); if(Array.isArray(o) && o.length===PRIO_DEFAULT.length && PRIO_DEFAULT.every(k=>o.includes(k))) prio=o; }catch(e){}
+function renderPrio(){
+  const html='<ol class="prio">'+prio.map((k,i)=>`<li><span>${PRIO_LABELS[k][0]}<small>${PRIO_LABELS[k][1]}</small></span><button type="button" data-up="${i}" ${i?"":"disabled"} aria-label="Monter ${PRIO_LABELS[k][0]}">↑</button><button type="button" data-down="${i}" ${i<prio.length-1?"":"disabled"} aria-label="Descendre ${PRIO_LABELS[k][0]}">↓</button></li>`).join("")+"</ol>";
+  document.querySelectorAll(".prio-target").forEach(t=>t.innerHTML=html);
+  $("sum-priorites").textContent=prio.map(k=>PRIO_LABELS[k][0].toLowerCase()).join(" › ");
+}
+document.querySelectorAll(".prio-target").forEach(t=>t.addEventListener("click",e=>{
+  const u=e.target.closest("[data-up]"), d=e.target.closest("[data-down]"); if(!u&&!d) return;
+  const i=+(u?u.dataset.up:d.dataset.down), j=u?i-1:i+1; if(j<0||j>=prio.length) return;
+  [prio[i],prio[j]]=[prio[j],prio[i]];
+  try{ localStorage.setItem(PRIO_KEY,JSON.stringify(prio)); }catch(_){}
+  syncPush(); renderPrio(); autoCalc();
+}));
+
+// ---------- Opérateurs préférés ----------
+const PREF_KEY="trajetve-preferes";
+let prefOps=[];
+try{ const o=JSON.parse(localStorage.getItem(PREF_KEY)||"[]"); if(Array.isArray(o)) prefOps=o; }catch(e){}
+const storePref=()=>{ try{ localStorage.setItem(PREF_KEY,JSON.stringify(prefOps)); }catch(e){} syncPush(); };
+
 // ---------- Tarifs par opérateur ----------
 const PRICE_KEY="trajetve-prix";
 let prices={};   // { "Electra": 0.49, … } en €/kWh
@@ -1146,11 +1196,17 @@ const fmtPrice=v=>v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFract
 function renderPrices(){
   const names=[...new Set([...lastOps.map(x=>x[0]), ...Object.keys(prices)])].sort((a,b)=>a.localeCompare(b,"fr"));
   const box=$("priceList");
-  box.innerHTML = names.length ? '<div class="prices">'+names.map(o=>`<div class="prow"><span title="${esc(o)}">${esc(o)}</span><input type="number" min="0" max="2" step="0.01" data-price="${esc(o)}" value="${typeof prices[o]==="number"?prices[o]:""}" placeholder="${priceDef()}" aria-label="Prix ${esc(o)} en €/kWh"><small>€/kWh</small></div>`).join("")+'</div>'
+  box.innerHTML = names.length ? '<div class="prices">'+names.map(o=>`<div class="prow"><button type="button" class="pref" data-pref="${esc(o)}" aria-pressed="${prefOps.includes(o)}" title="Opérateur préféré">${prefOps.includes(o)?"★":"☆"}</button><span title="${esc(o)}">${esc(o)}</span><input type="number" min="0" max="2" step="0.01" data-price="${esc(o)}" value="${typeof prices[o]==="number"?prices[o]:""}" placeholder="${priceDef()}" aria-label="Prix ${esc(o)} en €/kWh"><small>€/kWh</small></div>`).join("")+'</div>'
     : '<p class="note">Les opérateurs du trajet apparaîtront ici après le premier calcul.</p>';
   priceSum();
 }
-function priceSum(){ const n=Object.keys(prices).length; $("sum-tarifs").textContent=`défaut ${fmtPrice(priceDef())}${n?` · ${n} opérateur${n>1?"s":""} renseigné${n>1?"s":""}`:""}`; }
+function priceSum(){ const n=Object.keys(prices).length; $("sum-tarifs").textContent=`défaut ${fmtPrice(priceDef())}${n?` · ${n} prix renseigné${n>1?"s":""}`:""}${prefOps.length?` · ${prefOps.length} préféré${prefOps.length>1?"s":""}`:""}`; }
+$("priceList").addEventListener("click",e=>{
+  const b=e.target.closest("[data-pref]"); if(!b) return;
+  const o=b.dataset.pref, k=prefOps.indexOf(o);
+  if(k>=0) prefOps.splice(k,1); else prefOps.push(o);
+  storePref(); b.textContent=k>=0?"☆":"★"; b.setAttribute("aria-pressed",k<0); priceSum(); autoCalc();
+});
 $("priceList").addEventListener("input",e=>{
   const i=e.target.closest("[data-price]"); if(!i) return;
   const v=parseFloat(i.value), o=i.dataset.price;
@@ -1168,7 +1224,7 @@ function renderOps(chargers=opsChargers){
   lastOps=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
   const html = !lastOps.length ? '<p class="note">Aucun opérateur trouvé sur ce trajet.</p>' :
   `<div class="ops-actions"><span class="qlab">Opérateurs</span><button type="button" class="mini" data-ops="all">Tous</button><button type="button" class="mini" data-ops="none">Aucun</button></div>
-    <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${esc(o)} <small>${n} · ${fmtPrice(typeof prices[o]==="number"?prices[o]:priceDef())}</small></label>`).join("")}</div>
+    <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${prefOps.includes(o)?"★ ":""}${esc(o)} <small>${n} · ${fmtPrice(typeof prices[o]==="number"?prices[o]:priceDef())}</small></label>`).join("")}</div>
     <p class="note">${opsSel.mode==="all"?"Tous les opérateurs sont utilisés.":"Seuls les opérateurs cochés sont utilisés, y compris sur tes prochains trajets."}</p>`;
   $("opsList").innerHTML=html; document.querySelector("#quick .ops-target").innerHTML=html;
   renderPrices();
@@ -1338,7 +1394,7 @@ function updateSums(){
   const nv=readVias().filter(x=>x.q).length; set("trajet",`${v("from")||"?"} → ${nv?nv+" étape"+(nv>1?"s":"")+" → ":""}${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
-  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:"", {fast:"plus rapide",cheap:"moins chère",best:"compromis"}[v("pick")]].filter(Boolean).join(" · "));
+  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:""].filter(Boolean).join(" · "));
   set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"}${$("stayHw").checked?" · aires d'autoroute":""} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
@@ -1417,11 +1473,13 @@ const FIREBASE_CONFIG={
 };
 const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
 function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
-const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets, prices}; };
+const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets, prices, prio, prefOps}; };
 function applyState(st){
   if(st.favs){ favs={trips:st.favs.trips||[],places:st.favs.places||[]}; try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){} }
   if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
   if(st.prices && typeof st.prices==="object"){ prices=st.prices; try{ localStorage.setItem(PRICE_KEY,JSON.stringify(prices)); }catch(e){} }
+  if(Array.isArray(st.prio) && st.prio.length===PRIO_DEFAULT.length){ prio=st.prio; try{ localStorage.setItem(PRIO_KEY,JSON.stringify(prio)); }catch(e){} renderPrio(); }
+  if(Array.isArray(st.prefOps)){ prefOps=st.prefOps; try{ localStorage.setItem(PREF_KEY,JSON.stringify(prefOps)); }catch(e){} renderPrices(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
   renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps();
@@ -1563,7 +1621,7 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,pick:$("pick").value,priceOf,maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
@@ -1623,6 +1681,7 @@ $("f").addEventListener("submit", async e=>{
 updateSums();
 syncQuick();
 renderPrices();
+renderPrio();
 initSync();
 // ---------- Application installable (PWA) ----------
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("trajetve-sw.js",{scope:"./trajet-ve.html"}).catch(()=>{});   // portée limitée à cette page : les autres sites du dépôt ne sont pas concernés
