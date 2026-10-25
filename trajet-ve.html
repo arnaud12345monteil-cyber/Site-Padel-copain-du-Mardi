@@ -67,12 +67,14 @@ header.top{position:relative}
 .changelog section:last-child ul{margin-bottom:0}
 form{display:grid;gap:14px}
 form{gap:0}
-.sheets{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.sheets li{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.sheets{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.sec-b,.sec-b>*{min-width:0}
+form{min-width:0}
+.sheets li{min-width:0;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
 .sheets li.cur{border-color:var(--accent)}
 .sheets .open{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;font:inherit}
 .sheets .open b{display:block;font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sheets .open span{font-size:.78rem;color:var(--muted)}
+.sheets .open span{display:block;font-size:.78rem;color:var(--muted)}
 .sheets .del{flex:none;border:0;background:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:6px}
 .sheets .del:hover{color:var(--bad)}
 [hidden]{display:none!important}
@@ -104,7 +106,7 @@ details.sec[open]>summary::after{transform:rotate(-135deg)}
 .sec-t{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);flex:none}
 .sec-s{font-size:.82rem;color:var(--ink);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 details.sec[open] .sec-s{display:none}
-.sec-b{display:grid;gap:10px;padding-bottom:14px}
+.sec-b{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding-bottom:14px}
 .syncbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.84rem}
 .syncbar.on{border-color:var(--charge)}
 .syncbar.on #syncTxt::before{content:"● ";color:var(--charge)}
@@ -425,6 +427,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.2.2", d:"25/10/2026", c:[
+    "Correctif : le panneau de gauche s'élargissait et recouvrait la carte dès qu'une feuille de route au nom long était enregistrée"]},
   {v:"2.2.1", d:"25/10/2026", c:[
     "Réglages rapides placés sous le résumé du trajet, sur toute la largeur",
     "Carte toujours rognée à son cadre, même si la feuille de style de la carte ne se charge pas"]},
