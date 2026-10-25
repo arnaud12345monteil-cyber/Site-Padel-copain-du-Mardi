@@ -69,7 +69,9 @@ form{display:grid;gap:14px}
 form{gap:0}
 .sheets{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
 .sec-b,.sec-b>*{min-width:0}
-form{min-width:0}
+form{min-width:0;grid-template-columns:minmax(0,1fr)}
+aside.panel{overflow-x:clip}
+select{min-width:0;max-width:100%}
 .sheets li{min-width:0;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
 .sheets li.cur{border-color:var(--accent)}
 .sheets .open{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;color:var(--ink);cursor:pointer;font:inherit}
@@ -121,7 +123,7 @@ details.sec>summary::-webkit-details-marker{display:none}
 details.sec>summary::after{content:"";margin-left:auto;align-self:center;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
 details.sec[open]>summary::after{transform:rotate(-135deg)}
 .sec-t{font-family:var(--f-display);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);flex:none}
-.sec-s{font-size:.82rem;color:var(--ink);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sec-s{flex:1 1 0;width:0;font-size:.82rem;color:var(--ink);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 details.sec[open] .sec-s{display:none}
 .sec-b{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding-bottom:14px}
 .syncbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.84rem}
@@ -479,6 +481,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.5.1", d:"25/10/2026", c:[
+    "Correctif : le résumé d'une section réduite (règles d'arrêt, voiture…) élargissait le panneau de gauche, qui recouvrait la carte"]},
   {v:"2.5", d:"25/10/2026", c:[
     "Ordre de priorité des critères de choix des bornes (règles d'arrêt, vitesse, prix, opérateurs préférés, détour), réglable avec ↑ ↓ dans le panneau de gauche et sous la carte",
     "Opérateurs préférés (★) dans la section Tarifs et préférés",
