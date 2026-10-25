@@ -427,6 +427,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.2.3", d:"25/10/2026", c:[
+    "Correctif : la liste des opérateurs se vidait (« Aucun opérateur trouvé ») dès qu'une synchronisation arrivait d'un autre appareil"]},
   {v:"2.2.2", d:"25/10/2026", c:[
     "Correctif : le panneau de gauche s'élargissait et recouvrait la carte dès qu'une feuille de route au nom long était enregistrée"]},
   {v:"2.2.1", d:"25/10/2026", c:[
@@ -1052,7 +1054,9 @@ const UNKNOWN_OP="Opérateur non renseigné";
 const opOf=c=>(c.operator||"").trim()||UNKNOWN_OP;
 const opAllowed=name=>opsSel.mode==="all" || opsSel.list.includes(name);
 let lastOps=[];
-function renderOps(chargers){
+let opsChargers=[];   // bornes du dernier calcul, pour pouvoir réafficher la liste à tout moment
+function renderOps(chargers=opsChargers){
+  opsChargers=chargers;
   const counts=new Map(); for(const c of chargers){ const o=opOf(c); counts.set(o,(counts.get(o)||0)+1); }
   // on garde aussi les opérateurs déjà cochés absents de ce trajet
   for(const o of opsSel.list) if(!counts.has(o)) counts.set(o,0);
@@ -1070,7 +1074,7 @@ function opsChanged(mode,src){
     opsSel = (mode!=="none" && list.length===lastOps.length) ? {mode:"all",list:[]} : {mode:"list",list: mode==="none"?[]:list};
   }
   storeOps();
-  if(lastCalcOk) $("f").requestSubmit(); else renderOps([]);
+  if(lastCalcOk) $("f").requestSubmit(); else renderOps();
 }
 for(const box of [$("opsList"), document.querySelector("#quick .ops-target")]){
   box.addEventListener("click",e=>{ const b=e.target.closest("[data-ops]"); if(b) opsChanged(b.dataset.ops); });
@@ -1313,7 +1317,7 @@ function applyState(st){
   if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
-  renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps([]);
+  renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps();
 }
 // Lit un document distant : format 2 = état en JSON ; ancien format = champs directs
 function decodeRemote(r){ if(r && typeof r.data==="string"){ try{ return JSON.parse(r.data); }catch(e){ return {}; } } return r||{}; }
