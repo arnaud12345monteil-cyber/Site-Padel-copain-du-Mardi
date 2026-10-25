@@ -118,6 +118,10 @@ select{min-width:0;max-width:100%}
 .prow span{flex:1;min-width:0;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow input{width:84px;flex:none}
 .prow small{color:var(--muted);flex:none}
+.adjust{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px;padding:6px 10px;border:1px dashed var(--line);border-radius:8px;font-size:.84rem;color:var(--muted)}
+.adjust label{display:inline-flex;align-items:center;gap:4px}
+.adjust input{width:64px;padding:4px 6px;font-size:.85rem}
+.chip.adj{border-color:var(--accent);color:var(--accent)}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
 .quick .ops-grid{max-height:140px;overflow:auto}
@@ -311,6 +315,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <label>Charge rapide max <small>kW</small><input id="dcmax" type="number" min="20" max="400"></label>
           <label>Charge AC max <small>kW</small><input id="acmax" type="number" min="3" max="22"></label>
         </div>
+        <label>Pertes pendant la recharge <small>%, énergie payée mais non stockée</small><input id="loss" type="number" min="0" max="30" step="0.5" value="8"></label>
         </div>
       </details>
       <details class="sec" data-sec="conduite" open>
@@ -395,7 +400,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <label>Prix par défaut <small>€/kWh, pour les opérateurs sans prix</small><input id="priceDef" type="number" min="0" max="2" step="0.01" value="0.55"></label>
           <div id="priceList"></div>
           <p class="note">★ : opérateur préféré, utilisé par le critère « Opérateurs préférés » des priorités.</p>
-          <p class="note">Prix au kWh facturé par la borne. Les pertes pendant la charge (environ 8 %) sont comptées : tu paies un peu plus que ce qui entre dans la batterie.</p>
+          <p class="note">Prix au kWh facturé par la borne. Les pertes pendant la charge (réglables dans Voiture) sont comptées : tu paies un peu plus que ce qui entre dans la batterie.</p>
         </div>
       </details>
       <details class="sec" data-sec="bornes" open>
@@ -498,6 +503,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.7", d:"25/10/2026", c:[
+    "Pertes pendant la recharge réglables en % (section Voiture) : temps de charge et coût en tiennent compte",
+    "Feuille de route : chaque arrêt de recharge peut être ajusté (charger jusqu'à X % ou rester Y min), avec recalcul de la suite du trajet et bouton « Rétablir »",
+    "Feuille de route : pause modifiable directement sur chaque étape"]},
   {v:"2.6", d:"25/10/2026", c:[
     "Bloc « Ajuster » sous la carte découpé en trois parties repliables (règles d'arrêt et prix, priorités, opérateurs), avec un résumé quand elles sont réduites ; l'état est mémorisé"]},
   {v:"2.5.1", d:"25/10/2026", c:[
@@ -640,7 +649,7 @@ function rate(soc, ch){
   const f = soc<50 ? 1 : soc<80 ? 1-0.5*(soc-50)/30 : 0.5-0.3*(soc-80)/20;
   return Math.max(3, Math.min(ch.kw, ch.carKW*f));
 }
-const EFF = 0.92; // pertes de charge : énergie facturée = énergie stockée / EFF
+let EFF = 0.92; // rendement de charge (1 − pertes) : énergie facturée = énergie stockée / EFF ; réglable dans Voiture
 function chargeMinutes(a,b,ch,cap){
   let m=0;
   for(let p=a;p<b-1e-9;p+=0.5){ const st=Math.min(0.5,b-p); m += (cap*st/100/EFF)/rate(p+st/2,ch)*60; }
@@ -1011,15 +1020,21 @@ function simulate(R,C,p){
       socOut=Math.max(soc, Math.min(100, Math.ceil(finishInTime ? need : Math.min(need,needNext))));
     }
     const ch=chOf(c);
+    // Réglage manuel de cet arrêt depuis la feuille de route : % cible et/ou durée d'arrêt
+    const ov=(p.ov||{})[c.id];
+    if(ov && ov.target!=null) socOut=Math.max(soc, Math.min(100, ov.target));
     const cm=chargeMinutes(soc,socOut,ch,p.cap);
-    const dur=p.useMinStop ? Math.max(cm,p.minStop) : cm;
-    if(dur>cm && socOut<ceil) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,ceil));
-    if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
+    let dur=p.useMinStop ? Math.max(cm,p.minStop) : cm;
+    if(ov && ov.dur!=null) dur=Math.max(cm, ov.dur);
+    // temps d'arrêt plus long que la charge : on continue à charger (jusqu'au plafond, ou jusqu'à 100 % si la durée est imposée)
+    const ceil2 = ov && ov.dur!=null && ov.target==null ? 100 : ceil;
+    if(dur>cm && socOut<ceil2 && !(ov && ov.target!=null)) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,ceil2));
+    if(!lastLeg && socOut<=soc+0.5 && reason!=="time" && !ov) return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
     soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
     const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
     costTot+=cost; kwhCharged+=kwhBilled;
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -1084,11 +1099,15 @@ function render(res,p,a,b){
       if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
       if(c.onAire) chips.push(`<span class="chip">sur aire d'autoroute</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
+      if(s.ov) chips.push(`<span class="chip adj">ajusté</span>`);
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
-      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>`);
+      const o=(stopOv||{})[c.id]||{};
+      const adj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-cid="${esc(c.id)}"><span>Ajuster :</span><label>jusqu'à <input type="number" min="1" max="100" data-ov="target" value="${o.target??""}" placeholder="${Math.round(s.socOut)}"> %</label><label>ou rester <input type="number" min="0" max="600" step="5" data-ov="dur" value="${o.dur??""}" placeholder="${Math.round(s.dur)}"> min</label>${s.ov?'<button type="button" class="swap" data-ovreset>Rétablir</button>':""}</div>` : "";
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}`);
     }
     else if(s.type==="via"){ kv++;
-      html+=li(at(s.t),"via",`<h3>Étape ${kv} · ${esc(s.name)}</h3><p>${s.pause?`Pause de ${Math.round(s.pause)} min, départ à ${at(s.t+s.pause*60)}`:"Passage sans arrêt"}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
+      const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label></div>` : "";
+      html+=li(at(s.t),"via",`<h3>Étape ${kv} · ${esc(s.name)}</h3><p>${s.pause?`Pause de ${Math.round(s.pause)} min, départ à ${at(s.t+s.pause*60)}`:"Passage sans arrêt"}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>${vadj}`);
     }
     else if(s.type==="end") html+=li(at(s.t),"",`<h3>Arrivée</h3><p>${esc(short(b.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
   }
@@ -1129,7 +1148,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw","loss"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -1138,7 +1157,9 @@ function applySettings(o,skip=[]){ for(const f of FIELDS) if(f in o && !skip.inc
 let syncPush=()=>{};   // remplacée par la synchronisation serveur une fois connecté
 function save(){ try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} syncPush(); }
 function load(){ try{ const o=JSON.parse(localStorage.getItem("trajetve")||"null"); if(!o) return false; applySettings(o); return true; }catch(e){ return false; } }
+function setEff(){ const l=parseFloat($("loss").value); EFF=1-(isFinite(l)?Math.min(30,Math.max(0,l)):8)/100; }
 function showCurve(){
+  setEff();
   const c=CARS[$("car").value], el=$("curveInfo");
   if(!c || $("car").value==="0" || !c.curve){ el.textContent="Courbe de charge générique (pleine puissance jusqu'à 50 %, puis baisse). Choisis un modèle pour sa courbe réelle."; return; }
   const ch={dc:true,kw:999,carKW:999,curve:c.curve};
@@ -1426,7 +1447,7 @@ $("secClose").addEventListener("click",()=>document.querySelectorAll("details.se
 function updateSums(){
   const v=id=>$(id).value, on=id=>$(id).checked, set=(k,t)=>{ $("sum-"+k).textContent=t; };
   const nv=readVias().filter(x=>x.q).length; set("trajet",`${v("from")||"?"} → ${nv?nv+" étape"+(nv>1?"s":"")+" → ":""}${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
-  set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
+  set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh · pertes ${v("loss")||0} %`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
   set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:""].filter(Boolean).join(" · "));
   setTimeout(()=>{ try{ quickSums(); }catch(e){} },0);
@@ -1587,6 +1608,27 @@ async function initSync(){
 }
 
 let cache={};
+// ---------- Réglages manuels par arrêt (depuis la feuille de route) ----------
+let stopOv={}, ovTrip="", viewingSheet=false;
+$("road").addEventListener("change",e=>{
+  const i=e.target;
+  if(i.matches("[data-vpause]")){
+    const row=viaRows()[+i.closest("[data-via]").dataset.via]; if(!row) return;
+    const pin=row.querySelector("input.pause"); pin.value=i.value; saveVias();
+    pin.dispatchEvent(new Event("input",{bubbles:true})); return;
+  }
+  if(!i.matches("[data-ov]")) return;
+  const id=i.closest("[data-cid]").dataset.cid, v=parseFloat(i.value), o={...(stopOv[id]||{})};
+  if(isFinite(v)) o[i.dataset.ov]=v; else delete o[i.dataset.ov];
+  if(i.dataset.ov==="target" && isFinite(v)) delete o.dur;      // un seul réglage à la fois : le dernier saisi
+  if(i.dataset.ov==="dur" && isFinite(v)) delete o.target;
+  if(Object.keys(o).length) stopOv[id]=o; else delete stopOv[id];
+  $("f").requestSubmit();
+});
+$("road").addEventListener("click",e=>{
+  const b=e.target.closest("[data-ovreset]"); if(!b) return;
+  delete stopOv[b.closest("[data-cid]").dataset.cid]; $("f").requestSubmit();
+});
 // ---------- Recalcul automatique, effacement, feuilles de route enregistrées ----------
 let calcBusy=false, calcAgain=false, autoT=0, curSheet=null;
 const NO_AUTO=["from","to","ocmKey","favTrip"];
@@ -1594,7 +1636,7 @@ function autoCalc(){ if(!lastCalcOk || !$("from").value.trim() || !$("to").value
 $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.includes(e.target.id) || e.target.classList.contains("vq")) return; autoCalc(); });
 
 function clearResults(){
-  lastRun=null; lastCalcOk=false; curSheet=null;
+  lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; ovTrip="";
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
@@ -1642,10 +1684,12 @@ function openSheet(sh){
   clearTimeout(autoT); calcAgain=false;
   $("from").value=sh.fq; $("to").value=sh.tq; setVias(sh.vq||[]); saveVias();
   $("from-ok").textContent=""; $("to-ok").textContent="";
+  viewingSheet=true;
   const p={...sh.p, dep:new Date(sh.p.dep)}, R={line:sh.line};
   drawMap(R,[],sh.res,sh.a,sh.b,false);
   render(sh.res,p,sh.a,sh.b);
-  lastRun={res:sh.res,p,a:sh.a,b:sh.b,R,fq:sh.fq,tq:sh.tq,vq:sh.vq||[]}; $("exportBar").hidden=false; $("exportNote").textContent="";
+  lastRun={res:sh.res,p,a:sh.a,b:sh.b,R,fq:sh.fq,tq:sh.tq,vq:sh.vq||[]};
+  viewingSheet=true; stopOv={}; ovTrip=""; $("exportBar").hidden=false; $("exportNote").textContent="";
   lastCalcOk=true; curSheet=sh.id; renderSheets(); renderFavs(); updateSums();
   setStatus(`Feuille de route enregistrée le ${fmtDate(sh.savedAt)}, affichée telle quelle. Modifie un réglage ou clique sur Calculer pour la recalculer.`);
   window.scrollTo({top:$("map").getBoundingClientRect().top+scrollY-10,behavior:"smooth"});
@@ -1656,11 +1700,12 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),ov:stopOv,priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
   for(const [k,v] of Object.entries(p)) if(typeof v==="number" && !isFinite(v)) return setStatus("Un champ numérique est vide ou invalide.",true);
+  setEff();
   if(p.c130<p.c90) return setStatus("La consommation à 130 km/h doit être supérieure ou égale à celle à 90 km/h.",true);
   p.kDet=consModel(p.c90,p.c130,p.season)(50);
   if(p.arrival>100||p.arrival<0||p.socStart>100) return setStatus("Les pourcentages de batterie doivent être entre 0 et 100.",true);
@@ -1675,6 +1720,8 @@ $("f").addEventListener("submit", async e=>{
     const T={}, t0=performance.now(), lap=k=>{ T[k]=(performance.now()-t0)/1000; };
     const geo=async q=>{ const k="adr:"+q.toLowerCase(); const hit=lsGet(k,30*DAY); if(hit) return hit; const g=await geocode(q); lsSet(k,g); return g; };
     const vrows=viaRows().filter(r=>r.querySelector("input.vq").value.trim());
+    { const tk=[fq,...vrows.map(r=>r.querySelector("input.vq").value.trim()),tq].join("|").toLowerCase(); if(tk!==ovTrip){ stopOv={}; ovTrip=tk; } }
+    viewingSheet=false;
     const vq=vrows.map(r=>({q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0, id:r.querySelector("input.vq").id}));
     const [a,b,...vg]=await Promise.all([geo(fq),geo(tq),...vq.map(v=>geo(v.q))]);
     for(const [id,g] of [["from",a],["to",b],...vq.map((v,k)=>[v.id,vg[k]])]){ const el=$(id+"-ok"); if(!el.textContent){ el.textContent="Compris comme : "+g.label; el.classList.add("warn"); } }
