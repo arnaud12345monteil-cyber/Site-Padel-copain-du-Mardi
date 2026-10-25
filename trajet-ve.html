@@ -52,7 +52,7 @@ h1{font-size:1.7rem;font-weight:700}
 h2{font-size:1.15rem;font-weight:600}
 .wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:16px;max-width:1400px;margin:0 auto}
 @media (max-width:860px){.wrap{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel{overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
 header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1400px;margin:0 auto 14px}
 header.top p{margin:0;color:var(--muted)}
 header.top{position:relative}
@@ -74,6 +74,23 @@ form{gap:0}
 .sheets .open span{font-size:.78rem;color:var(--muted)}
 .sheets .del{flex:none;border:0;background:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px 6px;border-radius:6px}
 .sheets .del:hover{color:var(--bad)}
+[hidden]{display:none!important}
+.resbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:16px;align-items:start}
+@media (max-width:1100px){.resbar{grid-template-columns:1fr}}
+.resbar .stats{align-self:start}
+.quick{display:grid;gap:10px;padding:12px 14px}
+.quick h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.qrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.86rem}
+.qchk{display:flex;align-items:center;gap:6px;min-width:92px;font-weight:500}
+.qchk input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
+.qin{display:inline-flex;align-items:center;gap:4px;color:var(--muted)}
+.qin input{width:52px;padding:5px 6px}
+.qlab{min-width:92px;font-weight:500}
+.qrow select{flex:1;min-width:0;padding:6px 8px}
+.qrow:has(.qchk input:not(:checked)) .qin{opacity:.45}
+.tol span{color:var(--muted)}
+.tol input{width:64px!important}
+.quick .ops-grid{max-height:180px;overflow:auto}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .export .note{flex-basis:100%}
 .secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
@@ -113,10 +130,10 @@ button.go:disabled{opacity:.55;cursor:progress}
 details{font-size:.88rem}
 summary{cursor:pointer;color:var(--muted)}
 .main{display:grid;gap:16px;min-width:0;align-content:start}
-#map{height:430px;border-radius:10px;border:1px solid var(--line);background:var(--field)}
+#map{isolation:isolate;z-index:0;height:430px;border-radius:10px;border:1px solid var(--line);background:var(--field)}
 @media (max-width:860px){#map{height:320px}}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.stat{background:var(--panel);padding:10px 12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{box-shadow:1px 0 0 var(--line),0 1px 0 var(--line);background:var(--panel);padding:10px 12px}
 .stat b{display:block;font:600 1.25rem var(--f-mono);font-variant-numeric:tabular-nums}
 .stat span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 ol.road{list-style:none;margin:0;padding:0;display:grid}
@@ -176,14 +193,16 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg3{grid-template-columns:repeat(3,1fr)}
 .ops{display:grid;gap:6px}
-.ops-actions{display:flex;gap:6px;flex-wrap:wrap}
+.ops-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#opsList .ops-actions .qlab{display:none}
 .ops-grid{display:flex;flex-wrap:wrap;gap:6px}
 .op{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--field);font-size:.85rem;cursor:pointer}
 .op input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
 .op small{font-family:var(--f-mono);color:var(--muted)}
 .op:has(input:not(:checked)){opacity:.55}
 .flabel{font-size:.88rem;font-weight:500}
-.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg{position:relative}
+.seg input{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:0;top:0}
 .seg label{display:block;text-align:center;padding:9px 4px;font:600 .85rem var(--f-mono);cursor:pointer;background:var(--field);border-left:1px solid var(--line)}
 .seg label:first-of-type{border-left:0}
 .seg input:checked+label{background:var(--accent);color:var(--accent-ink)}
@@ -287,10 +306,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         <div class="toggle">
           <input type="checkbox" id="useTime" checked>
           <div class="body">
-            <label for="useTime" style="display:block">Arrêt au plus tard toutes les</label>
+            <label for="useTime" style="display:block">Arrêt toutes les</label>
             <div class="inline"><input id="maxMin" type="number" min="30" max="600" value="120"> minutes de route</div>
-            <div class="inline">dépassement toléré <input id="timeTol" type="number" min="0" max="60" step="5" value="15"> min</div>
-            <p class="note">Si aucune borne ne se trouve vers la fin de l'intervalle, la première borne après la limite est acceptée dans cette tolérance, plutôt qu'un arrêt bien trop tôt.</p>
+            <div class="inline tol">tolérance <span>−</span><input id="timeTolLo" type="number" min="0" max="120" step="5" value="20" aria-label="Tolérance avant, en minutes"><span>+</span><input id="timeTol" type="number" min="0" max="60" step="5" value="15" aria-label="Tolérance après, en minutes"> min</div>
+            <p class="note">L'arrêt se fait dans cette fenêtre, à la borne la plus puissante.</p>
           </div>
         </div>
         <div class="toggle">
@@ -298,7 +317,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <div class="body">
             <label for="useSoc" style="display:block">Arrêt quand la batterie descend à</label>
             <div class="inline"><input id="socTrig" type="number" min="5" max="80" value="20"> %</div>
-            <p class="note">Ignoré si tu peux finir le trajet avec la batterie d'arrivée souhaitée.</p>
+            <div class="inline tol">tolérance <span>−</span><input id="socTolLo" type="number" min="0" max="40" value="5" aria-label="Tolérance en dessous, en %"><span>+</span><input id="socTolHi" type="number" min="0" max="40" value="5" aria-label="Tolérance au-dessus, en %"> %</div>
+            <p class="note">L'arrêt se fait dans cette plage, à la borne la plus puissante ; ignoré si tu peux finir le trajet avec la batterie d'arrivée souhaitée.</p>
           </div>
         </div>
         <div class="toggle">
@@ -357,7 +377,27 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 
   <section class="main">
     <div id="map"></div>
-    <div class="stats" id="stats" hidden></div>
+    <div class="resbar" id="resbar" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="quick panel" id="quick">
+        <h2>Ajuster</h2>
+        <div class="qrow">
+          <label class="qchk"><input type="checkbox" data-m="useTime"> Toutes les</label>
+          <span class="qin"><input type="number" data-m="maxMin" min="30" max="600" aria-label="Minutes de route entre deux arrêts"> min</span>
+          <span class="qin"><span>−</span><input type="number" data-m="timeTolLo" min="0" max="120" step="5" aria-label="Tolérance avant"><span>+</span><input type="number" data-m="timeTol" min="0" max="60" step="5" aria-label="Tolérance après"></span>
+        </div>
+        <div class="qrow">
+          <label class="qchk"><input type="checkbox" data-m="useSoc"> À</label>
+          <span class="qin"><input type="number" data-m="socTrig" min="5" max="80" aria-label="Seuil de batterie"> %</span>
+          <span class="qin"><span>−</span><input type="number" data-m="socTolLo" min="0" max="40" aria-label="Tolérance en dessous"><span>+</span><input type="number" data-m="socTolHi" min="0" max="40" aria-label="Tolérance au-dessus"></span>
+        </div>
+        <div class="qrow">
+          <span class="qlab">Bornes</span>
+          <select data-m="pmin" aria-label="Puissance minimale des bornes"><option value="0">Toutes puissances</option><option value="50">50 kW et plus</option><option value="100">100 kW et plus</option><option value="150">150 kW et plus</option></select>
+        </div>
+        <div class="ops-target"></div>
+      </div>
+    </div>
     <div class="export" id="exportBar" hidden>
       <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
       <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
@@ -382,6 +422,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.2", d:"25/10/2026", c:[
+    "Tolérance avant et après sur les deux règles d'arrêt (temps de route et % de batterie) : l'arrêt se fait dans la fenêtre, à la borne la plus puissante",
+    "Réglages rapides sous la carte, à côté du résumé : règles d'arrêt, tolérances, puissance des bornes et opérateurs, avec recalcul immédiat",
+    "Correctif d'affichage : éléments invisibles qui débordaient de la page et provoquaient un défilement horizontal, couches de la carte isolées du reste de la page"]},
   {v:"2.1.1", d:"25/10/2026", c:[
     "Règle « arrêt toutes les X minutes » : tolérance de dépassement réglable (15 min par défaut). Quand la seule borne conforme arrive très tôt, la première borne juste après la limite est retenue, au lieu d'un arrêt inutile en début d'intervalle",
     "Le dépassement est affiché sur l'arrêt concerné (ex. « limite de temps (+12 min) »)"]},
@@ -760,14 +804,21 @@ function simulate(R,C,p){
       t+=(w.pause||0)*60; pauseSec+=(w.pause||0)*60; if((w.pause||0)>=10) tRef=vIdx;
       i=vIdx;
     };
+    // Fenêtres des règles d'arrêt (tolérances avant / après)
+    const tLate = p.maxMin + p.timeTolHi;                 // limite dure de temps de route (min)
+    const tEarly = Math.max(0, p.maxMin - p.timeTolLo);   // début de la fenêtre de temps
+    const sHard = p.socTrig - p.socTolLo;                 // seuil batterie qui déclenche l'arrêt
+    const sEarly = p.socTrig + p.socTolHi;                // début de la fenêtre batterie
+    const driveFromRef=c=>(R.sec[c.idx]-R.sec[refAt(c.idx)] + c.det/DET_KMH*3600)/60;   // minutes de route depuis le dernier vrai arrêt
+    const socAt=c=>soc - pct(E[c.idx]-E[i]+c.det*kDet);
     let trig=-1, reason="";
     for(let j=i+1;j<n;j++){
-      const ref=refAt(j), s=soc-pct(E[j]-E[i]), dt=R.sec[j]-R.sec[ref];
-      // tolérance de 10 % : on ne s'arrête pas juste avant d'arriver
-      const timeOn = p.useTime && (R.sec[n-1]-R.sec[ref]) > p.maxMin*60*1.1;
-      if(timeOn && dt>p.maxMin*60){ trig=j; reason="time"; break; }
+      const ref=refAt(j), s=soc-pct(E[j]-E[i]), dt=(R.sec[j]-R.sec[ref])/60;
+      // pas d'arrêt pour la règle de temps si la fin du trajet tient dans la tolérance
+      const timeOn = p.useTime && (R.sec[n-1]-R.sec[ref])/60 > Math.max(tLate, p.maxMin*1.05);
+      if(timeOn && dt>tLate){ trig=j; reason="time"; break; }
       if(s<=p.floor){ trig=j; reason="floor"; break; }
-      if(p.useSoc && s<=p.socTrig){
+      if(p.useSoc && s<=sHard){
         const sEnd = s - pct(E[n-1]-E[j]);
         if(sEnd < arr){ trig=j; reason="soc"; break; }
       }
@@ -784,25 +835,25 @@ function simulate(R,C,p){
       return {steps, curve, summary:{...base, km:endKm, avg:E[n-1]/endKm*100, driveSec, chargeSec, pauseSec, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
     }
     const lo=R.km[i]+1, hi=R.km[trig];
-    const reachOK = c => soc - pct(E[c.idx]-E[i]+c.det*kDet) >= p.floor-0.01;
-    const timeOK  = c => !p.useTime || (R.sec[c.idx]-R.sec[refAt(c.idx)] + c.det/DET_KMH*3600) <= p.maxMin*60+60;
-    let cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
+    const reachOK = c => socAt(c) >= p.floor-0.01;
+    const timeOK  = c => !p.useTime || driveFromRef(c) <= tLate+1;
+    const cand=C.filter(c=>c.km>lo && c.km<=hi && reachOK(c) && timeOK(c));
+    // Bornes dans la fenêtre de la règle qui déclenche l'arrêt : on y prend la plus puissante
+    const inWin = reason==="time" ? (c=>driveFromRef(c)>=tEarly)
+                : reason==="soc"  ? (c=>socAt(c)<=sEarly)
+                : null;
+    let pool = inWin ? cand.filter(inWin) : [];
     let late=false;
-    const driveFromRef=c=>(R.sec[c.idx]-R.sec[refAt(c.idx)] + c.det/DET_KMH*3600)/60;   // minutes de route depuis le dernier vrai arrêt
-    // Règle de temps : si la seule borne conforme arrive très tôt (moins de 70 % de l'intervalle),
-    // on accepte la première borne située juste après la limite, dans la tolérance choisie.
-    if(reason==="time" && p.timeTol>0 && (!cand.length || cand.every(c=>driveFromRef(c) < p.maxMin*0.7))){
-      const extra=C.filter(c=>c.km>hi && reachOK(c) && driveFromRef(c) <= p.maxMin+p.timeTol);
-      if(extra.length){ const k0=extra[0].km; cand=extra.filter(c=>c.km<=k0+10); late=true; }
+    if(!pool.length && cand.length){
+      // rien dans la fenêtre : la borne la plus tardive possible (arrêt plus tôt que voulu)
+      const maxK=Math.max(...cand.map(c=>c.km)); pool=cand.filter(c=>c.km>=maxK-25);
     }
-    if(!cand.length && reason==="soc"){ cand=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)).slice(0,1); late=cand.length>0; }
-    if(!cand.length){
+    if(!pool.length && reason==="soc"){ pool=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)).slice(0,1); late=pool.length>0; }
+    if(!pool.length){
       const where = fmtKm(hi)+" après le départ";
-      const why = reason==="time" ? `dans la limite de ${p.maxMin} min de route` : "avant de passer sous la réserve";
-      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'ajouter des opérateurs, de baisser la puissance minimale des bornes, d'augmenter la distance max de la route ou d'allonger l'intervalle d'arrêt.`, partial:steps};
+      const why = reason==="time" ? `dans la limite de ${p.maxMin}${p.timeTolHi?` (+${p.timeTolHi})`:""} min de route` : "avant de passer sous la réserve";
+      return {error:`Aucune borne trouvée ${why} (vers ${where}). Essaie d'ajouter des opérateurs, de baisser la puissance minimale des bornes, d'augmenter la tolérance ou la distance max de la route.`, partial:steps};
     }
-    const maxK=Math.max(...cand.map(c=>c.km));
-    const pool=cand.filter(c=>c.km>=maxK-25);
     pool.sort((a,b)=> effKW(b)-effKW(a) || b.km-a.km);
     const c=pool[0];
     if(c.idx>vIdx && vIdx<n-1){ goVia(); continue; }     // l'étape arrive avant la borne retenue : on la traite d'abord
@@ -836,7 +887,7 @@ function simulate(R,C,p){
     if(!lastLeg && socOut<=soc+0.5 && reason!=="time") return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
     soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, over: late&&reason==="time" ? Math.max(1,Math.round(driveFromRef(c)-p.maxMin)) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -887,7 +938,7 @@ const REASON={time:"limite de temps",soc:"seuil batterie",floor:"autonomie",arri
 function render(res,p,a,b){
   const road=$("road"), dep=p.dep;
   const at = s => fmtClock(new Date(dep.getTime()+s*1000));
-  if(res.error && !res.partial){ road.innerHTML=`<p class="empty">${esc(res.error)}</p>`; $("stats").hidden=true; $("chartPanel").hidden=true; return; }
+  if(res.error && !res.partial){ road.innerHTML=`<p class="empty">${esc(res.error)}</p>`; $("resbar").hidden=true; $("chartPanel").hidden=true; return; }
   const steps=res.steps||res.partial; let html='<ol class="road">', k=0, kv=0;
   for(const s of steps){
     if(s.type==="start") html+=li(at(0),"",`<h3>Départ</h3><p>${esc(short(a.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
@@ -919,7 +970,7 @@ function render(res,p,a,b){
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
   } else $("chartPanel").hidden=true;
   $("stats").innerHTML=tiles.map(([v,l,h])=>`<div class="stat${h?" hl":""}"><b>${v}</b><span>${l}</span></div>`).join("");
-  $("stats").hidden=false;
+  $("resbar").hidden=false;
 
 }
 // % de batterie que représente le trajet, et ce qu'il faudra ajouter en route pour arriver avec le % souhaité
@@ -944,7 +995,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -996,27 +1047,45 @@ function renderOps(chargers){
   // on garde aussi les opérateurs déjà cochés absents de ce trajet
   for(const o of opsSel.list) if(!counts.has(o)) counts.set(o,0);
   lastOps=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
-  const box=$("opsList");
-  if(!lastOps.length){ box.innerHTML='<p class="note">Aucun opérateur trouvé sur ce trajet.</p>'; return; }
-  box.innerHTML=`<div class="ops-actions"><button type="button" class="mini" id="opsAll">Tous</button><button type="button" class="mini" id="opsNone">Aucun</button></div>
+  const html = !lastOps.length ? '<p class="note">Aucun opérateur trouvé sur ce trajet.</p>' :
+  `<div class="ops-actions"><span class="qlab">Opérateurs</span><button type="button" class="mini" data-ops="all">Tous</button><button type="button" class="mini" data-ops="none">Aucun</button></div>
     <div class="ops-grid">${lastOps.map(([o,n],i)=>`<label class="op"><input type="checkbox" data-op="${esc(o)}" ${opAllowed(o)?"checked":""}>${esc(o)} <small>${n}</small></label>`).join("")}</div>
     <p class="note">${opsSel.mode==="all"?"Tous les opérateurs sont utilisés.":"Seuls les opérateurs cochés sont utilisés, y compris sur tes prochains trajets."}</p>`;
+  $("opsList").innerHTML=html; document.querySelector("#quick .ops-target").innerHTML=html;
 }
-function opsChanged(mode){
+function opsChanged(mode,src){
   if(mode==="all") opsSel={mode:"all",list:[]};
   else {
-    const list=[...document.querySelectorAll("#opsList input[data-op]")].filter(x=>x.checked).map(x=>x.dataset.op);
+    const list=[...(src||$("opsList")).querySelectorAll("input[data-op]")].filter(x=>x.checked).map(x=>x.dataset.op);
     opsSel = (mode!=="none" && list.length===lastOps.length) ? {mode:"all",list:[]} : {mode:"list",list: mode==="none"?[]:list};
   }
   storeOps();
   if(lastCalcOk) $("f").requestSubmit(); else renderOps([]);
 }
-$("opsList").addEventListener("click",e=>{
-  if(e.target.id==="opsAll") opsChanged("all");
-  if(e.target.id==="opsNone") opsChanged("none");
-});
-$("opsList").addEventListener("change",e=>{ if(e.target.matches("input[data-op]")) opsChanged("list"); });
+for(const box of [$("opsList"), document.querySelector("#quick .ops-target")]){
+  box.addEventListener("click",e=>{ const b=e.target.closest("[data-ops]"); if(b) opsChanged(b.dataset.ops); });
+  box.addEventListener("change",e=>{ if(e.target.matches("input[data-op]")) opsChanged("list",box); });
+}
 let lastCalcOk=false;
+
+// ---------- Réglages rapides sous la carte (miroir des champs du panneau de gauche) ----------
+function syncQuick(){
+  document.querySelectorAll("#quick [data-m]").forEach(q=>{
+    const m=q.dataset.m;
+    if(m==="pmin"){ if(document.activeElement!==q) q.value=String(radioVal("pmin")); return; }
+    const src=$(m); if(!src) return;
+    if(q.type==="checkbox") q.checked=src.checked; else if(document.activeElement!==q) q.value=src.value;
+  });
+}
+$("quick").addEventListener("input",e=>{
+  const q=e.target.closest("[data-m]"); if(!q) return;
+  const m=q.dataset.m;
+  if(m==="pmin"){ const r=document.querySelector(`input[name="pmin"][value="${q.value}"]`); if(r){ r.checked=true; r.dispatchEvent(new Event("input",{bubbles:true})); r.dispatchEvent(new Event("change",{bubbles:true})); } return; }
+  const src=$(m); if(!src) return;
+  if(q.type==="checkbox") src.checked=q.checked; else src.value=q.value;
+  src.dispatchEvent(new Event("input",{bubbles:true})); src.dispatchEvent(new Event("change",{bubbles:true}));
+});
+$("f").addEventListener("input",syncQuick); $("f").addEventListener("change",syncQuick);
 
 // ---------- Saisie des lieux avec suggestions ----------
 function photonLabel(pr){
@@ -1149,7 +1218,7 @@ function updateSums(){
   const nv=readVias().filter(x=>x.q).length; set("trajet",`${v("from")||"?"} → ${nv?nv+" étape"+(nv>1?"s":"")+" → ":""}${v("to")||"?"} · ${v("socStart")} % → ${v("arrival")} %`);
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
-  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} %`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
+  set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez"].filter(Boolean).join(" · "));
   set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
@@ -1234,7 +1303,7 @@ function applyState(st){
   if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
-  renderFavs(); updateSums(); if(lastOps.length) renderOps([]);
+  renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps([]);
 }
 // Lit un document distant : format 2 = état en JSON ; ancien format = champs directs
 function decodeRemote(r){ if(r && typeof r.data==="string"){ try{ return JSON.parse(r.data); }catch(e){ return {}; } } return r||{}; }
@@ -1313,7 +1382,7 @@ $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.
 function clearResults(){
   lastRun=null; lastCalcOk=false; curSheet=null;
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
-  $("stats").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
+  $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();
 }
@@ -1372,7 +1441,7 @@ $("f").addEventListener("submit", async e=>{
   e.preventDefault(); save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
-    useTime:$("useTime").checked,maxMin:num("maxMin"),timeTol:parseFloat($("timeTol").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
+    useTime:$("useTime").checked,maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
     floor:num("floor"),target:num("target"),minStop:num("minStop")||0,arrival:num("arrival"),
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
@@ -1381,7 +1450,7 @@ $("f").addEventListener("submit", async e=>{
   p.kDet=consModel(p.c90,p.c130,p.season)(50);
   if(p.arrival>100||p.arrival<0||p.socStart>100) return setStatus("Les pourcentages de batterie doivent être entre 0 et 100.",true);
   if(p.useTarget && p.target<=p.floor+10) return setStatus("« Recharger jusqu'à » doit dépasser la réserve d'au moins 10 points.",true);
-  if(p.useSoc && p.socTrig<=p.floor) return setStatus("Le seuil d'arrêt doit être au-dessus de la réserve minimale.",true);
+  if(p.useSoc && p.socTrig-p.socTolLo<=p.floor) return setStatus("Le seuil d'arrêt moins sa tolérance doit rester au-dessus de la réserve minimale.",true);
   if(p.useTarget && p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
   if(calcBusy){ calcAgain=true; return; }
   calcBusy=true; const btn=$("go"); btn.textContent="Calcul en cours…";
@@ -1428,6 +1497,7 @@ $("f").addEventListener("submit", async e=>{
   }finally{ calcBusy=false; btn.textContent="Calculer le trajet"; if(calcAgain){ calcAgain=false; setTimeout(()=>$("f").requestSubmit(),0); } }
 });
 updateSums();
+syncQuick();
 initSync();
 // ---------- Application installable (PWA) ----------
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("trajetve-sw.js",{scope:"./trajet-ve.html"}).catch(()=>{});   // portée limitée à cette page : les autres sites du dépôt ne sont pas concernés
