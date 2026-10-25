@@ -117,6 +117,7 @@ details.sec[open] .sec-s{display:none}
 .syncbar.on{border-color:var(--charge)}
 .syncbar.on #syncTxt::before{content:"● ";color:var(--charge)}
 .actions{display:flex;gap:8px;margin-top:6px}
+.actions.top{margin:0 0 10px}
 .actions .go{flex:1}
 .actions .mini{padding:0 16px}
 .status{margin-top:8px}
@@ -238,6 +239,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       <div class="syncbar" id="syncbar" hidden>
         <span id="syncTxt">Favoris enregistrés sur cet appareil</span>
         <button type="button" class="mini" id="syncBtn">Se connecter</button>
+      </div>
+      <div class="actions top">
+        <button class="go" type="submit">Calculer le trajet</button>
+        <button type="button" class="mini clear">Effacer</button>
       </div>
       <div class="secctl"><button type="button" class="swap" id="secOpen">Tout développer</button><button type="button" class="swap" id="secClose">Tout réduire</button></div>
       <details class="sec" data-sec="feuilles" open>
@@ -387,6 +392,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
               <label>Distance max de la route <small>km</small><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2"></label>
               <label>Puissance supposée si inconnue <small>kW</small><input id="unknownKW" type="number" min="7" max="350" value="50"></label>
             </div>
+            <label class="toggle" style="display:flex"><input type="checkbox" id="stayHw"><span>Rester sur l'autoroute : sur les portions d'autoroute, seules les bornes situées sur une aire (sans sortir) sont retenues</span></label>
             <label>Clé Open Charge Map <small>facultative</small><input id="ocmKey" type="text" spellcheck="false" autocapitalize="off" placeholder="Vide : clé intégrée au site"></label>
             <p class="note">Les bornes viennent d'Open Charge Map avec la clé intégrée au site, ou avec celle saisie ici si tu en mets une autre. Overpass (OpenStreetMap) prend le relais si Open Charge Map ne répond pas. Clé gratuite : crée un compte sur <a href="https://openchargemap.org" target="_blank" rel="noopener">openchargemap.org</a>, puis « My profile » → « My apps » → « Register an application ».</p>
             <label class="toggle" style="display:flex"><input type="checkbox" id="showAll" checked><span>Afficher toutes les bornes retenues sur la carte</span></label>
@@ -396,7 +402,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       </details>
       <div class="actions">
         <button class="go" id="go" type="submit">Calculer le trajet</button>
-        <button type="button" class="mini" id="clearBtn">Effacer</button>
+        <button type="button" class="mini clear" id="clearBtn">Effacer</button>
       </div>
       <p class="note">Après un premier calcul, chaque modification de réglage relance le calcul automatiquement.</p>
       <div class="status" id="status" role="status"></div>
@@ -460,6 +466,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.4", d:"25/10/2026", c:[
+    "Boutons Calculer et Effacer aussi en haut du panneau de gauche",
+    "Option « Rester sur l'autoroute » (Bornes → Plus d'options) : sur les portions d'autoroute, seules les bornes sur une aire sont retenues",
+    "Mention « sur aire d'autoroute » sur les arrêts concernés"]},
   {v:"2.3", d:"25/10/2026", c:[
     "Tarifs : prix au kWh par opérateur et prix par défaut (section Tarifs), synchronisés avec le compte",
     "Coût de chaque recharge dans la feuille de route (kWh facturés et prix), coût total et coût aux 100 km dans le résumé, et dans les exports",
@@ -792,11 +802,30 @@ function parseCharger(c){
     sockets: Object.keys(t).filter(k=>/^socket:[^:]+$/.test(k)).map(k=>k.slice(7).replace("type2_combo","CCS").replace("type2","Type 2").replace("chademo","CHAdeMO").replace("tesla_supercharger","Tesla")).filter(s=>!/schuko|typee/i.test(s))
   };
 }
+// Distance (km) d'un point au tracé complet (segments), en projection locale
+function distToLine(lat,lon,line){
+  const kx=111.32*Math.cos(lat*Math.PI/180), ky=110.57; let best=1e9;
+  for(let i=1;i<line.length;i++){
+    const ax=(line[i-1][1]-lon)*kx, ay=(line[i-1][0]-lat)*ky, bx=(line[i][1]-lon)*kx, by=(line[i][0]-lat)*ky;
+    if(Math.min(Math.abs(ax),Math.abs(bx))>best && (ax>0)===(bx>0)) continue;   // segment trop loin en x
+    const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy, t=L?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L)):0;
+    const d=Math.hypot(ax+t*dx, ay+t*dy); if(d<best) best=d;
+  }
+  return best;
+}
+const AIRE_RX=/\baires?\b|\bservice|\barea\b|\brelais\b|\bstation[- ]service/i;
 function project(chargers,R){
+  const n=R.km.length;
   return chargers.map(c=>{
     let best=1e9, idx=0;
-    for(let i=0;i<R.lat.length;i++){ const d=hav(c.lat,c.lon,R.lat[i],R.lon[i]); if(d<best){best=d;idx=i;} }
-    return {...c, idx, km:R.km[idx], det:best*1.4};
+    for(let i=0;i<n;i++){ const d=hav(c.lat,c.lon,R.lat[i],R.lon[i]); if(d<best){best=d;idx=i;} }
+    // vitesse prévue par l'itinéraire autour de la borne : 95 km/h ou plus = autoroute / voie rapide
+    const i0=Math.max(0,idx-2), i1=Math.min(n-1,idx+2);
+    const v=(R.km[i1]-R.km[i0])/Math.max(1,R.sec[i1]-R.sec[i0])*3600;
+    const hw=v>=95;
+    let onAire=false, dLine=null;
+    if(hw && R.line){ dLine=distToLine(c.lat,c.lon,R.line); onAire = dLine<=0.25 || (AIRE_RX.test(c.name||"") && dLine<=0.7); }
+    return {...c, idx, km:R.km[idx], det: onAire ? 0.2 : best*1.4, hw, onAire};
   }).sort((a,b)=>a.km-b.km);
 }
 
@@ -1011,6 +1040,7 @@ function render(res,p,a,b){
         ...(s.cost!=null && s.kwhBilled>0.05 ? [`<span class="chip eur">${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}</span>`] : []),
         `<span class="chip why">${REASON[s.reason]}${s.over?` (+${s.over} min)`:s.late?" (dépassé)":""}</span>`];
       if(c.det>0.3) chips.push(`<span class="chip">détour ${fmtKm(c.det)}</span>`);
+      if(c.onAire) chips.push(`<span class="chip">sur aire d'autoroute</span>`);
       if(c.access==="customers") chips.push(`<span class="chip">clients uniquement</span>`);
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
       html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>`);
@@ -1057,7 +1087,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","pick","priceDef"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","pick","priceDef","stayHw"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -1309,7 +1339,7 @@ function updateSums(){
   set("voiture",`${CARS[v("car")]?.n||"Personnalisé"} · ${v("cap")} kWh`);
   set("conduite",`${radioVal("hw")} km/h · ${{1:"été",1.1:"mi-saison",1.25:"hiver"}[radioVal("season")]||""}`);
   set("regles",[on("useTime")?`toutes les ${v("maxMin")} min (−${v("timeTolLo")||0}/+${v("timeTol")||0})`:"", on("useSoc")?`à ${v("socTrig")} % (±${v("socTolLo")||0}/${v("socTolHi")||0})`:"", on("useTarget")?`jusqu'à ${v("target")} %`:"juste assez", on("usePmax")?`≤ ${v("pmax")} €/kWh`:"", {fast:"plus rapide",cheap:"moins chère",best:"compromis"}[v("pick")]].filter(Boolean).join(" · "));
-  set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
+  set("bornes",`${radioVal("pmin")?radioVal("pmin")+" kW+":"toutes"}${$("stayHw").checked?" · aires d'autoroute":""} · ${opsSel.mode==="all"?"tous opérateurs":opsSel.list.length+" opérateur(s)"}`);
 }
 $("f").addEventListener("input",updateSums); $("f").addEventListener("change",updateSums);
 
@@ -1477,7 +1507,8 @@ function clearResults(){
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();
 }
-$("clearBtn").addEventListener("click",()=>{
+document.querySelectorAll("button.clear").forEach(b=>b.addEventListener("click",()=>$("clearBtn").dispatchEvent(new Event("clear"))));
+$("clearBtn").addEventListener("clear",()=>{
   clearTimeout(autoT); calcAgain=false;
   $("from").value=""; $("to").value=""; $("from-ok").textContent=""; $("to-ok").textContent=""; $("favTrip").value=""; setVias([]); saveVias();
   clearResults(); renderFavs(); updateSums(); setStatus("Trajet et feuille de route effacés.");
@@ -1503,7 +1534,7 @@ $("saveSheetBtn").addEventListener("click",()=>{
   if(!lastRun) return;
   const {res,p,a,b,R,fq,tq}=lastRun;
   const step=Math.max(1,Math.ceil(R.line.length/400));
-  const slimC=c=>({id:c.id,lat:c.lat,lon:c.lon,name:c.name,operator:c.operator||"",kw:c.kw,dc:c.dc,det:c.det,km:c.km,access:c.access||"",sockets:c.sockets||[]});
+  const slimC=c=>({id:c.id,lat:c.lat,lon:c.lon,name:c.name,operator:c.operator||"",kw:c.kw,dc:c.dc,det:c.det,km:c.km,access:c.access||"",sockets:c.sockets||[],onAire:!!c.onAire});
   const sh={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), savedAt:Date.now(), fq, tq, vq:lastRun.vq||[],
     a:{lat:a.lat,lon:a.lon,label:a.label}, b:{lat:b.lat,lon:b.lon,label:b.label},
     p:{dep:p.dep.toISOString(), cap:p.cap, arrival:p.arrival, floor:p.floor, socStart:p.socStart, socTrig:p.socTrig, useSoc:p.useSoc, tripKwh:p.tripKwh},
@@ -1544,7 +1575,7 @@ $("f").addEventListener("submit", async e=>{
   if(p.useSoc && p.socTrig-p.socTolLo<=p.floor) return setStatus("Le seuil d'arrêt moins sa tolérance doit rester au-dessus de la réserve minimale.",true);
   if(p.useTarget && p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
   if(calcBusy){ calcAgain=true; return; }
-  calcBusy=true; const btn=$("go"); btn.textContent="Calcul en cours…";
+  calcBusy=true; const btns=document.querySelectorAll("button.go"); btns.forEach(x=>x.textContent="Calcul en cours…");
   try{
     const fq=$("from").value.trim(), tq=$("to").value.trim();
     setStatus("Recherche des adresses…");
@@ -1572,6 +1603,7 @@ $("f").addEventListener("submit", async e=>{
     C=C.filter(c=>opAllowed(opOf(c)));
     if(p.usePmax) C=C.filter(c=>priceOf(c)<=p.pmax+1e-9);
     C=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3);
+    if($("stayHw").checked) C=C.filter(c=>!c.hw || c.onAire);
     const RD=applyDriving(R,p);
     p.tripKwh=RD.E[RD.E.length-1];
     const res=simulate(RD,C,p);
@@ -1586,7 +1618,7 @@ $("f").addEventListener("submit", async e=>{
     console.error(err);
     if(/Open Charge Map/.test(err.message||"")) $("moreOpts").open=true;
     setStatus((err.message||"Erreur réseau")+(String(err).includes("Failed to fetch")?" — vérifie ta connexion ou réessaie dans une minute.":""),true);
-  }finally{ calcBusy=false; btn.textContent="Calculer le trajet"; if(calcAgain){ calcAgain=false; setTimeout(()=>$("f").requestSubmit(),0); } }
+  }finally{ calcBusy=false; btns.forEach(x=>x.textContent="Calculer le trajet"); if(calcAgain){ calcAgain=false; setTimeout(()=>$("f").requestSubmit(),0); } }
 });
 updateSums();
 syncQuick();
