@@ -126,10 +126,12 @@ select{min-width:0;max-width:100%}
 .altlist{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
 .altlist li{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
 .altlist li>div{flex:1;min-width:0;display:grid;gap:2px}
+.altlist li>button{flex:none}
+@media (max-width:520px){.altlist li{flex-direction:column;align-items:stretch}}
 .altlist b{font-weight:600}
 .altlist span{color:var(--muted);font-size:.8rem}
 .altfl{display:flex;flex-wrap:wrap;gap:4px}
-.altfl i{font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
+.altfl i{white-space:nowrap;font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
 .altfl i.ok{border-color:var(--charge);color:var(--charge)}
 .chip.adj{border-color:var(--accent);color:var(--accent)}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
@@ -182,12 +184,12 @@ summary{cursor:pointer;color:var(--muted)}
 .stat b{display:block;font:600 1.25rem var(--f-mono);font-variant-numeric:tabular-nums}
 .stat span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 ol.road{list-style:none;margin:0;padding:0;display:grid}
-ol.road li{display:grid;grid-template-columns:64px 22px 1fr;gap:10px;align-items:start}
+ol.road>li{display:grid;grid-template-columns:64px 22px 1fr;gap:10px;align-items:start}
 .clock{font:600 .95rem var(--f-mono);font-variant-numeric:tabular-nums;padding-top:2px;text-align:right}
 .rail{position:relative;align-self:stretch;display:flex;justify-content:center}
 .rail::before{content:"";position:absolute;top:0;bottom:0;width:3px;background:var(--line)}
-li:first-child .rail::before{top:10px}
-li:last-child .rail::before{bottom:calc(100% - 10px)}
+ol.road>li:first-child .rail::before{top:10px}
+ol.road>li:last-child .rail::before{bottom:calc(100% - 10px)}
 .dot{position:relative;margin-top:4px;width:16px;height:16px;border-radius:50%;background:var(--panel);border:3px solid var(--ink)}
 .dot.charge{border-color:var(--charge);background:var(--charge)}
 .dot.drive{width:8px;height:8px;border:0;background:var(--muted);margin-top:9px}
@@ -513,6 +515,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.8.1", d:"25/10/2026", c:[
+    "Correctif d'affichage de la liste « Autres bornes possibles » (texte écrasé dans une colonne étroite)"]},
   {v:"2.8", d:"25/10/2026", c:[
     "« Sur aire d'autoroute » : uniquement si le nom ou la description de la borne mentionne une aire, l'autoroute ou un numéro d'autoroute (A61…), et à moins de 800 m du tracé",
     "Feuille de route : « Autres bornes possibles » sous chaque arrêt, avec ce qu'il faudrait assouplir (tolérance, prix, opérateur, puissance…) et un bouton pour la choisir",
