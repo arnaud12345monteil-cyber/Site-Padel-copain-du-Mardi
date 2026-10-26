@@ -205,6 +205,7 @@ ol.road>li:last-child .rail::before{bottom:calc(100% - 10px)}
 .item h3{font-size:1.02rem;font-weight:600}
 .item p{margin:2px 0 0;color:var(--muted);font-size:.9rem}
 .drive .item p{margin:0}
+.drive .item p.leg{font:500 .8rem var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);margin-top:2px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .chip{font:500 .78rem var(--f-mono);padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--field);white-space:nowrap}
 .chip.kw{border-color:var(--charge);color:var(--charge)}
@@ -523,6 +524,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.11", d:"26/10/2026", c:[
+    "Feuille de route : sous chaque portion de route, % de batterie au départ et à l'arrivée, kWh consommés et consommation moyenne de la portion"]},
   {v:"2.10", d:"26/10/2026", c:[
     "Autres bornes possibles : filtre local Toutes / Sur aire / Hors aire, avec le nombre de bornes de chaque type ; le choix est mémorisé"]},
   {v:"2.9", d:"25/10/2026", c:[
@@ -961,7 +964,7 @@ function simulate(R,C,p){
     const goVia=()=>{
       const w=W[wpi++], d=R.km[vIdx]-R.km[i], dt=R.sec[vIdx]-R.sec[i], en=E[vIdx]-E[i];
       soc-=pct(en); t+=dt; driveSec+=dt; kwh+=en;
-      steps.push({type:"drive", km:d, sec:dt});
+      steps.push({type:"drive", km:d, sec:dt, from:soc+pct(en), to:soc, kwh:en});
       steps.push({type:"via", t, soc, km:R.km[vIdx], name:w.name, pause:w.pause||0, lat:w.lat, lon:w.lon});
       curve.push([R.km[vIdx],soc]);
       t+=(w.pause||0)*60; pauseSec+=(w.pause||0)*60; if((w.pause||0)>=10) tRef=vIdx;
@@ -992,7 +995,7 @@ function simulate(R,C,p){
     if(trig<0){
       const d=endKm-R.km[i], dt=R.sec[n-1]-R.sec[i];
       const en=E[n-1]-E[i]; soc-=pct(en); t+=dt; driveSec+=dt; kwh+=en;
-      steps.push({type:"drive", km:d, sec:dt});
+      steps.push({type:"drive", km:d, sec:dt, from:soc+pct(en), to:soc, kwh:en});
       steps.push({type:"end", t, soc, km:endKm});
       curve.push([endKm,soc]);
       return {steps, curve, summary:{...base, km:endKm, avg:E[n-1]/endKm*100, driveSec, chargeSec, pauseSec, cost:costTot, kwhCharged, totalSec:t, soc, kwh, stops:steps.filter(s=>s.type==="stop").length}};
@@ -1063,7 +1066,7 @@ function simulate(R,C,p){
     // rouler jusqu'à la borne (détour aller inclus)
     const dRoute=c.km-R.km[i], dt=R.sec[c.idx]-R.sec[i]+c.det/DET_KMH*3600;
     const en=E[c.idx]-E[i]+c.det*kDet; soc-=pct(en); kwh+=en; t+=dt; driveSec+=dt;
-    steps.push({type:"drive", km:dRoute+c.det, sec:dt});
+    steps.push({type:"drive", km:dRoute+c.det, sec:dt, from:soc+pct(en), to:soc, kwh:en});
     curve.push([c.km,soc]);
     const arrive=t, socIn=soc;
 
@@ -1156,7 +1159,7 @@ function render(res,p,a,b){
   const steps=res.steps||res.partial; let html='<ol class="road">', k=0, kv=0;
   for(const s of steps){
     if(s.type==="start") html+=li(at(0),"",`<h3>Départ</h3><p>${esc(short(a.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
-    else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p></div>`}</li>`;
+    else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p>${s.kwh!=null?`<p class="leg">${Math.round(s.from)} % → ${Math.round(s.to)} % · ${s.kwh.toFixed(1).replace(".",",")} kWh consommés · ${(s.kwh/Math.max(0.1,s.km)*100).toFixed(1).replace(".",",")} kWh/100 km</p>`:""}</div>`}</li>`;
     else if(s.type==="stop"){ k++;
       const c=s.c;
       const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
