@@ -135,6 +135,12 @@ select{min-width:0;max-width:100%}
 .altfl i.ok{border-color:var(--charge);color:var(--charge)}
 .chip.rok{border-color:var(--charge);color:var(--charge)}
 .altlist{max-height:520px;overflow:auto}
+.altf{display:inline-flex;margin-top:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.altf button{font:500 .8rem var(--f-body);padding:5px 10px;border:0;border-left:1px solid var(--line);background:var(--field);color:var(--ink);cursor:pointer}
+.altf button:first-child{border-left:0}
+.altf button:disabled{opacity:.4;cursor:default}
+.alts[data-f="all"] [data-altf="all"],.alts[data-f="aire"] [data-altf="aire"],.alts[data-f="hors"] [data-altf="hors"]{background:var(--accent);color:var(--accent-ink)}
+.alts[data-f="aire"] li[data-aire="0"],.alts[data-f="hors"] li[data-aire="1"]{display:none}
 .chip.adj{border-color:var(--accent);color:var(--accent)}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
@@ -517,6 +523,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.10", d:"26/10/2026", c:[
+    "Autres bornes possibles : filtre local Toutes / Sur aire / Hors aire, avec le nombre de bornes de chaque type ; le choix est mémorisé"]},
   {v:"2.9", d:"25/10/2026", c:[
     "Seuil batterie mieux respecté : une borne juste après le seuil (au-dessus de la réserve) peut être préférée à une borne bien trop tôt",
     "Étiquette de règle sur chaque arrêt : en vert si l'arrêt est dans la fenêtre, en orange avec la plage visée sinon",
@@ -1042,7 +1050,9 @@ function simulate(R,C,p){
     };
     const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=150 && socAt(x)>=p.floor-0.01);
     const alts=altsSrc.map(x=>{ const fl=[...(x.flags||[]), ...winFlag(x)]; return {x, fl, sc:score(x)+fl.length*0.5}; })
-      .sort((u,v)=>u.sc-v.sc).slice(0,12)
+      .sort((u,v)=>u.sc-v.sc)
+      // les 12 meilleures, plus les 8 meilleures sur aire et les 8 meilleures hors aire (pour le filtre local)
+      .filter((o,k,arr)=> k<12 || arr.filter(y=>!!y.x.onAire===!!o.x.onAire).indexOf(o)<8)
       .map(({x,fl})=>({good:goodFlag(x), id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, flags:fl}));
     // Borne choisie à la main depuis la feuille de route
     let forced=false;
@@ -1168,9 +1178,11 @@ function render(res,p,a,b){
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
       const cheapId=altAll.reduce((m,x)=>x.price<m.price?x:m).id, fastId=altAll.reduce((m,x)=>x.eff>m.eff?x:m).id;
       const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`})[k] || k; };
-      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
+      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
         ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
-        <ul class="altlist">${(s.alts||[]).map(x=>`<li><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
+        ${(()=>{ const na=(s.alts||[]).filter(x=>x.onAire).length, nh=(s.alts||[]).length-na;
+          return (s.alts||[]).length ? `<div class="altf" role="group" aria-label="Filtrer les bornes"><button type="button" data-altf="all">Toutes (${s.alts.length})</button><button type="button" data-altf="aire" ${na?"":"disabled"}>Sur aire (${na})</button><button type="button" data-altf="hors" ${nh?"":"disabled"}>Hors aire (${nh})</button></div>` : ""; })()}
+        <ul class="altlist">${(s.alts||[]).map(x=>`<li data-aire="${x.onAire?1:0}"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
           <span class="altfl">${(x.good||[]).map(g=>`<i class="ok">${esc(goodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(flTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
           <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
       html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
@@ -1680,6 +1692,9 @@ async function initSync(){
 let cache={};
 // ---------- Réglages manuels par arrêt (depuis la feuille de route) ----------
 let stopOv={}, stopForce={}, ovTrip="", viewingSheet=false;
+// Filtre local de la liste « Autres bornes possibles » : toutes / sur aire / hors aire (mémorisé sur l'appareil)
+let altFilter="all";
+try{ const v=localStorage.getItem("trajetve-altfiltre"); if(["all","aire","hors"].includes(v)) altFilter=v; }catch(e){}
 $("road").addEventListener("change",e=>{
   const i=e.target;
   if(i.matches("[data-vpause]")){
@@ -1696,6 +1711,9 @@ $("road").addEventListener("change",e=>{
   $("f").requestSubmit();
 });
 $("road").addEventListener("click",e=>{
+  const af=e.target.closest("[data-altf]");
+  if(af){ altFilter=af.dataset.altf; try{ localStorage.setItem("trajetve-altfiltre",altFilter); }catch(_){}
+    document.querySelectorAll("#road .alts").forEach(d=>d.dataset.f=altFilter); return; }
   const fz=e.target.closest("[data-force]");
   if(fz){ const [o,a]=fz.dataset.force.split("|"); stopForce[o]=a; $("f").requestSubmit(); return; }
   const uf=e.target.closest("[data-unforce]");
