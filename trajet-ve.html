@@ -146,6 +146,21 @@ select{min-width:0;max-width:100%}
 .tol input{width:64px!important}
 .quick .ops-grid{max-height:140px;overflow:auto}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mini.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.here{display:grid;gap:12px;padding:14px 16px}
+.here h2{font-size:1.05rem;flex-basis:100%}
+.here-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.here-form label{flex:0 1 160px}
+.here-form .go{flex:1 1 220px;padding:10px 12px}
+.here-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.here-card{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.here-card b{display:block;font:600 1.1rem var(--f-mono);font-variant-numeric:tabular-nums}
+.here-card span{font-size:.8rem;color:var(--muted)}
+.here-card.good{border-color:var(--charge)} .here-card.good b{color:var(--charge)}
+.here-card.warn{border-color:var(--warn)} .here-card.warn b{color:var(--warn)}
+.here-card.bad{border-color:var(--bad)} .here-card.bad b{color:var(--bad)}
+.here-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.here b.err{color:var(--bad)}
 .export .note{flex-basis:100%}
 .secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
 details.sec{border-top:1px solid var(--line)}
@@ -500,7 +515,16 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         </details>
       </div>
     </div>
+    <div class="here panel" id="hereBox" hidden>
+      <div class="here-form">
+        <h2>Je suis ici</h2>
+        <label>Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42"></label>
+        <button type="button" class="go" id="hereGo">Comparer avec ma position</button>
+      </div>
+      <div id="hereOut" role="status"></div>
+    </div>
     <div class="export" id="exportBar" hidden>
+      <button type="button" class="mini primary" id="hereBtn">Je suis ici</button>
       <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
       <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
       <button type="button" class="mini" id="saveSheetBtn">Enregistrer la feuille de route</button>
@@ -524,6 +548,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.12", d:"27/10/2026", c:[
+    "Bouton « Je suis ici » : position GPS du téléphone et batterie saisie, comparées au plan (km parcourus, écart de batterie, avance ou retard)",
+    "Estimation de la batterie au prochain arrêt si l'écart se maintient, avec alerte sous la réserve",
+    "« Recalculer le trajet depuis ici » avec la batterie et l'heure réelles ; les étapes déjà passées sont retirées"]},
   {v:"2.11", d:"26/10/2026", c:[
     "Feuille de route : sous chaque portion de route, % de batterie au départ et à l'arrivée, kWh consommés et consommation moyenne de la portion"]},
   {v:"2.10", d:"26/10/2026", c:[
@@ -1546,6 +1574,93 @@ const xmlEsc=t=>String(t).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&am
 function runStops(){ return lastRun.res.steps.filter(s=>s.type==="stop"); }
 function runPoints(){ return lastRun.res.steps.filter(s=>s.type==="stop"||(s.type==="via"&&s.lat!=null)); }
 const clockAt=sec=>fmtClock(new Date(lastRun.p.dep.getTime()+sec*1000));
+// ---------- Je suis ici : position GPS du téléphone + batterie saisie, comparées au plan ----------
+const dtLocal=d=>{ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
+// Points du plan (km parcourus, temps écoulé, batterie) à chaque événement de la feuille de route
+function planPoints(res){
+  const pts=[];
+  for(const s of res.steps){
+    if(s.type==="start") pts.push({km:0,t:0,soc:s.soc});
+    else if(s.type==="stop"){ pts.push({km:s.c.km,t:s.t,soc:s.socIn}); pts.push({km:s.c.km,t:s.t+s.dur*60,soc:s.socOut}); }
+    else if(s.type==="via"){ pts.push({km:s.km,t:s.t,soc:s.soc}); if(s.pause) pts.push({km:s.km,t:s.t+s.pause*60,soc:s.soc}); }
+    else if(s.type==="end") pts.push({km:s.km,t:s.t,soc:s.soc});
+  }
+  return pts;
+}
+function planAt(pts,x){
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    if(b.km>a.km && x>=a.km-0.01 && x<=b.km+0.01){ const f=(x-a.km)/(b.km-a.km); return {t:a.t+f*(b.t-a.t), soc:a.soc+f*(b.soc-a.soc)}; }
+  }
+  const last=pts[pts.length-1]; return x<=0 ? {t:0,soc:pts[0].soc} : {t:last.t,soc:last.soc};
+}
+// Position projetée sur le tracé : km parcourus (mis à l'échelle de la distance routière) et écart au tracé
+function locateOnRoute(lat,lon,line,routeKm){
+  const kx=111.32*Math.cos(lat*Math.PI/180), ky=110.57;
+  let cum=0, best={d:1e9,along:0};
+  for(let i=1;i<line.length;i++){
+    const ax=(line[i-1][1]-lon)*kx, ay=(line[i-1][0]-lat)*ky, bx=(line[i][1]-lon)*kx, by=(line[i][0]-lat)*ky;
+    const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy, seg=Math.sqrt(L), t=L?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L)):0;
+    const d=Math.hypot(ax+t*dx, ay+t*dy);
+    if(d<best.d) best={d,along:cum+t*seg};
+    cum+=seg;
+  }
+  return {off:best.d, km:cum>0 ? best.along/cum*routeKm : 0};
+}
+let hereFix=null;
+$("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
+$("hereGo").addEventListener("click",()=>{
+  if(!lastRun?.res?.summary){ $("hereOut").innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  const out=$("hereOut");
+  if(!("geolocation" in navigator)){ out.innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
+  out.innerHTML='<p class="note">Recherche de ta position…</p>'; $("hereGo").disabled=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    $("hereGo").disabled=false;
+    const {latitude:lat, longitude:lon, accuracy}=pos.coords;
+    const {res,p,R}=lastRun, S=res.summary;
+    const loc=locateOnRoute(lat,lon,R.line,S.km), pts=planPoints(res), plan=planAt(pts,loc.km);
+    const socReal=parseFloat($("hereSoc").value), hasSoc=isFinite(socReal);
+    const now=new Date(), planClock=new Date(p.dep.getTime()+plan.t*1000), dMin=Math.round((now-planClock)/60000);
+    const dSoc=hasSoc ? socReal-plan.soc : null;
+    // Batterie réelle prolongée jusqu'au prochain arrêt ou à l'arrivée, au rythme prévu
+    const next=res.steps.find(s=>(s.type==="stop" && s.c.km>loc.km+0.5) || s.type==="end");
+    let nextTxt="";
+    if(next && hasSoc){
+      const atNext=planAt(pts, next.type==="stop"?next.c.km:next.km), socNext=(next.type==="stop"?next.socIn:next.soc)+dSoc;
+      nextTxt=`${next.type==="stop"?"au prochain arrêt ("+esc(next.c.name)+")":"à l'arrivée"} : environ ${Math.round(socNext)} %`;
+      if(socNext<p.floor) nextTxt+=` <b class="err">sous ta réserve de ${p.floor} %</b>`;
+    }
+    hereFix={lat,lon,km:loc.km,soc:hasSoc?socReal:null,res};
+    const cls=v=>Math.abs(v)<=3?"good":Math.abs(v)<=8?"warn":"bad";
+    out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
+      <div class="here-grid">
+        <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
+        ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${Math.round(socReal)} % réelle, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (saisis la tienne pour comparer)</span></div>`}
+        <div class="here-card ${Math.abs(dMin)<=10?"good":Math.abs(dMin)<=30?"warn":"bad"}"><b>${dMin>=0?"+":""}${dMin} min</b><span>${dMin>=0?"de retard":"d'avance"} sur l'horaire prévu (${fmtClock(planClock)} ici)</span></div>
+      </div>
+      ${nextTxt?`<p>Si l'écart se maintient, batterie ${nextTxt}.</p>`:""}
+      <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Saisis ta batterie pour recalculer.</span>'}</div>`;
+  }, err=>{
+    $("hereGo").disabled=false;
+    const m={1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.";
+    out.innerHTML=`<p class="status err">${m}</p>`;
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
+});
+$("hereOut").addEventListener("click",e=>{
+  if(!e.target.closest("#hereRecalc") || !hereFix || hereFix.soc==null) return;
+  const {lat,lon,km,soc,res}=hereFix, label=`Ma position ${fmtClock(new Date())}`;
+  // la position est mise en cache comme une adresse : le calcul la réutilise sans géocodage
+  lsSet("adr:"+label.toLowerCase(),{lat,lon,label:`Position GPS (${lat.toFixed(4)}, ${lon.toFixed(4)})`});
+  // les étapes déjà passées sont retirées
+  const passed=res.steps.filter(s=>s.type==="via").filter(s=>s.km<km).length;
+  if(passed){ setVias(readVias().slice(passed)); saveVias(); }
+  $("from").value=label; $("from-ok").textContent="✓ position GPS du téléphone"; $("from-ok").classList.remove("warn");
+  $("socStart").value=Math.round(soc); $("dep").value=dtLocal(new Date());
+  $("hereBox").hidden=true; $("hereOut").innerHTML="";
+  updateSums(); renderFavs(); $("f").requestSubmit();
+  setStatus("Trajet recalculé depuis ta position actuelle.");
+});
+
 $("gmapsBtn").addEventListener("click",()=>{
   if(!lastRun) return;
   const {a,b}=lastRun, st=runPoints(), ll=o=>`${(+o.lat).toFixed(6)},${(+o.lon).toFixed(6)}`;
@@ -1733,7 +1848,7 @@ $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.
 function clearResults(){
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
-  $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true;
+  $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();
 }
