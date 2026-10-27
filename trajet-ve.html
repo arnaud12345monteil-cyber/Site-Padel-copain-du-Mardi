@@ -279,6 +279,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .sugg li b{font-weight:600;font-size:.92rem}
 .sugg li span{font-size:.8rem;color:var(--muted)}
 .sugg li.fav b::before{content:"★ ";color:var(--warn)}
+.sugg li.pos b{color:var(--accent)}
+.sugg li.pos b::before{content:"◎ ";}
 .sugg li.none{cursor:default;color:var(--muted);font-size:.85rem}
 .placeok{margin:0;font-size:.8rem;color:var(--charge);min-height:0}
 .placeok.warn{color:var(--warn)}
@@ -580,6 +582,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.15", d:"27/10/2026", c:[
+    "« Ma position actuelle » proposée en tête de liste dans Départ et Arrivée : position GPS du téléphone, avec le nom du lieu"]},
   {v:"2.14", d:"27/10/2026", c:[
     "Suivi en temps réel : la position se met à jour en continu sur la carte, avec la trace parcourue, le point vert ou rouge et la batterie estimée",
     "Batterie estimée entre deux saisies en supposant que l'écart au plan reste le même ; une nouvelle saisie recale l'estimation",
@@ -1484,11 +1488,35 @@ function attachAC(id){
   const close=()=>{ list.hidden=true; inp.setAttribute("aria-expanded","false"); sel=-1; };
   const draw=(none)=>{
     if(!items.length){ list.innerHTML= none ? `<li class="none">Aucun lieu trouvé pour « ${esc(inp.value)} »</li>` : ""; list.hidden=!none; return; }
-    list.innerHTML=items.map((it,i)=>`<li role="option" id="${id}-o${i}" class="${it.fav?"fav":""}" aria-selected="${i===sel}" data-i="${i}"><b>${esc(it.main)}</b>${it.sub?`<span>${esc(it.sub)}</span>`:""}</li>`).join("");
+    list.innerHTML=items.map((it,i)=>`<li role="option" id="${id}-o${i}" class="${it.fav?"fav":it.pos?"pos":""}" aria-selected="${i===sel}" data-i="${i}"><b>${esc(it.main)}</b>${it.sub?`<span>${esc(it.sub)}</span>`:""}</li>`).join("");
     list.hidden=false; inp.setAttribute("aria-expanded","true");
   };
   const favMatches=q=>favs.places.filter(pl=>!q || pl.toLowerCase().includes(q.toLowerCase())).slice(0,5).map(pl=>({fav:true,main:pl,sub:"Lieu favori",value:pl}));
+  // « Ma position actuelle » en tête de liste pour le départ et l'arrivée
+  const withPos=(id==="from"||id==="to") && "geolocation" in navigator;
+  const POS={pos:true,main:"Ma position actuelle",sub:"GPS du téléphone"};
+  const posFor=q=> withPos && (q.length<3 || /^(ma |ici|pos)/i.test(q)) ? [POS] : [];
+  const usePos=()=>{
+    close(); const before=inp.value; inp.value="Localisation…"; ok.textContent=""; ok.classList.remove("warn");
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const {latitude:lat, longitude:lon, accuracy}=pos.coords;
+      // nom lisible du lieu (Photon), sinon les coordonnées
+      let place="";
+      try{ const r=await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=fr&limit=1`); const f=r.ok?(await r.json()).features?.[0]:null;
+        if(f){ const pr=f.properties; place=[pr.street?[pr.housenumber,pr.street].filter(Boolean).join(" "):pr.name, pr.city||pr.town||pr.village].filter((v,k,arr)=>v && arr.indexOf(v)===k).join(", "); } }catch(e){}
+      const value=`Ma position${place?" · "+place:""} (${fmtClock(new Date())})`;
+      inp.value=value;
+      lsSet("adr:"+value.toLowerCase(),{lat,lon,label:`${place||"Position GPS"} (${lat.toFixed(5)}, ${lon.toFixed(5)})`});
+      ok.textContent=`✓ position GPS ${place?"· "+place+" ":""}(±${Math.round(accuracy)} m)`;
+      renderFavs(); updateSums(); autoCalc();
+    }, err=>{
+      inp.value=before; updClr();
+      ok.textContent=({1:"Accès à la position refusé : autorise la localisation pour ce site.",2:"Position indisponible.",3:"La position n'a pas répondu à temps."})[err.code]||"Position impossible à obtenir.";
+      ok.classList.add("warn");
+    }, {enableHighAccuracy:true, timeout:15000, maximumAge:60000});
+  };
   const choose=it=>{
+    if(it.pos){ usePos(); return; }
     inp.value=it.value; close();
     if(it.lat!=null){ lsSet("adr:"+it.value.toLowerCase(),{lat:it.lat,lon:it.lon,label:[it.main,it.sub].filter(Boolean).join(", ")}); ok.textContent="✓ "+[it.main,it.sub].filter(Boolean).join(", "); ok.classList.remove("warn"); }
     else ok.textContent="";
@@ -1497,7 +1525,7 @@ function attachAC(id){
   const search=async()=>{
     const q=inp.value.trim();
     const fav=favMatches(q);
-    if(q.length<3){ items=fav; sel=-1; draw(false); return; }
+    if(q.length<3){ items=[...posFor(q),...fav]; sel=-1; draw(false); return; }
     ctl?.abort(); ctl=new AbortController();
     try{
       const r=await fetch(`https://photon.komoot.io/api/?limit=6&lang=fr&lat=46.6&lon=2.4&q=${encodeURIComponent(q)}`,{signal:ctl.signal});
@@ -1505,11 +1533,11 @@ function attachAC(id){
       const seen=new Set();
       const res=feats.map(f=>{ const l=photonLabel(f.properties); return {...l, value:[l.main, f.properties.city&&f.properties.city!==l.main?f.properties.city:""].filter(Boolean).join(", "), lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0]}; })
         .filter(x=>x.main && !seen.has(x.main+x.sub) && seen.add(x.main+x.sub));
-      items=[...fav.filter(f=>!res.some(x=>x.value.toLowerCase()===f.value.toLowerCase())), ...res]; sel=-1; draw(!items.length);
+      items=[...posFor(q), ...fav.filter(f=>!res.some(x=>x.value.toLowerCase()===f.value.toLowerCase())), ...res]; sel=-1; draw(!items.length);
     }catch(e){ if(e.name!=="AbortError"){ items=fav; draw(false); } }
   };
   inp.addEventListener("input",()=>{ ok.textContent=""; clearTimeout(timer); timer=setTimeout(search,250); });
-  inp.addEventListener("focus",()=>{ if(!inp.value.trim() || favs.places.length){ items=favMatches(inp.value.trim().length<3?"":inp.value.trim()); if(items.length) draw(false); } });
+  inp.addEventListener("focus",()=>{ const q=inp.value.trim(); if(!q || favs.places.length || withPos){ items=[...posFor(q), ...favMatches(q.length<3?"":q)]; if(items.length) draw(false); } });
   inp.addEventListener("keydown",e=>{
     if(list.hidden || !items.length) return;
     if(e.key==="ArrowDown"){ sel=(sel+1)%items.length; draw(false); e.preventDefault(); }
