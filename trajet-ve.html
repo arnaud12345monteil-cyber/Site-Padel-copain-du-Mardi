@@ -53,6 +53,19 @@ h2{font-size:1.15rem;font-weight:600}
 .wrap>*{min-width:0}
 .wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:16px;max-width:1400px;margin:0 auto}
 @media (max-width:860px){.wrap{grid-template-columns:1fr}}
+/* Réglages masqués : carte à gauche (fixe au défilement), résumé et feuille de route à droite */
+body.wide .wrap{grid-template-columns:minmax(0,1fr);max-width:1600px}
+body.wide aside.panel{display:none}
+@media (min-width:861px){
+  body.wide section.main{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start;column-gap:16px}
+  body.wide section.main>*{grid-column:2}
+  /* ordre à droite : résumé, actions, feuille de route, puis les réglages rapides et le graphique */
+  body.wide .resbar{display:contents}
+  body.wide #stats{order:1} body.wide #exportBar{order:2} body.wide #hereBox{order:3}
+  body.wide #roadPanel{order:4} body.wide #quick{order:5} body.wide #chartPanel{order:6} body.wide section.main>p.note{order:7}
+  body.wide section.main{row-gap:16px}
+  body.wide #map{grid-column:1;grid-row:1 / span 30;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);height:calc(100vh - 110px);min-height:380px}
+}
 .panel{overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
 header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1400px;margin:0 auto 14px}
 header.top p{margin:0;color:var(--muted)}
@@ -161,6 +174,9 @@ select{min-width:0;max-width:100%}
 .here-card.bad{border-color:var(--bad)} .here-card.bad b{color:var(--bad)}
 .here-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .here b.err{color:var(--bad)}
+.herepin{width:22px;height:22px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 2px var(--c),0 2px 6px rgba(0,0,0,.35)}
+.herelab{position:absolute;left:28px;top:-4px;white-space:nowrap;background:#fff;color:var(--c);border:2px solid var(--c);border-radius:8px;padding:1px 7px;font:700 13px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.herelab small{display:block;font:500 10px var(--f-body);color:#5b6878}
 .export .note{flex-basis:100%}
 .secctl{display:flex;gap:16px;justify-content:flex-end;margin-bottom:6px}
 details.sec{border-top:1px solid var(--line)}
@@ -244,6 +260,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .via-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .via-h small{color:var(--muted);font-size:.78rem}
 .dot.via{border-color:var(--accent);background:var(--accent);border-radius:3px;transform:rotate(45deg) scale(.8)}
+.ac .clr{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;border-radius:50%;background:none;color:var(--muted);font-size:1.2rem;line-height:1;cursor:pointer}
+.ac .clr:hover{background:var(--line);color:var(--ink)}
+#from,#to{padding-right:38px}
 .ac{position:relative;flex:1;min-width:0;display:flex}
 .sugg{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:1100;list-style:none;margin:0;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:300px;overflow:auto}
 .sugg li{padding:8px 10px;border-radius:6px;cursor:pointer;display:grid;gap:1px}
@@ -288,6 +307,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <h1>Trajet VE</h1>
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+    <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
   </div>
@@ -320,14 +340,14 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         </div>
         <div class="field">
           <label for="from">Départ</label>
-          <div class="place"><div class="ac"><input id="from" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="from-sugg" value="Toulouse"><ul class="sugg" id="from-sugg" role="listbox" hidden></ul></div><button type="button" class="star" data-for="from" aria-pressed="false" title="Lieu favori">☆</button></div>
+          <div class="place"><div class="ac"><input id="from" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="from-sugg" value="Toulouse"><button type="button" class="clr" data-clr="from" aria-label="Effacer" title="Effacer" hidden>×</button><ul class="sugg" id="from-sugg" role="listbox" hidden></ul></div><button type="button" class="star" data-for="from" aria-pressed="false" title="Lieu favori">☆</button></div>
           <p class="placeok" id="from-ok"></p>
         </div>
         <div id="vias"></div>
         <div class="viactl"><button type="button" class="swap" id="addVia">+ Ajouter une étape</button><button type="button" class="swap" id="swap">⇅ Inverser le trajet</button></div>
         <div class="field">
           <label for="to">Arrivée</label>
-          <div class="place"><div class="ac"><input id="to" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="to-sugg" value="Lyon"><ul class="sugg" id="to-sugg" role="listbox" hidden></ul></div><button type="button" class="star" data-for="to" aria-pressed="false" title="Lieu favori">☆</button></div>
+          <div class="place"><div class="ac"><input id="to" required autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="to-sugg" value="Lyon"><button type="button" class="clr" data-clr="to" aria-label="Effacer" title="Effacer" hidden>×</button><ul class="sugg" id="to-sugg" role="listbox" hidden></ul></div><button type="button" class="star" data-for="to" aria-pressed="false" title="Lieu favori">☆</button></div>
           <p class="placeok" id="to-ok"></p>
         </div>
                 <div class="row">
@@ -531,7 +551,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
       <button type="button" class="mini" id="copyBtn">Copier la feuille de route</button>
       <p class="note" id="exportNote"></p>
     </div>
-    <div class="panel">
+    <div class="panel" id="roadPanel">
       <h2 style="margin-bottom:12px">Feuille de route</h2>
       <div id="road"><p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l'heure, la borne et le temps de charge.</p></div>
     </div>
@@ -548,6 +568,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.13", d:"27/10/2026", c:[
+    "« Je suis ici » : point de position sur la carte, vert avec le % de batterie s'il colle au plan (±5 points), rouge sinon",
+    "Bouton × pour vider le départ ou l'arrivée",
+    "« Masquer les réglages » : carte à gauche (fixe au défilement), résumé et feuille de route à droite ; le choix est mémorisé"]},
   {v:"2.12", d:"27/10/2026", c:[
     "Bouton « Je suis ici » : position GPS du téléphone et batterie saisie, comparées au plan (km parcourus, écart de batterie, avance ou retard)",
     "Estimation de la batterie au prochain arrêt si l'écart se maintient, avec alerte sous la réserve",
@@ -1141,7 +1165,7 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
-let map, layers;
+let map, layers, hereLayer, lastLine=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
   map=L.map("map",{zoomControl:true}).setView([46.6,2.4],6);
@@ -1156,13 +1180,14 @@ function initMap(){
     base.on("tileerror",()=>{ if(++fails>=4 && bi<BASES.length-1){ bi++; useBase(); } }); };
   useBase();
   layers=L.layerGroup().addTo(map);
+  hereLayer=L.layerGroup().addTo(map);
 }
 const pinIcon=(cls,txt)=>L.divIcon({className:"",html:`<div class="pin ${cls}">${txt}</div>`,iconSize:[26,26],iconAnchor:[13,13]});
 function drawMap(R,C,res,a,b,showAll){
   if(!map) return;
   layers.clearLayers();
   const accent=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1f4fd8";
-  const line=L.polyline(R.line,{color:accent,weight:5,opacity:.85}).addTo(layers);
+  const line=L.polyline(R.line,{color:accent,weight:5,opacity:.85}).addTo(layers); lastLine=line;
   if(showAll) for(const c of C) L.circleMarker([c.lat,c.lon],{radius:4,color:"#5b6878",weight:1,fillOpacity:.5})
     .bindPopup(`<b>${esc(c.name)}</b><br>${c.kw?Math.round(c.kw)+" kW":"puissance inconnue"}${c.operator?"<br>"+esc(c.operator):""}`).addTo(layers);
   L.marker([a.lat,a.lon],{icon:pinIcon("s","D")}).bindPopup("Départ").addTo(layers);
@@ -1481,6 +1506,14 @@ function attachAC(id){
 }
 attachAC("from"); attachAC("to");
 
+// ---------- Bouton × pour vider le départ ou l'arrivée ----------
+function updClr(){ document.querySelectorAll(".clr[data-clr]").forEach(b=>b.hidden=!$(b.dataset.clr).value); }
+document.querySelectorAll(".clr[data-clr]").forEach(b=>b.addEventListener("click",()=>{
+  const id=b.dataset.clr; $(id).value=""; $(id+"-ok").textContent=""; b.hidden=true;
+  $("favTrip").value=""; renderFavs(); updateSums(); $(id).focus();
+}));
+["from","to"].forEach(id=>$(id).addEventListener("input",updClr));
+
 // ---------- Étapes intermédiaires ----------
 let viaSeq=0;
 function viaRows(){ return [...document.querySelectorAll("#vias .via")]; }
@@ -1516,6 +1549,7 @@ const tripKey=t=>[t.from,...(t.vias||[]).map(v=>v.q),t.to].join("|").toLowerCase
 const tripLabel=t=>[t.from,...(t.vias||[]).map(v=>v.q),t.to].join(" → ");
 const curTrip=()=>({from:$("from").value.trim(), to:$("to").value.trim(), vias:readVias().filter(v=>v.q)});
 function renderFavs(){
+  try{ updClr(); }catch(e){}
   const sel=$("favTrip"), cur=sel.value;
   sel.innerHTML='<option value="">'+(favs.trips.length?"Trajets favoris…":"Aucun trajet favori")+'</option>'+favs.trips.map((t,i)=>`<option value="${i}">${esc(tripLabel(t))}</option>`).join("");
   const ck=tripKey(curTrip()), match=favs.trips.findIndex(t=>tripKey(t)===ck);
@@ -1574,6 +1608,16 @@ const xmlEsc=t=>String(t).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&am
 function runStops(){ return lastRun.res.steps.filter(s=>s.type==="stop"); }
 function runPoints(){ return lastRun.res.steps.filter(s=>s.type==="stop"||(s.type==="via"&&s.lat!=null)); }
 const clockAt=sec=>fmtClock(new Date(lastRun.p.dep.getTime()+sec*1000));
+// ---------- Masquer / afficher le panneau des réglages ----------
+function setWide(on){
+  document.body.classList.toggle("wide",on);
+  $("panelBtn").textContent=on?"Afficher les réglages":"Masquer les réglages"; $("panelBtn").setAttribute("aria-pressed",on);
+  try{ localStorage.setItem("trajetve-large",on?"1":"0"); }catch(e){}
+  setTimeout(()=>{ if(map){ map.invalidateSize(); if(lastLine) map.fitBounds(lastLine.getBounds(),{padding:[20,20]}); } },60);
+}
+$("panelBtn").addEventListener("click",()=>setWide(!document.body.classList.contains("wide")));
+try{ if(localStorage.getItem("trajetve-large")==="1") setWide(true); }catch(e){}
+
 // ---------- Je suis ici : position GPS du téléphone + batterie saisie, comparées au plan ----------
 const dtLocal=d=>{ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
 // Points du plan (km parcourus, temps écoulé, batterie) à chaque événement de la feuille de route
@@ -1631,7 +1675,17 @@ $("hereGo").addEventListener("click",()=>{
       if(socNext<p.floor) nextTxt+=` <b class="err">sous ta réserve de ${p.floor} %</b>`;
     }
     hereFix={lat,lon,km:loc.km,soc:hasSoc?socReal:null,res};
-    const cls=v=>Math.abs(v)<=3?"good":Math.abs(v)<=8?"warn":"bad";
+    // point sur la carte : vert si la batterie colle au plan (±5 points), rouge sinon, gris sans batterie saisie
+    if(map && hereLayer){
+      hereLayer.clearLayers();
+      const ok=hasSoc && Math.abs(dSoc)<=5, col=!hasSoc?"#5b6878":ok?"#0d8a5f":"#b3261e";
+      L.circle([lat,lon],{radius:Math.min(accuracy,2000),color:col,weight:1,fillOpacity:.08}).addTo(hereLayer);
+      L.marker([lat,lon],{zIndexOffset:2000,icon:L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],
+        html:`<div class="herepin" style="--c:${col}"></div><div class="herelab" style="--c:${col}">${hasSoc?Math.round(socReal)+" %":"ici"}${hasSoc?`<small>prévu ${Math.round(plan.soc)} %</small>`:""}</div>`})})
+        .bindPopup(`<b>Position ${fmtClock(now)}</b><br>${hasSoc?`Batterie ${Math.round(socReal)} % (prévu ${Math.round(plan.soc)} %)`:"Batterie non saisie"}`).addTo(hereLayer);
+      map.panTo([lat,lon]);
+    }
+    const cls=v=>Math.abs(v)<=5?"good":"bad";   // même seuil que la couleur du point sur la carte
     out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
       <div class="here-grid">
         <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
@@ -1846,6 +1900,7 @@ function autoCalc(){ if(!lastCalcOk || !$("from").value.trim() || !$("to").value
 $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.includes(e.target.id) || e.target.classList.contains("vq")) return; autoCalc(); });
 
 function clearResults(){
+  if(hereLayer) hereLayer.clearLayers();
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
@@ -1923,7 +1978,7 @@ $("f").addEventListener("submit", async e=>{
   if(p.useSoc && p.socTrig-p.socTolLo<=p.floor) return setStatus("Le seuil d'arrêt moins sa tolérance doit rester au-dessus de la réserve minimale.",true);
   if(p.useTarget && p.useSoc && p.target<=p.socTrig+10) return setStatus("« Recharger jusqu'à » doit dépasser le seuil d'arrêt d'au moins 10 points.",true);
   if(calcBusy){ calcAgain=true; return; }
-  calcBusy=true; const btns=document.querySelectorAll("button.go"); btns.forEach(x=>x.textContent="Calcul en cours…");
+  calcBusy=true; const btns=document.querySelectorAll("#f button.go"); btns.forEach(x=>x.textContent="Calcul en cours…");
   try{
     const fq=$("from").value.trim(), tq=$("to").value.trim();
     setStatus("Recherche des adresses…");
@@ -1979,6 +2034,7 @@ $("f").addEventListener("submit", async e=>{
   }finally{ calcBusy=false; btns.forEach(x=>x.textContent="Calculer le trajet"); if(calcAgain){ calcAgain=false; setTimeout(()=>$("f").requestSubmit(),0); } }
 });
 updateSums();
+updClr();
 syncQuick();
 renderPrices();
 renderPrio();
