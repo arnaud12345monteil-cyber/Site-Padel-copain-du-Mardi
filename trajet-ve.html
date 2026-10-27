@@ -146,6 +146,10 @@ select{min-width:0;max-width:100%}
 .altfl{display:flex;flex-wrap:wrap;gap:4px}
 .altfl i{white-space:nowrap;font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
 .altfl i.ok{border-color:var(--charge);color:var(--charge)}
+.altpin{display:grid;place-items:center;min-width:26px;height:22px;padding:0 5px;border-radius:11px;background:#fff;border:2px solid var(--c);color:var(--c);font:700 11px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap}
+.altpin.sel{background:var(--c);color:#fff}
+.altlist li[data-ai]{cursor:pointer}
+.altlist li.hl{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .chip.rok{border-color:var(--charge);color:var(--charge)}
 .altlist{max-height:520px;overflow:auto}
 .altf{display:inline-flex;margin-top:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -582,6 +586,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.16", d:"27/10/2026", c:[
+    "Ouvrir « Autres bornes possibles » affiche uniquement ces bornes sur la carte (puissance sur chaque pastille, vert si elles respectent tes réglages, orange sinon), avec la borne retenue ; le filtre Sur aire / Hors aire s'applique aussi à la carte",
+    "Clic sur une borne de la liste : la carte se centre dessus ; clic sur une pastille : la ligne correspondante est mise en évidence ; bouton « Choisir cette borne » dans la bulle"]},
   {v:"2.15", d:"27/10/2026", c:[
     "« Ma position actuelle » proposée en tête de liste dans Départ et Arrivée : position GPS du téléphone, avec le nom du lieu"]},
   {v:"2.14", d:"27/10/2026", c:[
@@ -1128,7 +1135,7 @@ function simulate(R,C,p){
       .sort((u,v)=>u.sc-v.sc)
       // les 12 meilleures, plus les 8 meilleures sur aire et les 8 meilleures hors aire (pour le filtre local)
       .filter((o,k,arr)=> k<12 || arr.filter(y=>!!y.x.onAire===!!o.x.onAire).indexOf(o)<8)
-      .map(({x,fl})=>({good:goodFlag(x), id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, flags:fl}));
+      .map(({x,fl})=>({good:goodFlag(x), id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, lat:x.lat, lon:x.lon, flags:fl}));
     // Borne choisie à la main depuis la feuille de route
     let forced=false;
     const fid=(p.force||{})[c.id];
@@ -1185,7 +1192,7 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
-let map, layers, hereLayer, lastLine=null;
+let map, layers, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
   map=L.map("map",{zoomControl:true}).setView([46.6,2.4],6);
@@ -1201,6 +1208,9 @@ function initMap(){
   useBase();
   layers=L.layerGroup().addTo(map);
   hereLayer=L.layerGroup().addTo(map);
+  altLayer=L.layerGroup().addTo(map);
+  // bouton « Choisir » dans les bulles des bornes alternatives
+  map.getContainer().addEventListener("click",e=>{ const b=e.target.closest("[data-force]"); if(b){ const [o,a2]=b.dataset.force.split("|"); stopForce[o]=a2; map.closePopup(); $("f").requestSubmit(); } });
 }
 const pinIcon=(cls,txt)=>L.divIcon({className:"",html:`<div class="pin ${cls}">${txt}</div>`,iconSize:[26,26],iconAnchor:[13,13]});
 function drawMap(R,C,res,a,b,showAll){
@@ -1208,8 +1218,9 @@ function drawMap(R,C,res,a,b,showAll){
   layers.clearLayers();
   const accent=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1f4fd8";
   const line=L.polyline(R.line,{color:accent,weight:5,opacity:.85}).addTo(layers); lastLine=line;
+  allLayer=L.layerGroup().addTo(layers); altLayer?.clearLayers(); altOpen=null;
   if(showAll) for(const c of C) L.circleMarker([c.lat,c.lon],{radius:4,color:"#5b6878",weight:1,fillOpacity:.5})
-    .bindPopup(`<b>${esc(c.name)}</b><br>${c.kw?Math.round(c.kw)+" kW":"puissance inconnue"}${c.operator?"<br>"+esc(c.operator):""}`).addTo(layers);
+    .bindPopup(`<b>${esc(c.name)}</b><br>${c.kw?Math.round(c.kw)+" kW":"puissance inconnue"}${c.operator?"<br>"+esc(c.operator):""}`).addTo(allLayer);
   L.marker([a.lat,a.lon],{icon:pinIcon("s","D")}).bindPopup("Départ").addTo(layers);
   L.marker([b.lat,b.lon],{icon:pinIcon("e","A")}).bindPopup("Arrivée").addTo(layers);
   let k=0;
@@ -1230,7 +1241,7 @@ function render(res,p,a,b){
   const at = s => fmtClock(new Date(dep.getTime()+s*1000));
   if(res.error && !res.partial){ road.innerHTML=`<p class="empty">${esc(res.error)}</p>`; $("resbar").hidden=true; $("chartPanel").hidden=true; return; }
   const steps=res.steps||res.partial; let html='<ol class="road">', k=0, kv=0;
-  for(const s of steps){
+  for(const [si,s] of steps.entries()){
     if(s.type==="start") html+=li(at(0),"",`<h3>Départ</h3><p>${esc(short(a.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
     else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p>${s.kwh!=null?`<p class="leg">${Math.round(s.from)} % → ${Math.round(s.to)} % · ${s.kwh.toFixed(1).replace(".",",")} kWh consommés · ${(s.kwh/Math.max(0.1,s.km)*100).toFixed(1).replace(".",",")} kWh/100 km</p>`:""}</div>`}</li>`;
     else if(s.type==="stop"){ k++;
@@ -1254,11 +1265,11 @@ function render(res,p,a,b){
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
       const cheapId=altAll.reduce((m,x)=>x.price<m.price?x:m).id, fastId=altAll.reduce((m,x)=>x.eff>m.eff?x:m).id;
       const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`})[k] || k; };
-      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
+      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
         ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
         ${(()=>{ const na=(s.alts||[]).filter(x=>x.onAire).length, nh=(s.alts||[]).length-na;
           return (s.alts||[]).length ? `<div class="altf" role="group" aria-label="Filtrer les bornes"><button type="button" data-altf="all">Toutes (${s.alts.length})</button><button type="button" data-altf="aire" ${na?"":"disabled"}>Sur aire (${na})</button><button type="button" data-altf="hors" ${nh?"":"disabled"}>Hors aire (${nh})</button></div>` : ""; })()}
-        <ul class="altlist">${(s.alts||[]).map(x=>`<li data-aire="${x.onAire?1:0}"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
+        <ul class="altlist">${(s.alts||[]).map((x,ai)=>`<li data-aire="${x.onAire?1:0}" data-ai="${ai}" title="Voir sur la carte"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
           <span class="altfl">${(x.good||[]).map(g=>`<i class="ok">${esc(goodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(flTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
           <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
       html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
@@ -1272,6 +1283,7 @@ function render(res,p,a,b){
   html+="</ol>";
   if(res.error) html+=`<p class="status err" style="margin-top:8px">${esc(res.error)}</p>`;
   road.innerHTML=html;
+  if(altLayer){ altLayer.clearLayers(); altOpen=null; if(allLayer && layers && !layers.hasLayer(allLayer)) layers.addLayer(allLayer); }
 
   const N=need(p), tiles=[[Math.round(N.tripPct)+" %","batterie pour le trajet",1],[Math.round(N.toCharge)+" %","à recharger en route",1]];
   if(res.summary){
@@ -1949,6 +1961,34 @@ async function initSync(){
 let cache={};
 // ---------- Réglages manuels par arrêt (depuis la feuille de route) ----------
 let stopOv={}, stopForce={}, ovTrip="", viewingSheet=false;
+// Bornes alternatives sur la carte : seules celles de la liste ouverte (et du filtre choisi) sont affichées
+function showAlts(det){
+  if(!map || !altLayer) return;
+  altLayer.clearLayers(); altMarkers=[];
+  if(!det){ altOpen=null; if(allLayer && !layers.hasLayer(allLayer)) layers.addLayer(allLayer); return; }
+  const st=lastRun?.res?.steps?.[+det.dataset.si]; if(!st || !st.alts) return;
+  altOpen=det;
+  if(allLayer) layers.removeLayer(allLayer);   // on masque les autres bornes pour ne garder que la liste
+  const pts=[[st.c.lat,st.c.lon]];
+  L.marker([st.c.lat,st.c.lon],{zIndexOffset:1500,icon:L.divIcon({className:"",iconSize:[60,22],iconAnchor:[30,11],html:`<div class="altpin sel" style="--c:#0d8a5f">retenue</div>`})})
+    .bindPopup(`<b>Borne retenue</b><br>${esc(st.c.name)}`).addTo(altLayer);
+  st.alts.forEach((x,ai)=>{
+    if(x.lat==null) return;
+    if((altFilter==="aire" && !x.onAire) || (altFilter==="hors" && x.onAire)) { altMarkers[ai]=null; return; }
+    const col=x.flags.length?"#b4570a":"#0d8a5f";
+    const m=L.marker([x.lat,x.lon],{zIndexOffset:1400,icon:L.divIcon({className:"",iconSize:[44,22],iconAnchor:[22,11],html:`<div class="altpin" style="--c:${col}">${x.kw?Math.round(x.kw):"?"}</div>`})})
+      .bindPopup(`<b>${esc(x.name)}</b><br>${esc([x.operator,(x.kw?Math.round(x.kw)+" kW":""),fmtPrice(x.price)+"/kWh","arrivée "+x.soc+" %"].filter(Boolean).join(" · "))}<br><button type="button" class="mini" data-force="${esc(st.origId)}|${esc(x.id)}" style="margin-top:6px">Choisir cette borne</button>`)
+      .on("click",()=>{ document.querySelectorAll("#road .altlist li.hl").forEach(l=>l.classList.remove("hl")); const li=det.querySelector(`li[data-ai="${ai}"]`); if(li){ li.classList.add("hl"); li.scrollIntoView({block:"nearest",behavior:"smooth"}); } })
+      .addTo(altLayer);
+    altMarkers[ai]=m; pts.push([x.lat,x.lon]);
+  });
+  if(pts.length>1) map.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:12});
+}
+$("road").addEventListener("toggle",e=>{
+  const d=e.target; if(!d.matches || !d.matches("details.alts")) return;
+  if(d.open){ document.querySelectorAll("#road details.alts[open]").forEach(o=>{ if(o!==d) o.open=false; }); showAlts(d); }
+  else if(altOpen===d) showAlts(null);
+},true);
 // Filtre local de la liste « Autres bornes possibles » : toutes / sur aire / hors aire (mémorisé sur l'appareil)
 let altFilter="all";
 try{ const v=localStorage.getItem("trajetve-altfiltre"); if(["all","aire","hors"].includes(v)) altFilter=v; }catch(e){}
@@ -1970,7 +2010,10 @@ $("road").addEventListener("change",e=>{
 $("road").addEventListener("click",e=>{
   const af=e.target.closest("[data-altf]");
   if(af){ altFilter=af.dataset.altf; try{ localStorage.setItem("trajetve-altfiltre",altFilter); }catch(_){}
-    document.querySelectorAll("#road .alts").forEach(d=>d.dataset.f=altFilter); return; }
+    document.querySelectorAll("#road .alts").forEach(d=>d.dataset.f=altFilter); if(altOpen) showAlts(altOpen); return; }
+  // clic sur une borne de la liste : la carte se centre dessus
+  const li=e.target.closest(".altlist li[data-ai]");
+  if(li && !e.target.closest("button")){ const m=altMarkers[+li.dataset.ai]; if(m){ map.setView(m.getLatLng(),Math.max(map.getZoom(),13)); m.openPopup(); } return; }
   const fz=e.target.closest("[data-force]");
   if(fz){ const [o,a]=fz.dataset.force.split("|"); stopForce[o]=a; $("f").requestSubmit(); return; }
   const uf=e.target.closest("[data-unforce]");
