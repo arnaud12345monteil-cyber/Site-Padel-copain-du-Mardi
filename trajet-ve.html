@@ -174,6 +174,15 @@ select{min-width:0;max-width:100%}
 .here-card.bad{border-color:var(--bad)} .here-card.bad b{color:var(--bad)}
 .here-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .here b.err{color:var(--bad)}
+#hereLive{padding:10px 14px}
+#hereLive.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.hfollow{display:flex!important;align-items:center;gap:6px;flex:0 0 auto!important;font-size:.85rem;font-weight:400}
+.hfollow input{width:16px;height:16px;margin:0}
+#hereLiveSt:empty{display:none}
+#hereBtn.live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:6px;animation:blink 1.2s infinite}
+.herepin.live{animation:pulse 1.6s infinite}
+@keyframes blink{50%{opacity:.2}}
+@keyframes pulse{0%{box-shadow:0 0 0 2px var(--c),0 0 0 0 var(--c)}70%{box-shadow:0 0 0 2px var(--c),0 0 0 12px transparent}100%{box-shadow:0 0 0 2px var(--c),0 0 0 0 transparent}}
 .herepin{width:22px;height:22px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 2px var(--c),0 2px 6px rgba(0,0,0,.35)}
 .herelab{position:absolute;left:28px;top:-4px;white-space:nowrap;background:#fff;color:var(--c);border:2px solid var(--c);border-radius:8px;padding:1px 7px;font:700 13px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .herelab small{display:block;font:500 10px var(--f-body);color:#5b6878}
@@ -540,7 +549,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
         <h2>Je suis ici</h2>
         <label>Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42"></label>
         <button type="button" class="go" id="hereGo">Comparer avec ma position</button>
+        <button type="button" class="mini" id="hereLive">Suivre en temps réel</button>
+        <label class="hfollow"><input type="checkbox" id="hereFollow" checked> centrer la carte</label>
       </div>
+      <p class="note" id="hereLiveSt"></p>
       <div id="hereOut" role="status"></div>
     </div>
     <div class="export" id="exportBar" hidden>
@@ -568,6 +580,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.14", d:"27/10/2026", c:[
+    "Suivi en temps réel : la position se met à jour en continu sur la carte, avec la trace parcourue, le point vert ou rouge et la batterie estimée",
+    "Batterie estimée entre deux saisies en supposant que l'écart au plan reste le même ; une nouvelle saisie recale l'estimation",
+    "L'écran reste allumé pendant le suivi (si le navigateur le permet) ; option pour centrer la carte sur la position"]},
   {v:"2.13", d:"27/10/2026", c:[
     "« Je suis ici » : point de position sur la carte, vert avec le % de batterie s'il colle au plan (±5 points), rouge sinon",
     "Bouton × pour vider le départ ou l'arrivée",
@@ -1652,53 +1668,94 @@ function locateOnRoute(lat,lon,line,routeKm){
   return {off:best.d, km:cum>0 ? best.along/cum*routeKm : 0};
 }
 let hereFix=null;
+// Référence batterie : dernière valeur saisie, avec l'écart au plan à cet endroit. En suivi, l'écart est supposé constant.
+let hereRef=null, watchId=null, wakeLock=null, trailPts=[], lastCards=0, lastPos=null;
+const errMsg=err=>({1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.");
 $("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
-$("hereGo").addEventListener("click",()=>{
-  if(!lastRun?.res?.summary){ $("hereOut").innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+// nouvelle saisie de batterie pendant le suivi : prise en compte à la dernière position connue
+$("hereSoc").addEventListener("change",()=>{ if(lastPos) hereRender(lastPos,true); });
+function hereRender(pos, force){
   const out=$("hereOut");
+  if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  lastPos=pos;
+  const {latitude:lat, longitude:lon, accuracy}=pos.coords;
+  const {res,p,R}=lastRun, S=res.summary;
+  const loc=locateOnRoute(lat,lon,R.line,S.km), pts=planPoints(res), plan=planAt(pts,loc.km);
+  const typed=parseFloat($("hereSoc").value);
+  // nouveau plan (recalcul) : on garde la batterie estimée et on recale l'écart sur le nouveau plan
+  if(hereRef && hereRef.run!==lastRun){ const est=planAt(hereRef.pts,loc.km).soc+hereRef.d; hereRef={...hereRef, d:est-plan.soc, run:lastRun, pts}; }
+  if(isFinite(typed) && (!hereRef || hereRef.val!==typed)) hereRef={val:typed, km:loc.km, d:typed-plan.soc, run:lastRun, pts};
+  const hasSoc=!!hereRef, dSoc=hasSoc?hereRef.d:null, socNow=hasSoc?plan.soc+dSoc:null;
+  const measured=hasSoc && Math.abs(loc.km-hereRef.km)<1;
+  const now=new Date(), planClock=new Date(p.dep.getTime()+plan.t*1000), dMin=Math.round((now-planClock)/60000);
+  hereFix={lat,lon,km:loc.km,soc:hasSoc?socNow:null,res};
+  // Point sur la carte : vert si la batterie colle au plan (±5 points), rouge sinon, gris sans batterie saisie
+  if(map && hereLayer){
+    hereLayer.clearLayers();
+    const ok=hasSoc && Math.abs(dSoc)<=5, col=!hasSoc?"#5b6878":ok?"#0d8a5f":"#b3261e";
+    if(watchId!=null && trailPts.length>1) L.polyline(trailPts,{color:col,weight:3,opacity:.6,dashArray:"4 6"}).addTo(hereLayer);
+    L.circle([lat,lon],{radius:Math.min(accuracy,2000),color:col,weight:1,fillOpacity:.08}).addTo(hereLayer);
+    const lab=hasSoc ? `${measured?"":"~"}${Math.round(socNow)} %<small>prévu ${Math.round(plan.soc)} %</small>` : `ici<small>prévu ${Math.round(plan.soc)} %</small>`;
+    L.marker([lat,lon],{zIndexOffset:2000,icon:L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],
+      html:`<div class="herepin${watchId!=null?" live":""}" style="--c:${col}"></div><div class="herelab" style="--c:${col}">${lab}</div>`})})
+      .bindPopup(`<b>Position ${fmtClock(now)}</b><br>${hasSoc?`Batterie ${measured?"":"estimée "}${Math.round(socNow)} % (prévu ${Math.round(plan.soc)} %)`:"Batterie non saisie"}`).addTo(hereLayer);
+    if(watchId==null || $("hereFollow").checked) map.panTo([lat,lon],{animate:watchId!=null});
+  }
+  // En suivi, les cases sont rafraîchies toutes les 10 s au plus
+  if(!force && watchId!=null && Date.now()-lastCards<10000) return;
+  lastCards=Date.now();
+  const next=res.steps.find(s=>(s.type==="stop" && s.c.km>loc.km+0.5) || s.type==="end");
+  let nextTxt="";
+  if(next && hasSoc){
+    const socNext=(next.type==="stop"?next.socIn:next.soc)+dSoc;
+    nextTxt=`${next.type==="stop"?"au prochain arrêt ("+esc(next.c.name)+")":"à l'arrivée"} : environ ${Math.round(socNext)} %`;
+    if(socNext<p.floor) nextTxt+=` <b class="err">sous ta réserve de ${p.floor} %</b>`;
+  }
+  const cls=v=>Math.abs(v)<=5?"good":"bad";   // même seuil que la couleur du point sur la carte
+  out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
+    <div class="here-grid">
+      <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
+      ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${measured?Math.round(socNow)+" % réelle":"estimée ~"+Math.round(socNow)+" % (saisie "+Math.round(hereRef.val)+" % il y a "+fmtKm(Math.max(0,loc.km-hereRef.km))+")"}, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (saisis la tienne pour comparer)</span></div>`}
+      <div class="here-card ${Math.abs(dMin)<=10?"good":Math.abs(dMin)<=30?"warn":"bad"}"><b>${dMin>=0?"+":""}${dMin} min</b><span>${dMin>=0?"de retard":"d'avance"} sur l'horaire prévu (${fmtClock(planClock)} ici)</span></div>
+    </div>
+    ${nextTxt?`<p>Si l'écart se maintient, batterie ${nextTxt}.</p>`:""}
+    <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Saisis ta batterie pour recalculer.</span>'}</div>`;
+}
+$("hereGo").addEventListener("click",()=>{
+  const out=$("hereOut");
+  if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
   if(!("geolocation" in navigator)){ out.innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
+  if(watchId!=null && lastPos){ hereRender(lastPos,true); return; }
   out.innerHTML='<p class="note">Recherche de ta position…</p>'; $("hereGo").disabled=true;
-  navigator.geolocation.getCurrentPosition(pos=>{
-    $("hereGo").disabled=false;
-    const {latitude:lat, longitude:lon, accuracy}=pos.coords;
-    const {res,p,R}=lastRun, S=res.summary;
-    const loc=locateOnRoute(lat,lon,R.line,S.km), pts=planPoints(res), plan=planAt(pts,loc.km);
-    const socReal=parseFloat($("hereSoc").value), hasSoc=isFinite(socReal);
-    const now=new Date(), planClock=new Date(p.dep.getTime()+plan.t*1000), dMin=Math.round((now-planClock)/60000);
-    const dSoc=hasSoc ? socReal-plan.soc : null;
-    // Batterie réelle prolongée jusqu'au prochain arrêt ou à l'arrivée, au rythme prévu
-    const next=res.steps.find(s=>(s.type==="stop" && s.c.km>loc.km+0.5) || s.type==="end");
-    let nextTxt="";
-    if(next && hasSoc){
-      const atNext=planAt(pts, next.type==="stop"?next.c.km:next.km), socNext=(next.type==="stop"?next.socIn:next.soc)+dSoc;
-      nextTxt=`${next.type==="stop"?"au prochain arrêt ("+esc(next.c.name)+")":"à l'arrivée"} : environ ${Math.round(socNext)} %`;
-      if(socNext<p.floor) nextTxt+=` <b class="err">sous ta réserve de ${p.floor} %</b>`;
-    }
-    hereFix={lat,lon,km:loc.km,soc:hasSoc?socReal:null,res};
-    // point sur la carte : vert si la batterie colle au plan (±5 points), rouge sinon, gris sans batterie saisie
-    if(map && hereLayer){
-      hereLayer.clearLayers();
-      const ok=hasSoc && Math.abs(dSoc)<=5, col=!hasSoc?"#5b6878":ok?"#0d8a5f":"#b3261e";
-      L.circle([lat,lon],{radius:Math.min(accuracy,2000),color:col,weight:1,fillOpacity:.08}).addTo(hereLayer);
-      L.marker([lat,lon],{zIndexOffset:2000,icon:L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],
-        html:`<div class="herepin" style="--c:${col}"></div><div class="herelab" style="--c:${col}">${hasSoc?Math.round(socReal)+" %":"ici"}${hasSoc?`<small>prévu ${Math.round(plan.soc)} %</small>`:""}</div>`})})
-        .bindPopup(`<b>Position ${fmtClock(now)}</b><br>${hasSoc?`Batterie ${Math.round(socReal)} % (prévu ${Math.round(plan.soc)} %)`:"Batterie non saisie"}`).addTo(hereLayer);
-      map.panTo([lat,lon]);
-    }
-    const cls=v=>Math.abs(v)<=5?"good":"bad";   // même seuil que la couleur du point sur la carte
-    out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
-      <div class="here-grid">
-        <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
-        ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${Math.round(socReal)} % réelle, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (saisis la tienne pour comparer)</span></div>`}
-        <div class="here-card ${Math.abs(dMin)<=10?"good":Math.abs(dMin)<=30?"warn":"bad"}"><b>${dMin>=0?"+":""}${dMin} min</b><span>${dMin>=0?"de retard":"d'avance"} sur l'horaire prévu (${fmtClock(planClock)} ici)</span></div>
-      </div>
-      ${nextTxt?`<p>Si l'écart se maintient, batterie ${nextTxt}.</p>`:""}
-      <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Saisis ta batterie pour recalculer.</span>'}</div>`;
-  }, err=>{
-    $("hereGo").disabled=false;
-    const m={1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.";
-    out.innerHTML=`<p class="status err">${m}</p>`;
-  }, {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
+  navigator.geolocation.getCurrentPosition(pos=>{ $("hereGo").disabled=false; hereRender(pos,true); },
+    err=>{ $("hereGo").disabled=false; out.innerHTML=`<p class="status err">${errMsg(err)}</p>`; },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
+});
+// ---------- Suivi en temps réel ----------
+async function keepAwake(){ try{ if("wakeLock" in navigator && document.visibilityState==="visible") wakeLock=await navigator.wakeLock.request("screen"); }catch(e){ wakeLock=null; } }
+document.addEventListener("visibilitychange",()=>{ if(watchId!=null && document.visibilityState==="visible") keepAwake(); });
+function stopLive(){
+  if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+  watchId=null; try{ wakeLock?.release(); }catch(e){} wakeLock=null;
+  $("hereLive").textContent="Suivre en temps réel"; $("hereLive").classList.remove("on"); $("hereBtn").classList.remove("live");
+  $("hereLiveSt").textContent=lastPos?`Suivi arrêté. Dernière position à ${fmtClock(new Date(lastPos.timestamp))}.`:"";
+}
+$("hereLive").addEventListener("click",()=>{
+  if(watchId!=null){ stopLive(); return; }
+  if(!lastRun?.res?.summary){ $("hereOut").innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  if(!("geolocation" in navigator)){ $("hereOut").innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
+  trailPts=[]; lastCards=0;
+  $("hereLive").textContent="Arrêter le suivi"; $("hereLive").classList.add("on"); $("hereBtn").classList.add("live");
+  $("hereLiveSt").textContent="Suivi actif, recherche de la position…";
+  keepAwake();
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const pt=[pos.coords.latitude,pos.coords.longitude], last=trailPts[trailPts.length-1];
+    if(!last || hav(last[0],last[1],pt[0],pt[1])>0.03) trailPts.push(pt);
+    if(trailPts.length>2000) trailPts.shift();
+    hereRender(pos,false);
+    $("hereLiveSt").textContent=`Suivi actif · position à ${new Date(pos.timestamp).toLocaleTimeString("fr-FR")}${pos.coords.speed!=null?` · ${Math.round(pos.coords.speed*3.6)} km/h`:""}`;
+  }, err=>{ $("hereLiveSt").textContent=errMsg(err); if(err.code===1) stopLive(); },
+  {enableHighAccuracy:true, timeout:30000, maximumAge:5000});
 });
 $("hereOut").addEventListener("click",e=>{
   if(!e.target.closest("#hereRecalc") || !hereFix || hereFix.soc==null) return;
@@ -1900,6 +1957,7 @@ function autoCalc(){ if(!lastCalcOk || !$("from").value.trim() || !$("to").value
 $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.includes(e.target.id) || e.target.classList.contains("vq")) return; autoCalc(); });
 
 function clearResults(){
+  if(typeof stopLive==="function" && watchId!=null) stopLive();
   if(hereLayer) hereLayer.clearLayers();
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
   if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
@@ -2023,7 +2081,8 @@ $("f").addEventListener("submit", async e=>{
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
     curSheet=null; renderSheets();
-    lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause})=>({q,pause}))} : null; $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
+    lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause})=>({q,pause}))} : null;
+    if(lastPos && watchId!=null && lastRun) setTimeout(()=>hereRender(lastPos,true),0); $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
     setStatus(miss?`${miss} tronçon(s) sans réponse du service des bornes : relance le calcul pour les compléter.`:(res.error?"":`${raw.warn?raw.warn+" ":""}${C.length} bornes le long du trajet (${raw.source}). ${timing}`), !!miss||!!raw.warn);
