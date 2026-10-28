@@ -272,7 +272,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .place{display:flex;gap:6px}
 .place input{flex:1}
 .viactl{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.via .pause{flex:none;width:76px}
+.via .pause{flex:none;width:70px}
+.via .vmin{flex:none;width:64px}
 .via .del{flex:none;width:42px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--muted);font-size:1.1rem;cursor:pointer}
 .via .del:hover{color:var(--bad)}
 .via-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -593,6 +594,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.19", d:"28/10/2026", c:[
+    "Batterie minimale à l'arrivée pour chaque étape (champ à côté de la pause, et dans la feuille de route) : le calcul ajoute ou allonge une recharge avant l'étape si besoin",
+    "Autres bornes possibles : aussi les bornes plus loin sur le trajet (batterie plus basse), y compris jusqu'à 10 points sous la réserve, signalées « sous ta réserve »"]},
   {v:"2.18", d:"28/10/2026", c:[
     "Sens de circulation sur autoroute : une aire située du côté opposé (à gauche dans le sens de passage) n'est plus retenue ; elle reste visible dans les autres bornes possibles avec la mention « aire dans l'autre sens »",
     "Trajets qui repassent par la même autoroute (aller puis retour) : chaque passage est traité séparément, avec son propre sens",
@@ -1079,7 +1083,7 @@ function simulate(R,C,p){
 
   for(let guard=0; guard<60; guard++){
     // étape tombée exactement sur la borne précédente : on la passe tout de suite
-    while(wpi<W.length && W[wpi].idx<=i){ const w=W[wpi++]; steps.push({type:"via", t, soc, km:R.km[i], name:w.name, pause:w.pause||0, lat:w.lat, lon:w.lon}); t+=(w.pause||0)*60; pauseSec+=(w.pause||0)*60; if((w.pause||0)>=10) tRef=i; }
+    while(wpi<W.length && W[wpi].idx<=i){ const w=W[wpi++]; steps.push({type:"via", t, soc, km:R.km[i], name:w.name, pause:w.pause||0, min:w.min??null, lat:w.lat, lon:w.lon}); t+=(w.pause||0)*60; pauseSec+=(w.pause||0)*60; if((w.pause||0)>=10) tRef=i; }
     const vIdx = wpi<W.length ? W[wpi].idx : n-1;           // prochaine étape (ou arrivée)
     // une étape avec une pause de 10 min ou plus remet le compteur de temps de conduite à zéro
     const resets=W.slice(wpi).filter(w=>(w.pause||0)>=10).map(w=>w.idx);
@@ -1088,7 +1092,7 @@ function simulate(R,C,p){
       const w=W[wpi++], d=R.km[vIdx]-R.km[i], dt=R.sec[vIdx]-R.sec[i], en=E[vIdx]-E[i];
       soc-=pct(en); t+=dt; driveSec+=dt; kwh+=en;
       steps.push({type:"drive", km:d, sec:dt, from:soc+pct(en), to:soc, kwh:en});
-      steps.push({type:"via", t, soc, km:R.km[vIdx], name:w.name, pause:w.pause||0, lat:w.lat, lon:w.lon});
+      steps.push({type:"via", t, soc, km:R.km[vIdx], name:w.name, pause:w.pause||0, min:w.min??null, lat:w.lat, lon:w.lon});
       curve.push([R.km[vIdx],soc]);
       t+=(w.pause||0)*60; pauseSec+=(w.pause||0)*60; if((w.pause||0)>=10) tRef=vIdx;
       i=vIdx;
@@ -1111,6 +1115,8 @@ function simulate(R,C,p){
         const sEnd = s - pct(E[n-1]-E[j]);
         if(sEnd < arr){ trig=j; reason="soc"; break; }
       }
+      // batterie minimale demandée à la prochaine étape
+      if(j===vIdx && vIdx<n-1 && W[wpi] && W[wpi].min!=null && s<W[wpi].min-0.01 && C.some(x=>x.km>R.km[i]+1 && x.idx<=vIdx && socAt(x)>=p.floor-0.01)){ trig=j; reason="via"; break; }
     }
     // la route passe sans arrêt mais on arriverait sous le % souhaité : il faut un arrêt avant l'arrivée
     if(trig<0 && soc-pct(E[n-1]-E[i]) < arr-0.01){ trig=n-1; reason="arrival"; }
@@ -1164,7 +1170,8 @@ function simulate(R,C,p){
       if(p.useTime && reason==="time" && d<tEarly) f.push("tot:"+Math.round(d));
       if(p.useTime && d>tLate) f.push("tard:"+Math.round(d-p.maxMin));
       if(p.useSoc && reason==="soc" && sa>sEarly) f.push("socHaut:"+Math.round(sa));
-      if(p.useSoc && sa<sHard) f.push("socBas:"+Math.round(sa));
+      if(p.useSoc && sa<sHard && sa>=p.floor) f.push("socBas:"+Math.round(sa));
+      if(sa<p.floor) f.push("reserve:"+Math.round(sa));
       return f;
     };
     const goodFlag=x=>{
@@ -1174,16 +1181,20 @@ function simulate(R,C,p){
       if(isPref(x)) g.push("pref");
       return g;
     };
-    const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=150 && socAt(x)>=p.floor-0.01);
+    // alternatives : y compris plus loin, jusqu'à 10 points sous la réserve (signalé), pour voir ce qu'on gagnerait à l'abaisser
+    const softFloor=Math.max(2,p.floor-10);
+    const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=150 && socAt(x)>=softFloor);
     const alts=altsSrc.map(x=>{ const fl=[...(x.flags||[]), ...winFlag(x)]; return {x, fl, sc:score(x)+fl.length*0.5}; })
       .sort((u,v)=>u.sc-v.sc)
       // les 12 meilleures, plus les 8 meilleures sur aire et les 8 meilleures hors aire (pour le filtre local)
-      .filter((o,k,arr)=> k<12 || arr.filter(y=>!!y.x.onAire===!!o.x.onAire).indexOf(o)<8)
+      // 12 meilleures + 8 sur aire + 8 hors aire + les 4 premières plus loin et les 4 premières plus tôt que la borne retenue
+      .filter((o,k,arr)=> k<12 || arr.filter(y=>!!y.x.onAire===!!o.x.onAire).indexOf(o)<8
+                          || arr.filter(y=>(y.x.km>c.km)===(o.x.km>c.km)).indexOf(o)<4)
       .map(({x,fl})=>({good:goodFlag(x), id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, lat:x.lat, lon:x.lon, flags:fl}));
     // Borne choisie à la main depuis la feuille de route
     let forced=false;
     const fid=(p.force||{})[c.id];
-    if(fid){ const a2=(p.Call||[]).find(x=>x.id===fid); if(a2 && a2.km>R.km[i]+1 && socAt(a2)>=p.floor-0.01){ c=a2; forced=true; } }
+    if(fid){ const a2=(p.Call||[]).find(x=>x.id===fid); if(a2 && a2.km>R.km[i]+1 && socAt(a2)>=1){ c=a2; forced=true; } }
     if(c.idx>vIdx && vIdx<n-1){ goVia(); continue; }     // l'étape arrive avant la borne retenue : on la traite d'abord
 
     // rouler jusqu'à la borne (détour aller inclus)
@@ -1208,6 +1219,14 @@ function simulate(R,C,p){
       const needNext=keep+pct(E[nextIdx]-E[c.idx]+c.det*kDet)+2;
       socOut=Math.max(soc, Math.min(100, Math.ceil(finishInTime ? need : Math.min(need,needNext))));
     }
+    // assez pour arriver à la prochaine étape avec sa batterie minimale
+    const nv=W.slice(wpi).find(w=>w.idx>c.idx && w.min!=null);
+    if(nv){
+      const vNeed=Math.ceil(nv.min+pct(E[nv.idx]-E[c.idx]+c.det*kDet)+1);
+      // impossible en une charge : on laisse un arrêt plus proche de l'étape s'en charger, sauf s'il n'y en a plus
+      const another=C.some(x=>x.km>c.km+1 && x.idx<nv.idx);
+      if(vNeed<=100 || !another){ const v2=Math.min(100,vNeed); if(socOut<v2) socOut=v2; }
+    }
     const ch=chOf(c);
     // Réglage manuel de cet arrêt depuis la feuille de route : % cible et/ou durée d'arrêt
     const ov=(p.ov||{})[c.id];
@@ -1226,7 +1245,8 @@ function simulate(R,C,p){
     const dRef=Math.round(driveFromRef(c)), sIn=Math.round(socIn);
     const rule = reason==="time" ? {ok: dRef>=tEarly && dRef<=tLate, txt:`limite de temps · ${dRef} min de route`, win:`fenêtre ${Math.round(tEarly)}–${Math.round(tLate)} min`}
                : reason==="soc"  ? {ok: sIn<=Math.round(sEarly) && sIn>=Math.round(sHard), txt:`seuil batterie · arrivée ${sIn} %`, win:`plage ${Math.round(sEarly)}–${Math.round(sHard)} %`}
-               : reason==="floor" ? {ok:true, txt:"réserve minimale"} : {ok:true, txt:"% d'arrivée souhaité"};
+               : reason==="floor" ? {ok:true, txt:"réserve minimale"}
+               : reason==="via" ? {ok:true, txt:"batterie minimale à l'étape suivante"} : {ok:true, txt:"% d'arrivée souhaité"};
     steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, rule, alts: forced ? [] : alts, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
@@ -1308,7 +1328,7 @@ function render(res,p,a,b){
       // « la moins chère » / « la plus rapide » : seulement si strictement mieux que la borne retenue
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
       const cheapId=altAll.reduce((m,x)=>x.price<m.price?x:m).id, fastId=altAll.reduce((m,x)=>x.eff>m.eff?x:m).id;
-      const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`})[k] || k; };
+      const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`,reserve:`batterie à ${v} %, sous ta réserve`})[k] || k; };
       const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
         ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
         ${(()=>{ const na=(s.alts||[]).filter(x=>x.onAire).length, nh=(s.alts||[]).length-na;
@@ -1319,8 +1339,8 @@ function render(res,p,a,b){
       html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
     }
     else if(s.type==="via"){ kv++;
-      const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label></div>` : "";
-      html+=li(at(s.t),"via",`<h3>Étape ${kv} · ${esc(s.name)}</h3><p>${s.pause?`Pause de ${Math.round(s.pause)} min, départ à ${at(s.t+s.pause*60)}`:"Passage sans arrêt"}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>${vadj}`);
+      const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label><label>batterie min <input type="number" min="0" max="100" data-vmin value="${s.min??""}" placeholder="—"> %</label></div>` : "";
+      html+=li(at(s.t),"via",`<h3>Étape ${kv} · ${esc(s.name)}</h3><p>${s.pause?`Pause de ${Math.round(s.pause)} min, départ à ${at(s.t+s.pause*60)}`:"Passage sans arrêt"}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span>${s.min!=null?`<span class="chip ${s.soc>=s.min-0.5?"rok":"why"}">minimum demandé ${Math.round(s.min)} %</span>`:""}</div>${vadj}`);
     }
     else if(s.type==="end") html+=li(at(s.t),"",`<h3>Arrivée</h3><p>${esc(short(b.label))}</p><div class="chips"><span class="chip">${Math.round(s.soc)} %</span></div>`);
   }
@@ -1617,21 +1637,22 @@ document.querySelectorAll(".clr[data-clr]").forEach(b=>b.addEventListener("click
 // ---------- Étapes intermédiaires ----------
 let viaSeq=0;
 function viaRows(){ return [...document.querySelectorAll("#vias .via")]; }
-function readVias(){ return viaRows().map(r=>({q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0})); }
+function readVias(){ return viaRows().map(r=>{ const m=parseFloat(r.querySelector("input.vmin").value); return {q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0, ...(isFinite(m)?{min:m}:{})}; }); }
 function renumberVias(){ viaRows().forEach((r,k)=>{ r.querySelector(".via-h label").textContent=`Étape ${k+1}`; }); }
 function addVia(v={q:"",pause:0},focus=false){
   const k=++viaSeq, id="via-"+k, row=document.createElement("div");
   row.className="field via";
-  row.innerHTML=`<div class="via-h"><label for="${id}">Étape</label><small>pause en min</small></div>
+  row.innerHTML=`<div class="via-h"><label for="${id}">Étape</label><small>pause min · batterie min %</small></div>
     <div class="place"><div class="ac"><input id="${id}" class="vq" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}-sugg" placeholder="Ville, adresse, lieu…"><ul class="sugg" id="${id}-sugg" role="listbox" hidden></ul></div>
-    <input class="pause" type="number" min="0" max="900" step="5" placeholder="0" aria-label="Pause à l'étape, en minutes"><button type="button" class="del" aria-label="Retirer l'étape" title="Retirer l'étape">×</button></div>
+    <input class="pause" type="number" min="0" max="900" step="5" placeholder="0" aria-label="Pause à l'étape, en minutes"><input class="vmin" type="number" min="0" max="100" placeholder="—" aria-label="Batterie minimale à l'arrivée à l'étape, en %"><button type="button" class="del" aria-label="Retirer l'étape" title="Retirer l'étape">×</button></div>
     <p class="placeok" id="${id}-ok"></p>`;
   $("vias").appendChild(row);
-  row.querySelector("input.vq").value=v.q||""; row.querySelector("input.pause").value=v.pause||"";
+  row.querySelector("input.vq").value=v.q||""; row.querySelector("input.pause").value=v.pause||""; row.querySelector("input.vmin").value=v.min??"";
   attachAC(id); renumberVias();
   row.querySelector(".del").addEventListener("click",()=>{ row.remove(); renumberVias(); saveVias(); updateSums(); autoCalc(); });
   row.querySelector("input.vq").addEventListener("input",saveVias);
   row.querySelector("input.pause").addEventListener("input",saveVias);
+  row.querySelector("input.vmin").addEventListener("input",saveVias);
   if(focus) row.querySelector("input.vq").focus();
 }
 function setVias(list){ $("vias").innerHTML=""; (list||[]).forEach(v=>addVia(v)); }
@@ -2084,6 +2105,11 @@ let altFilter="all";
 try{ const v=localStorage.getItem("trajetve-altfiltre"); if(["all","aire","hors"].includes(v)) altFilter=v; }catch(e){}
 $("road").addEventListener("change",e=>{
   const i=e.target;
+  if(i.matches("[data-vmin]")){
+    const row=viaRows()[+i.closest("[data-via]").dataset.via]; if(!row) return;
+    const mi=row.querySelector("input.vmin"); mi.value=i.value; saveVias();
+    mi.dispatchEvent(new Event("input",{bubbles:true})); return;
+  }
   if(i.matches("[data-vpause]")){
     const row=viaRows()[+i.closest("[data-via]").dataset.via]; if(!row) return;
     const pin=row.querySelector("input.pause"); pin.value=i.value; saveVias();
@@ -2206,14 +2232,14 @@ $("f").addEventListener("submit", async e=>{
     const vrows=viaRows().filter(r=>r.querySelector("input.vq").value.trim());
     { const tk=[fq,...vrows.map(r=>r.querySelector("input.vq").value.trim()),tq].join("|").toLowerCase(); if(tk!==ovTrip){ stopOv={}; stopForce={}; ovTrip=tk; } }
     viewingSheet=false;
-    const vq=vrows.map(r=>({q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0, id:r.querySelector("input.vq").id}));
+    const vq=vrows.map(r=>{ const m=parseFloat(r.querySelector("input.vmin").value); return {q:r.querySelector("input.vq").value.trim(), pause:parseFloat(r.querySelector("input.pause").value)||0, min:isFinite(m)?m:null, id:r.querySelector("input.vq").id}; });
     const [a,b,...vg]=await Promise.all([geo(fq),geo(tq),...vq.map(v=>geo(v.q))]);
     for(const [id,g] of [["from",a],["to",b],...vq.map((v,k)=>[v.id,vg[k]])]){ const el=$(id+"-ok"); if(!el.textContent){ el.textContent="Compris comme : "+g.label; el.classList.add("warn"); } }
     lap("adr");
     setStatus("Calcul de l'itinéraire…");
     const rk="r:"+[fq,...vq.map(v=>v.q),tq].join("|");
     const R0 = cache[rk] ||= (lsGet("route2:"+rk.toLowerCase(),7*DAY) || await getRoute([a,...vg,b]).then(r=>{ lsSet("route2:"+rk.toLowerCase(),r); return r; }));
-    const R = {...R0, wp:(R0.wp||[]).map((w,k)=>({...w, name:vq[k]?.q||`Étape ${k+1}`, pause:vq[k]?.pause||0, lat:vg[k]?.lat, lon:vg[k]?.lon}))};
+    const R = {...R0, wp:(R0.wp||[]).map((w,k)=>({...w, name:vq[k]?.q||`Étape ${k+1}`, pause:vq[k]?.pause||0, min:vq[k]?.min??null, lat:vg[k]?.lat, lon:vg[k]?.lon}))};
     lap("route");
     const key=$("ocmKey").value.trim() || OCM_DEFAULT_KEY;
     const ck="c:"+rk+"|"+p.radius+"|"+(key?"ocm":"osm");
@@ -2246,7 +2272,7 @@ $("f").addEventListener("submit", async e=>{
     drawMap(R,C,res,a,b,$("showAll").checked);
     render(res,p,a,b);
     curSheet=null; renderSheets();
-    lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause})=>({q,pause}))} : null;
+    lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause,min})=>({q,pause,...(min!=null?{min}:{})}))} : null;
     if(lastPos && watchId!=null && lastRun) setTimeout(()=>hereRender(lastPos,true),0); $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
