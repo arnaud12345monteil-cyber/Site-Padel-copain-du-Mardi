@@ -125,7 +125,7 @@ const FIREBASE_CONFIG = {
   appId: "1:14173816618:web:ce7a5abad27463b6f04053"
 };
 // Seule valeur à incrémenter à chaque mise en ligne (transmise au service worker).
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
@@ -511,7 +511,8 @@ function ficheView(){
   const theo = (prog().theorie || {})[f.seanceKey];
   return `<div class="row mb"><button type="button" class="btn sm" data-a="closeFiche">← Retour</button><h2>${f.id ? 'Modifier la fiche' : 'Nouvelle fiche de séance'}</h2></div>
   <div class="card">
-    <div class="muted">Moniteur</div><b>${esc(monName(f.moniteurId))}</b>
+    ${isResp() ? `<label style="margin-top:0">Moniteur</label><select id="fMon">${moniteurs(true).filter(m => m.actif !== false || m.id === f.moniteurId).map(m => `<option value="${m.id}" ${m.id === f.moniteurId ? 'selected' : ''}>${esc(personName(m))}</option>`).join('')}</select>`
+      : `<div class="muted">Moniteur</div><b>${esc(monName(f.moniteurId))}</b>`}
     <div class="grid2">
       <div><label>Date</label><input type="date" id="fDate" value="${esc(f.date)}"></div>
       <div><label>Séance</label><select id="fSeance">${seances().map(s => `<option value="${s.key}" ${s.key === f.seanceKey ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></div>
@@ -1030,7 +1031,7 @@ const A = {
     }
     const id = f.id || backend.newId('fiches');
     const old = f.id ? DB.fiches[f.id] || {} : {};
-    const data = {date: f.date, seanceKey: f.seanceKey, creneau: f.creneau, mode: f.mode, moniteurId: old.moniteurId || f.moniteurId,
+    const data = {date: f.date, seanceKey: f.seanceKey, creneau: f.creneau, mode: f.mode, moniteurId: isResp() ? f.moniteurId : (old.moniteurId || f.moniteurId),
       eleves: f.eleves, competences: compsSel, evals, commentaires, createdAt: old.createdAt || Date.now(), updatedAt: Date.now()};
     const p = backend.set('fiches', id, data);
     dropDraft(); S.view = null; S.fiche = null; S.tab = 'fiches'; render();
@@ -1206,6 +1207,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.id === 'fMon' && S.fiche) { S.fiche.moniteurId = t.value; saveDraft(); render(); }
   if (t.id === 'fDate' && S.fiche) { S.fiche.date = t.value; saveDraft(); render(); }
   if (t.id === 'fSeance' && S.fiche) {
     const f = S.fiche, oldProg = progComps(f.seanceKey);
