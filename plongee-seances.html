@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Palanquée — Séances de plongée</title>
+<link rel="manifest" href="palanquee-manifest.webmanifest">
+<meta name="theme-color" content="#06324d">
+<link rel="icon" type="image/png" href="icons/palanquee-192.png">
+<link rel="apple-touch-icon" href="icons/palanquee-apple-touch.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Palanquée">
 <!--
   CONFIGURATION
   1. Crée un projet Firebase, active Firestore, colle la config web dans FIREBASE_CONFIG ci-dessous.
@@ -82,6 +90,17 @@ ul.pedit li input{margin-top:6px;padding:6px 8px;font-size:13px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:50;max-width:90vw;font-size:14px}
 .toast.bad{background:var(--bad)}
 a{color:var(--brand)}
+.ver{font-size:11px;font-weight:700;letter-spacing:.3px;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:6px;opacity:.9;white-space:nowrap}
+.hbtn{border:1px solid rgba(255,255,255,.45);background:none;color:#fff;padding:6px 11px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.update{max-width:980px;margin:12px auto 0;padding:10px 14px;background:#e3f1fa;border:1px solid #9cc9e4;border-radius:10px;font-size:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.remind{background:#fff6df;border:1px solid #efd48b;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.stats div{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
+.stats b{display:block;font-size:20px}
+header{padding-top:max(12px,env(safe-area-inset-top))}
+.hgroup{display:flex;align-items:center;gap:8px}
+@media(max-width:560px){.ver{order:1;align-self:flex-start}.hgroup{order:2;width:100%;justify-content:flex-end}}
 </style>
 </head>
 <body>
@@ -99,6 +118,10 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "14173816618",
   appId: "1:14173816618:web:ce7a5abad27463b6f04053"
 };
+
+// Version affichée en haut à droite. C'est la seule valeur à incrémenter à chaque mise en ligne :
+// elle est transmise au service worker (palanquee-sw.js?v=...), ce qui force la mise à jour de l'appli installée.
+const APP_VERSION = '1.1.1';
 
 // Ordre = hiérarchie (sert aux comparaisons de niveau). Adapte si ta structure n'est pas FFESSM.
 const NIVEAUX = ['Débutant','N1','N2','N3','N4','E1','E2','E3','E4'];
@@ -139,7 +162,7 @@ const S = {
   adminOk: sessionStorage.getItem('plq_admin') === '1',
   tab: 'seances', filter: 'avenir', pFilter: 'tous', q: '',
   ptab: 'avenir', me: localStorage.getItem('plq_me') || null,
-  loginId: '', signup: false, draft: null
+  loginId: '', signup: false, draft: null, restore: null, updateWorker: null
 };
 
 /* ================= OUTILS ================= */
@@ -218,7 +241,11 @@ async function initBackend(){
   if (FIREBASE_CONFIG.projectId) {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    const db = fs.getFirestore(initializeApp(FIREBASE_CONFIG));
+    const app = initializeApp(FIREBASE_CONFIG);
+    let db;
+    // Cache local : l'appli installée affiche les dernières données même hors connexion.
+    try { db = fs.initializeFirestore(app, {localCache: fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
+    catch (e) { db = fs.getFirestore(app); }
     backend = {
       mode: 'firebase',
       listen(cb){
@@ -235,6 +262,16 @@ async function initBackend(){
       update: (c,id,data) => fs.updateDoc(fs.doc(db,c,id), clean(data)),
       del: (c,id) => fs.deleteDoc(fs.doc(db,c,id)),
       setSettings: data => fs.setDoc(fs.doc(db,'config','settings'), data, {merge:true}),
+      async bulk(ops){
+        for (let i = 0; i < ops.length; i += 400) {
+          const b = fs.writeBatch(db);
+          for (const o of ops.slice(i, i + 400)) {
+            const ref = fs.doc(db, o.c, o.id);
+            if (o.op === 'del') b.delete(ref); else b.set(ref, clean(o.data));
+          }
+          await b.commit();
+        }
+      },
       txSession: (id, fn) => fs.runTransaction(db, async tx => {
         const ref = fs.doc(db,'sessions',id);
         const snap = await tx.get(ref);
@@ -262,6 +299,10 @@ async function initBackend(){
       async update(c,id,data){ if (!store[c][id]) throw new Error('Introuvable'); Object.assign(store[c][id], clean(data)); commit(); },
       async del(c,id){ delete store[c][id]; commit(); },
       async setSettings(data){ Object.assign(store.settings, data); commit(); },
+      async bulk(ops){
+        for (const o of ops) { if (o.op === 'del') delete store[o.c][o.id]; else store[o.c][o.id] = clean(o.data); }
+        commit();
+      },
       async txSession(id, fn){
         if (!store.sessions[id]) throw new Error('Séance introuvable');
         const next = fn(JSON.parse(JSON.stringify({id, ...store.sessions[id]})));
@@ -287,17 +328,22 @@ document.addEventListener('focusout', () => setTimeout(() => {
 }, 0));
 
 function render(){
+  if (!backend) return;
   const club = DB.settings.clubName || 'Palanquée';
   document.title = club + ' — Séances de plongée';
   $('#app').innerHTML = `
     <header>
       <div class="brand">${esc(club)}<small>Séances de plongée</small></div>
       <span class="sp"></span>
+      <div class="hgroup">
+      ${canInstall() ? '<button type="button" class="hbtn" data-a="install">Installer</button>' : ''}
       <div class="seg">
         <button type="button" class="${S.mode==='participant'?'on':''}" data-a="mode" data-v="participant">Participant</button>
         <button type="button" class="${S.mode==='admin'?'on':''}" data-a="mode" data-v="admin">Admin</button>
-      </div>
+      </div></div>
+      <span class="ver" title="Version de l'application">v${APP_VERSION}</span>
     </header>
+    ${S.updateWorker ? `<div class="update"><span>Une nouvelle version est disponible.</span><span class="sp"></span><button type="button" class="btn sm p" data-a="applyUpdate">Mettre à jour</button></div>` : ''}
     ${backend.mode==='local' ? `<div class="demo"><b>Mode démo.</b> Les données restent dans ce navigateur. Renseigne <code>FIREBASE_CONFIG</code> en haut du fichier pour partager la base avec tout le club.</div>` : ''}
     <main>${S.mode === 'admin' ? viewAdmin() : viewParticipant()}</main>`;
 }
@@ -319,7 +365,11 @@ function viewAdmin(){
       <div class="row mt"><button class="btn p">Entrer</button></div></form></div>`;
   const pending = people().filter(p => p.statut === 'en_attente').length;
   const tabs = [['seances','Séances'],['personnes','Personnes' + (pending ? `<span class="pill">${pending}</span>` : '')],['activites','Activités'],['reglages','Réglages']];
-  return `<div class="tabs">${tabs.map(([k,l]) => `<button type="button" class="${S.tab===k?'on':''}" data-a="tab" data-v="${k}">${l}</button>`).join('')}</div>`
+  const lb = DB.settings.lastBackup, days = lb ? Math.floor((Date.now() - lb) / 864e5) : null;
+  const hasData = Object.keys(DB.people).length + Object.keys(DB.sessions).length > 0;
+  const remind = S.tab !== 'reglages' && hasData && (days === null || days >= 30)
+    ? `<div class="remind">${days === null ? 'Aucune sauvegarde faite pour l’instant.' : `Dernière sauvegarde il y a ${days} jours.`} <a href="#" data-a="tab" data-v="reglages">Sauvegarder</a></div>` : '';
+  return `<div class="tabs">${tabs.map(([k,l]) => `<button type="button" class="${S.tab===k?'on':''}" data-a="tab" data-v="${k}">${l}</button>`).join('')}</div>` + remind
     + ({seances:adminSessions, personnes:adminPeople, activites:adminActivities, reglages:adminSettings}[S.tab])();
 }
 
@@ -538,11 +588,20 @@ function adminSettings(){
       <div class="grid2"><div><label>Nouveau code</label><input type="password" name="a" minlength="4" required></div>
       <div><label>Confirmer</label><input type="password" name="b" minlength="4" required></div></div>
       <div class="row mt"><button class="btn p">Changer le code</button></div></form></div>
-    <div class="card"><h3>Sauvegarde</h3>
-      <p class="muted">Export complet (personnes, activités, séances) en JSON. L'import écrase les éléments portant le même identifiant ; il sert aussi à passer du mode démo à Firebase.</p>
-      <div class="row"><button type="button" class="btn" data-a="exportData">Exporter</button>
-      <label class="btn" style="margin:0;color:var(--ink)">Importer<input type="file" id="importFile" accept=".json,application/json" hidden></label></div></div>
+    ${backupCard()}
     <div class="card"><button type="button" class="btn" data-a="lock">Verrouiller le mode admin</button></div>`;
+}
+
+function backupCard(){
+  const lb = DB.settings.lastBackup;
+  const c = k => Object.keys(DB[k]).length;
+  return `<div class="card"><h3>Sauvegarde et restauration</h3>
+    <div class="stats"><div><b>${c('people')}</b><span class="muted">personnes</span></div><div><b>${c('sessions')}</b><span class="muted">séances</span></div><div><b>${c('activities')}</b><span class="muted">activités</span></div></div>
+    <p class="muted">${lb ? 'Dernière sauvegarde : ' + new Date(lb).toLocaleString('fr-FR', {dateStyle:'long', timeStyle:'short'}) : 'Aucune sauvegarde enregistrée.'}</p>
+    <div class="row"><button type="button" class="btn p" data-a="exportData">Télécharger une sauvegarde</button>
+      <label class="btn" style="margin:0;color:var(--ink)">Restaurer un fichier…<input type="file" id="importFile" accept=".json,application/json" hidden></label></div>
+    <p class="muted mt">Le fichier JSON contient personnes, séances, activités et réglages (jamais le code admin). Range-le hors du navigateur, sur ton cloud par exemple.</p></div>
+    <div class="card muted">Palanquée v${APP_VERSION} · ${backend.mode === 'firebase' ? 'Base Firebase : ' + esc(FIREBASE_CONFIG.projectId) : 'Mode démo (navigateur)'}</div>`;
 }
 
 /* ---------- PARTICIPANT ---------- */
@@ -637,7 +696,7 @@ function signupForm(){
 
 /* ================= MODALE ================= */
 function openModal(html){ $('#modal').innerHTML = `<div class="modal-bg" data-a="modalBg"><div class="modal">${html}</div></div>`; }
-function closeModal(){ $('#modal').innerHTML = ''; S.draft = null; }
+function closeModal(){ $('#modal').innerHTML = ''; S.draft = null; S.restore = null; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeModal(); });
 
 /* ================= ACTIONS ================= */
@@ -685,17 +744,29 @@ const A = {
     await backend.del('activities', d.id); closeModal(); toast('Activité supprimée');
   },
   seedActs: async () => {
-    await Promise.all(CATALOGUE_DE_BASE.map(([nom, categorie, niveauMin, dureeMin]) =>
-      backend.set('activities', backend.newId('activities'), {nom, categorie, niveauMin, dureeMin, description: ''})));
+    await backend.bulk(CATALOGUE_DE_BASE.map(([nom, categorie, niveauMin, dureeMin]) =>
+      ({op:'set', c:'activities', id: backend.newId('activities'), data: {nom, categorie, niveauMin, dureeMin, description: ''}})));
     toast(`${CATALOGUE_DE_BASE.length} activités ajoutées`);
   },
 
-  exportData: () => {
-    const settings = {...DB.settings}; delete settings.adminHash;
-    const blob = new Blob([JSON.stringify({exportedAt: new Date().toISOString(), settings, people: DB.people, activities: DB.activities, sessions: DB.sessions}, null, 2)], {type: 'application/json'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plongee-sauvegarde-${today()}.json`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  exportData: async () => {
+    downloadJson(snapshot(), backupName());
+    await backend.setSettings({lastBackup: Date.now()});
+    toast('Sauvegarde téléchargée');
   },
+  restoreMerge: () => applyRestore(false),
+  restoreReplace: () => applyRestore(true),
+  install: async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null; render();
+    } else if (isIOS()) {
+      openModal(`<div class="modal-head"><h2>Installer sur iPhone / iPad</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+        <ol><li>Ouvre cette page dans <b>Safari</b>.</li><li>Touche le bouton <b>Partager</b> (carré avec une flèche vers le haut).</li><li>Choisis <b>Sur l'écran d'accueil</b>, puis <b>Ajouter</b>.</li></ol>`);
+    }
+  },
+  applyUpdate: () => { if (S.updateWorker) S.updateWorker.postMessage('skipWaiting'); },
 
   signup: () => { S.signup = true; render(); },
   signupCancel: () => { S.signup = false; render(); },
@@ -816,14 +887,62 @@ const F = {
   }
 };
 
+const SETTINGS_KEYS = ['clubName','ratio','closeH','blockCertif'];
+
+function snapshot(){
+  const settings = {};
+  SETTINGS_KEYS.forEach(k => { if (DB.settings[k] !== undefined) settings[k] = DB.settings[k]; });
+  const strip = o => Object.fromEntries(Object.entries(o).map(([id, v]) => [id, clean(v)]));
+  return {app: 'palanquee', format: 1, version: APP_VERSION, exportedAt: new Date().toISOString(),
+    settings, people: strip(DB.people), activities: strip(DB.activities), sessions: strip(DB.sessions)};
+}
+function backupName(prefix = 'palanquee-sauvegarde'){
+  const d = new Date();
+  return `${prefix}-${ymd(d)}-${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}.json`;
+}
+function downloadJson(obj, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 async function importFile(file){
   if (!file) return;
-  const data = JSON.parse(await file.text());
-  const n = c => Object.keys(data[c] || {}).length;
-  if (!confirm(`Importer ${n('people')} personnes, ${n('activities')} activités et ${n('sessions')} séances ?`)) return;
-  for (const c of COLS) for (const [id, v] of Object.entries(data[c] || {})) await backend.set(c, id, v);
-  if (data.settings) { const s = {...data.settings}; delete s.adminHash; await backend.setSettings(s); }
-  toast('Import terminé');
+  let data;
+  try { data = JSON.parse(await file.text()); } catch (e) { throw new Error('Fichier illisible : ce n’est pas un JSON valide'); }
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  if (!isObj(data) || !COLS.every(c => data[c] === undefined || isObj(data[c])) || !COLS.some(c => isObj(data[c])))
+    throw new Error('Ce fichier n’est pas une sauvegarde Palanquée');
+  COLS.forEach(c => { if (!isObj(data[c])) data[c] = {}; });
+  S.restore = data;
+  const n = c => Object.keys(data[c]).length, cur = c => Object.keys(DB[c]).length;
+  openModal(`<div class="modal-head"><h2>Restaurer une sauvegarde</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <p class="muted">${esc(file.name)}${data.exportedAt ? ' · créée le ' + new Date(data.exportedAt).toLocaleString('fr-FR', {dateStyle:'long', timeStyle:'short'}) : ''}${data.version ? ' · v' + esc(data.version) : ''}</p>
+    <div class="stats"><div><b>${n('people')}</b><span class="muted">personnes (${cur('people')} actuellement)</span></div>
+      <div><b>${n('sessions')}</b><span class="muted">séances (${cur('sessions')})</span></div>
+      <div><b>${n('activities')}</b><span class="muted">activités (${cur('activities')})</span></div></div>
+    <p><b>Fusionner</b> : ajoute le contenu du fichier et remplace les éléments identiques. Rien n’est supprimé.</p>
+    <p><b>Remplacer tout</b> : la base redevient exactement le fichier. Tout ce qui a été créé depuis est effacé. Une sauvegarde de l’état actuel est téléchargée juste avant, par sécurité.</p>
+    <div class="row mt"><button type="button" class="btn" data-a="closeModal">Annuler</button><span class="sp"></span>
+      <button type="button" class="btn d" data-a="restoreReplace">Remplacer tout</button><button type="button" class="btn p" data-a="restoreMerge">Fusionner</button></div>`);
+}
+
+async function applyRestore(replace){
+  const data = S.restore; if (!data) return;
+  if (replace && !confirm('Tout ce qui n’est pas dans le fichier sera supprimé. Continuer ?')) return;
+  if (replace) downloadJson(snapshot(), backupName('palanquee-avant-restauration'));
+  const ops = [];
+  for (const c of COLS) {
+    if (replace) for (const id of Object.keys(DB[c])) if (!(id in data[c])) ops.push({op:'del', c, id});
+    for (const [id, v] of Object.entries(data[c])) ops.push({op:'set', c, id, data: v});
+  }
+  await backend.bulk(ops);
+  const st = {};
+  if (data.settings) SETTINGS_KEYS.forEach(k => { if (data.settings[k] !== undefined) st[k] = data.settings[k]; });
+  if (Object.keys(st).length) await backend.setSettings(st);
+  S.restore = null; closeModal();
+  toast(`Restauration terminée (${ops.filter(o => o.op === 'set').length} éléments${replace ? ', ' + ops.filter(o => o.op === 'del').length + ' supprimés' : ''})`);
 }
 
 /* ================= ÉVÉNEMENTS ================= */
@@ -850,6 +969,28 @@ document.addEventListener('change', e => {
     $('#pin2wrap').hidden = !(p && !p.pinHash);
   }
 });
+
+/* ================= APPLICATION INSTALLABLE ================= */
+let deferredPrompt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const canInstall = () => !isStandalone() && (!!deferredPrompt || isIOS());
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; requestRender(); });
+window.addEventListener('appinstalled', () => { deferredPrompt = null; toast('Application installée'); requestRender(); });
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  // Portée limitée à cette page : le dépôt héberge d'autres sites qui ont leur propre service worker.
+  navigator.serviceWorker.register('./palanquee-sw.js?v=' + encodeURIComponent(APP_VERSION), {scope: './plongee-seances.html'}).then(reg => {
+    const offer = w => { S.updateWorker = w; requestRender(); };
+    if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); });
+    });
+  }).catch(e => console.warn('Service worker :', e));
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading) { reloading = true; location.reload(); } });
+}
 
 /* ================= DÉMARRAGE ================= */
 (async () => {
