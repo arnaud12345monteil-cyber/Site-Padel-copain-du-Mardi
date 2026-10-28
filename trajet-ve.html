@@ -593,6 +593,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.18", d:"28/10/2026", c:[
+    "Sens de circulation sur autoroute : une aire située du côté opposé (à gauche dans le sens de passage) n'est plus retenue ; elle reste visible dans les autres bornes possibles avec la mention « aire dans l'autre sens »",
+    "Trajets qui repassent par la même autoroute (aller puis retour) : chaque passage est traité séparément, avec son propre sens",
+    "Distance des bornes à la route mesurée sur le tracé détaillé (plus précise)"]},
   {v:"2.17", d:"27/10/2026", c:[
     "« Lire la batterie de la voiture » sous Batterie au départ et dans « Je suis ici » : lecture à la demande via le PC de la maison (script trajetve_voiture.py + psa_car_controller), jamais en continu",
     "Âge de la donnée affiché ; si elle a plus de 15 min, bouton pour réveiller la voiture et relire"]},
@@ -990,19 +994,49 @@ function distToLine(lat,lon,line){
 // Une borne n'est considérée « sur aire » que si son nom ou sa description le dit (aire, autoroute, A61…)
 const AIRE_RX=/\baires?\b|autoroute|\brelais\b|motorway|service area|autopista|autostrada/i, AROUTE_RX=/\bA\d{1,3}\b/;
 const aireText=c=>{ const t=(c.name||"")+" "+(c.desc||""); return AIRE_RX.test(t) || AROUTE_RX.test(t); };
-function project(chargers,R){
-  const n=R.km.length;
-  return chargers.map(c=>{
-    let best=1e9, idx=0;
-    for(let i=0;i<n;i++){ const d=hav(c.lat,c.lon,R.lat[i],R.lon[i]); if(d<best){best=d;idx=i;} }
-    // vitesse prévue par l'itinéraire autour de la borne : 95 km/h ou plus = autoroute / voie rapide
-    const i0=Math.max(0,idx-2), i1=Math.min(n-1,idx+2);
-    const v=(R.km[i1]-R.km[i0])/Math.max(1,R.sec[i1]-R.sec[i0])*3600;
-    const hw=v>=95;
-    let onAire=false, dLine=null;
-    if(hw && R.line){ dLine=distToLine(c.lat,c.lon,R.line); onAire = dLine<=0.8 && aireText(c); }
-    return {...c, idx, km:R.km[idx], det: onAire ? 0.2 : best*1.4, hw, onAire};
-  }).sort((a,b)=>a.km-b.km);
+// Rattache chaque borne au tracé. Un trajet peut passer deux fois au même endroit (aller puis retour sur la même
+// autoroute) : chaque passage proche donne une occurrence distincte, avec le sens de circulation de ce passage.
+// Sur autoroute, une aire se trouve à droite de la chaussée dans le sens de circulation : une aire à gauche
+// est marquée « autre sens » (inaccessible sauf aire commune aux deux sens).
+function project(chargers,R,radiusKm){
+  const n=R.km.length, line=R.line||[], total=R.km[n-1];
+  // longueur cumulée du tracé détaillé, ramenée aux km routiers
+  const cum=[0]; for(let i=1;i<line.length;i++) cum.push(cum[i-1]+hav(line[i-1][0],line[i-1][1],line[i][0],line[i][1]));
+  const scale=cum[cum.length-1]>0 ? total/cum[cum.length-1] : 1;
+  const idxAt=km=>{ let lo=0,hi=n-1; while(lo<hi){ const m=(lo+hi)>>1; if(R.km[m]<km) lo=m+1; else hi=m; } return (lo>0 && km-R.km[lo-1]<R.km[lo]-km) ? lo-1 : lo; };
+  const lim=Math.max(radiusKm||2,1)*1.2;
+  const out=[];
+  for(const c of chargers){
+    const kx=111.32*Math.cos(c.lat*Math.PI/180), ky=110.57;
+    const hits=[];   // segments proches : [km le long du tracé, distance, côté]
+    for(let i=1;i<line.length;i++){
+      const ax=(line[i-1][1]-c.lon)*kx, ay=(line[i-1][0]-c.lat)*ky, bx=(line[i][1]-c.lon)*kx, by=(line[i][0]-c.lat)*ky;
+      if((ax>lim&&bx>lim)||(ax<-lim&&bx<-lim)||(ay>lim&&by>lim)||(ay<-lim&&by<-lim)) continue;
+      const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy, t=L?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L)):0;
+      const qx=ax+t*dx, qy=ay+t*dy, d=Math.hypot(qx,qy);
+      if(d>lim) continue;
+      // produit vectoriel : > 0 = borne à gauche du sens de circulation
+      const side=dy*qx-dx*qy;
+      hits.push([(cum[i-1]+t*Math.sqrt(L))*scale, d, side]);
+    }
+    if(!hits.length) continue;
+    // regroupe les segments proches en passages (écart de plus de 5 km le long du tracé = autre passage)
+    hits.sort((u,v)=>u[0]-v[0]);
+    const passes=[]; let cur=[hits[0]];
+    for(let k=1;k<hits.length;k++){ if(hits[k][0]-hits[k-1][0]>5){ passes.push(cur); cur=[]; } cur.push(hits[k]); }
+    passes.push(cur);
+    passes.forEach((ps,pi)=>{
+      const best=ps.reduce((m,h)=>h[1]<m[1]?h:m);
+      const km=best[0], d=best[1], idx=idxAt(km);
+      // vitesse prévue autour de la borne : 95 km/h ou plus = autoroute / voie rapide
+      const i0=Math.max(0,idx-2), i1=Math.min(n-1,idx+2);
+      const v=(R.km[i1]-R.km[i0])/Math.max(1,R.sec[i1]-R.sec[i0])*3600;
+      const hw=v>=95, onAire=hw && d<=0.8 && aireText(c);
+      const wrongSide=onAire && d>0.03 && best[2]>0;
+      out.push({...c, id: pi ? c.id+"#"+pi : c.id, idx, km:R.km[idx], det: onAire ? 0.2 : d*1.4, dLine:d, hw, onAire, wrongSide});
+    });
+  }
+  return out.sort((a,b)=>a.km-b.km);
 }
 
 // ---------- Consommation selon la vitesse ----------
@@ -1269,7 +1303,7 @@ function render(res,p,a,b){
       const gm=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
       const o=(stopOv||{})[c.id]||{};
       const adj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-cid="${esc(c.id)}"><span>Ajuster :</span><label>jusqu'à <input type="number" min="1" max="100" data-ov="target" value="${o.target??""}" placeholder="${Math.round(s.socOut)}"> %</label><label>ou rester <input type="number" min="0" max="600" step="5" data-ov="dur" value="${o.dur??""}" placeholder="${Math.round(s.dur)}"> min</label>${s.ov?'<button type="button" class="swap" data-ovreset>Rétablir</button>':""}</div>` : "";
-      const FL={pmin:"puissance sous le minimum",op:"opérateur exclu",price:"prix au-dessus du max",aire:"hors aire d'autoroute"};
+      const FL={pmin:"puissance sous le minimum",op:"opérateur exclu",price:"prix au-dessus du max",aire:"hors aire d'autoroute",sens:"aire dans l'autre sens de circulation"};
       const goodTxt=g=>{ const [k,v]=g.split(":"); return ({fenetre:`fenêtre de temps (${v} min)`, plage:`plage batterie (${v} %)`, pref:"★ opérateur préféré"})[k]||k; };
       // « la moins chère » / « la plus rapide » : seulement si strictement mieux que la borne retenue
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
@@ -2192,12 +2226,16 @@ $("f").addEventListener("submit", async e=>{
     renderOps(p.pmin>0 ? C.filter(c=>kwOf(c)>=p.pmin) : C); lastCalcOk=true;
     // Toutes les bornes proches de la route, avec les réglages qui les écartent (servent aux « autres bornes possibles »)
     const stayHw=$("stayHw").checked;
-    const Call=project(C,R).filter(c=>c.det<=p.radius*1.4+0.3).map(c=>{
+    // projection sur le tracé gardée en mémoire : les recalculs (réglages, priorités…) ne la refont pas
+    const pk="p:"+ck+"|"+p.radius+"|"+C.length;
+    const proj=cache[pk] ||= project(C,R,p.radius);
+    const Call=proj.filter(c=>c.dLine<=p.radius).map(c=>{
       const f=[];
       if(p.pmin>0 && kwOf(c)<p.pmin) f.push("pmin");
       if(!opAllowed(opOf(c))) f.push("op");
       if(p.usePmax && priceOf(c)>p.pmax+1e-9) f.push("price");
       if(stayHw && c.hw && !c.onAire) f.push("aire");
+      if(c.wrongSide) f.push("sens");
       return {...c, flags:f};
     });
     C=Call.filter(c=>!c.flags.length);
