@@ -594,6 +594,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.19.1", d:"28/10/2026", c:[
+    "Correctif : avec une batterie minimale à une étape (ou certaines priorités, comme le détour en tête), le calcul pouvait choisir une borne où la batterie était déjà au niveau visé et s'arrêter sur « La charge cible est trop basse »"]},
   {v:"2.19", d:"28/10/2026", c:[
     "Batterie minimale à l'arrivée pour chaque étape (champ à côté de la pause, et dans la feuille de route) : le calcul ajoute ou allonge une recharge avant l'étape si besoin",
     "Autres bornes possibles : aussi les bornes plus loin sur le trajet (batterie plus basse), y compris jusqu'à 10 points sous la réserve, signalées « sous ta réserve »"]},
@@ -1137,6 +1139,12 @@ function simulate(R,C,p){
     let pool=cand.slice(), late=false;
     // seuil batterie : les bornes juste après le seuil restent possibles (au-dessus de la réserve), mais pénalisées
     if(reason==="soc"){ const after=C.filter(c=>c.km>hi && reachOK(c) && timeOK(c)); pool=pool.concat(after); late=!cand.length && after.length>0; }
+    // pas d'arrêt là où la batterie est déjà au plafond de charge (sauf règle de temps : l'arrêt sert alors de pause)
+    if(reason!=="time"){
+      const ceilC = p.useTarget ? p.target : 100;
+      const useful=pool.filter(x=>socAt(x) < ceilC-3);
+      if(useful.length) pool=useful;
+    }
     if(!pool.length){
       const where = fmtKm(hi)+" après le départ";
       const why = reason==="time" ? `dans la limite de ${p.maxMin}${p.timeTolHi?` (+${p.timeTolHi})`:""} min de route` : "avant de passer sous la réserve";
@@ -1237,7 +1245,7 @@ function simulate(R,C,p){
     // temps d'arrêt plus long que la charge : on continue à charger (jusqu'au plafond, ou jusqu'à 100 % si la durée est imposée)
     const ceil2 = ov && ov.dur!=null && ov.target==null ? 100 : ceil;
     if(dur>cm && socOut<ceil2 && !(ov && ov.target!=null)) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,ceil2));
-    if(!lastLeg && socOut<=soc+0.5 && reason!=="time" && !ov) return {error:"La charge cible est trop basse pour continuer. Augmente « Recharger jusqu'à » ou décoche-le.", partial:steps};
+    if(!lastLeg && socOut<=soc+0.5 && reason!=="time" && !ov && !forced) return {error:`Arrêt impossible à rendre utile : la batterie (${Math.round(soc)} %) est déjà au niveau de charge visé. Augmente « Recharger jusqu'à », décoche-le, ou baisse la batterie minimale demandée à l'étape.`, partial:steps};
     soc=socOut; t+=dur*60; chargeSec+=dur*60;
     curve.push([c.km,soc]);
     const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
