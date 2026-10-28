@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Palanquée — Séances de plongée</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palanquée — Suivi pédagogique</title>
 <link rel="manifest" href="palanquee-manifest.webmanifest">
 <meta name="theme-color" content="#06324d">
 <link rel="icon" type="image/png" href="icons/palanquee-192.png">
@@ -13,49 +13,45 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Palanquée">
 <!--
-  CONFIGURATION
-  1. Crée un projet Firebase, active Firestore, colle la config web dans FIREBASE_CONFIG ci-dessous.
-  2. Tant que projectId est vide, l'appli tourne en MODE DÉMO (données dans le navigateur uniquement).
-  3. Collections utilisées : people, activities, sessions, config/settings.
-
-  Règles Firestore minimales (à durcir, voir remarques) :
-  rules_version = '2';
-  service cloud.firestore {
-    match /databases/{db}/documents {
-      match /{document=**} { allow read, write: if true; }
-    }
-  }
+  PALANQUÉE — suivi pédagogique de formation (N1)
+  Prérequis Firebase (projet renseigné dans FIREBASE_CONFIG) :
+   1. Authentication > Sign-in method : activer « Adresse e-mail/Mot de passe ».
+   2. Authentication > Paramètres > Domaines autorisés : ajouter le domaine GitHub Pages.
+   3. Firestore > Règles : coller le contenu de palanquee-firestore.rules.
+  Sans projectId, l'appli tourne en mode démo (données dans le navigateur).
 -->
 <style>
 :root{--bg:#f2f6f9;--card:#fff;--ink:#0f2233;--muted:#5b6f82;--line:#dbe4ec;--brand:#0b5d8a;--brand-d:#06324d;--chip:#e6f1f8;--ok:#1d8a4b;--warn:#b87300;--bad:#c0392b}
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
-header{background:linear-gradient(135deg,var(--brand-d),var(--brand));color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header{background:linear-gradient(135deg,var(--brand-d),var(--brand));color:#fff;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
 .brand{font-weight:800;font-size:18px;letter-spacing:.2px}
 .brand small{display:block;font-weight:500;font-size:12px;opacity:.75}
 .sp{flex:1}
-.seg{display:flex;background:rgba(255,255,255,.15);border-radius:10px;padding:3px}
-.seg button{border:0;background:none;color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
-.seg button.on{background:#fff;color:var(--brand)}
-.seg2{display:flex;background:#e3ebf1;border-radius:9px;padding:3px;flex-wrap:wrap}
-.seg2 button{border:0;background:none;padding:6px 10px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--muted);font-size:13px}
-.seg2 button.on{background:#fff;color:var(--brand);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-main{max-width:980px;margin:0 auto;padding:16px}
-.demo{max-width:980px;margin:12px auto 0;padding:10px 14px;background:#fff6df;border:1px solid #efd48b;border-radius:10px;font-size:13px}
+.hgroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ver{font-size:11px;font-weight:700;letter-spacing:.3px;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:6px;opacity:.9;white-space:nowrap}
+.hbtn{border:1px solid rgba(255,255,255,.45);background:none;color:#fff;padding:6px 11px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+@media(max-width:560px){.ver{order:1;align-self:flex-start}.hgroup{order:2;width:100%;justify-content:flex-end}}
+main{max-width:1000px;margin:0 auto;padding:16px 16px 40px}
+.demo,.update{max-width:1000px;margin:12px auto 0;padding:10px 14px;border-radius:10px;font-size:13px}
+.demo{background:#fff6df;border:1px solid #efd48b}
+.update{background:#e3f1fa;border:1px solid #9cc9e4;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px}
 .tabs button{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600;white-space:nowrap;color:var(--muted)}
 .tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
-.pill{background:var(--bad);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px}
+.seg2{display:inline-flex;background:#e3ebf1;border-radius:9px;padding:3px;flex-wrap:wrap}
+.seg2 button{border:0;background:none;padding:6px 11px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--muted);font-size:13px}
+.seg2 button.on{background:#fff;color:var(--brand);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
-.card.mine{border-color:#7fb8d8;box-shadow:inset 3px 0 0 var(--brand)}
 .card.tight{padding:10px 12px;margin-bottom:6px}
 .narrow{max-width:440px;margin-left:auto;margin-right:auto}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .nowrap{flex-wrap:nowrap}
 .mt{margin-top:10px}.mb{margin-bottom:12px}
-h2{margin:0 0 6px;font-size:20px}h3{margin:18px 0 8px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.card h3{margin-top:0}
-.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+h2{margin:0;font-size:20px}h3{margin:16px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.card>h3:first-child{margin-top:0}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-family:inherit}
 .btn:hover{border-color:#b7c7d4}
 .btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.d{color:var(--bad)}
@@ -64,43 +60,53 @@ h2{margin:0 0 6px;font-size:20px}h3{margin:18px 0 8px;font-size:15px;color:var(-
 .chip{display:inline-block;background:var(--chip);color:var(--brand);border-radius:999px;padding:2px 9px;font-size:12px;margin:2px 4px 2px 0;font-weight:600}
 .badge{display:inline-block;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;background:#eef2f5;color:var(--muted)}
 .badge.ok{background:#e3f4ea;color:var(--ok)}.badge.warn{background:#fdf1dc;color:var(--warn)}.badge.bad{background:#fbe5e2;color:var(--bad)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#aab}
-.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
 .muted{color:var(--muted);font-size:13px}
-.date{font-weight:700;font-size:16px;text-transform:capitalize}
-.warns{margin:8px 0 0;padding-left:18px;color:var(--warn);font-size:13px}
-details summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--brand)}
-ol.prog{margin:8px 0 0;padding-left:20px}ol.prog li{margin:4px 0}
+.pre{white-space:pre-line}
 input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
-textarea{min-height:60px;resize:vertical}
+textarea{min-height:56px;resize:vertical}
 label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px;color:var(--muted)}
 label.inline{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink)}
 label.inline input{width:auto}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 @media(max-width:560px){.grid2{grid-template-columns:1fr}}
-.checklist{max-height:210px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:2px 10px}
-.checklist label{display:flex;gap:8px;align-items:center;font-weight:400;color:var(--ink);margin:7px 0;font-size:14px}
-.checklist input{width:auto}
-ul.pedit{list-style:none;margin:8px 0 0;padding:0}
-ul.pedit li{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px}
-ul.pedit li input{margin-top:6px;padding:6px 8px;font-size:13px}
+a{color:var(--brand)}
+details summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--brand)}
+.tchip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:14px;cursor:pointer;margin:0 6px 6px 0;font-family:inherit;color:var(--ink)}
+.tchip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.tchip small{opacity:.75}
+.crow{display:flex;gap:10px;align-items:flex-start;font-weight:400;color:var(--ink);margin:0;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.crow input{width:auto;margin-top:3px}
+.evcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.evrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 0;border-top:1px solid var(--line)}
+.evname{flex:1 1 170px;font-size:14px}
+.lvbtns{display:flex;gap:5px}
+.evrow input{flex-basis:100%}
+.lvb{min-width:44px;height:36px;border:1px solid var(--line);background:#fff;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;color:var(--muted);font-family:inherit}
+.lvb.eca.on{background:#f4b740;border-color:#e0a020;color:#3d2a00}
+.lvb.acq.on{background:#3b8fd0;border-color:#2f7ab5;color:#fff}
+.lvb.mai.on{background:#22a05a;border-color:#1b8a4c;color:#fff}
+.lvb.cm{min-width:38px}.lvb.cm.has{border-color:var(--brand);color:var(--brand)}
+.lv{display:inline-block;border-radius:6px;padding:2px 7px;font-size:12px;font-weight:700;white-space:nowrap}
+.lv.eca{background:#fdecc8;color:#8a5a00}.lv.acq{background:#d6eaf8;color:#0b5d8a}.lv.mai{background:#d4efdf;color:#17703f}.lv.none{background:#eef2f5;color:var(--muted);font-weight:600}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+.tbl table{border-collapse:collapse;font-size:13px;min-width:100%}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:7px 8px;text-align:center;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{position:sticky;left:0;background:#fff;text-align:left;z-index:1}
+.tbl thead th{background:#eaf2f8;color:var(--brand-d)}
+.tbl thead th:first-child{background:#eaf2f8}
+.bar{height:8px;background:#e6edf2;border-radius:6px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#3b8fd0,#22a05a)}
+.hist{border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:8px 0;font-size:14px}
+.comp{padding:10px 0;border-top:1px solid var(--line)}
+.legend{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
 .modal-bg{position:fixed;inset:0;background:rgba(6,30,46,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 10px;overflow-y:auto;z-index:20}
 .modal{background:#fff;border-radius:14px;max-width:660px;width:100%;padding:18px 18px 16px}
-.modal-head{display:flex;align-items:center;margin-bottom:4px}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:50;max-width:90vw;font-size:14px}
-.toast.bad{background:var(--bad)}
-a{color:var(--brand)}
-.ver{font-size:11px;font-weight:700;letter-spacing:.3px;background:rgba(255,255,255,.14);padding:4px 8px;border-radius:6px;opacity:.9;white-space:nowrap}
-.hbtn{border:1px solid rgba(255,255,255,.45);background:none;color:#fff;padding:6px 11px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
-.hbtn:hover{background:rgba(255,255,255,.12)}
-.update{max-width:980px;margin:12px auto 0;padding:10px 14px;background:#e3f1fa;border:1px solid #9cc9e4;border-radius:10px;font-size:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.remind{background:#fff6df;border:1px solid #efd48b;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+.modal-head{display:flex;align-items:center;margin-bottom:6px;gap:8px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
 .stats div{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
 .stats b{display:block;font-size:20px}
-header{padding-top:max(12px,env(safe-area-inset-top))}
-.hgroup{display:flex;align-items:center;gap:8px}
-@media(max-width:560px){.ver{order:1;align-self:flex-start}.hgroup{order:2;width:100%;justify-content:flex-end}}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:50;max-width:90vw;font-size:14px}
+.toast.bad{background:var(--bad)}
 </style>
 </head>
 <body>
@@ -109,7 +115,7 @@ header{padding-top:max(12px,env(safe-area-inset-top))}
 <div id="toast" class="toast" hidden></div>
 
 <script type="module">
-/* ================= CONFIG ================= */
+/* ================= CONFIGURATION ================= */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAr7roHXWagY8LgDpn1mpLyUStpl4T4YMk",
   authDomain: "palanquee-c934c.firebaseapp.com",
@@ -118,150 +124,165 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "14173816618",
   appId: "1:14173816618:web:ce7a5abad27463b6f04053"
 };
+// Seule valeur à incrémenter à chaque mise en ligne (transmise au service worker).
+const APP_VERSION = '2.0.0';
 
-// Version affichée en haut à droite. C'est la seule valeur à incrémenter à chaque mise en ligne :
-// elle est transmise au service worker (palanquee-sw.js?v=...), ce qui force la mise à jour de l'appli installée.
-const APP_VERSION = '1.1.1';
+const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
 
-// Ordre = hiérarchie (sert aux comparaisons de niveau). Adapte si ta structure n'est pas FFESSM.
-const NIVEAUX = ['Débutant','N1','N2','N3','N4','E1','E2','E3','E4'];
-const TYPES = ['Piscine','Fosse','Mer','Lac','Carrière'];
-const CATEGORIES = ['Aisance','Technique','Sécurité','Matériel','Théorie'];
-const CATALOGUE_DE_BASE = [
-  ['Palmage de surface','Aisance','Débutant',10],
-  ['Apnée et canard','Aisance','Débutant',10],
-  ['Capelage / décapelage en surface','Aisance','Débutant',10],
-  ['Vidage de masque','Technique','Débutant',10],
-  ["Lâcher et reprise d'embout",'Technique','Débutant',10],
-  ['Respiration sur détendeur de secours','Technique','Débutant',10],
-  ['Stabilisation au poumon-ballast','Technique','Débutant',15],
-  ['Utilisation du gilet (gonflage / purge)','Technique','Débutant',15],
-  ['Remontée contrôlée','Technique','Débutant',10],
-  ['Signes de communication','Sécurité','Débutant',10],
-  ["Panne d'air : échange d'embout",'Sécurité','Débutant',15],
-  ['Remontée assistée','Sécurité','N1',15],
-  ['Tractage en surface','Sécurité','N1',10],
-  ['Remontée sur expiration','Sécurité','N2',10],
-  ['Orientation au compas','Sécurité','N2',15],
-  ['Montage et démontage du bloc','Matériel','Débutant',15],
-  ['Vérifications avant immersion','Matériel','Débutant',5],
-  ['Physique : pressions et volumes','Théorie','Débutant',30],
-  ['Barotraumatismes','Théorie','Débutant',30],
-  ['Accident de décompression et tables','Théorie','N1',45],
-  ['Réglementation et prérogatives','Théorie','N1',30],
-  ["Planification d'une plongée",'Théorie','N2',45]
-];
+const LV = {
+  ECA: {label: "En cours d'acquisition", cls: 'eca'},
+  A:   {label: 'Acquis', cls: 'acq'},
+  M:   {label: 'Maîtrisé', cls: 'mai'}
+};
+const LV_KEYS = ['ECA', 'A', 'M'];
+const CRENEAUX = {H1: '1re heure', H2: '2e heure', FULL: 'Créneau complet'};
+const CREN_RANK = {H1: 1, FULL: 2, H2: 3};
+const DEFAULT_SEANCES = [...Array(12)].map((_, i) => ({key: 's' + (i + 1), label: 'Séance ' + (i + 1)}))
+  .concat([{key: 'validation-mer', label: 'Validation Mer'}, {key: 'fosse', label: 'Fosse'}]);
 
 /* ================= ÉTAT ================= */
-const COLS = ['people','activities','sessions'];
-const DB = {people:{},activities:{},sessions:{},settings:{}};
-const loaded = {people:false,activities:false,sessions:false,settings:false};
-let backend;
+const COLS = ['eleves', 'moniteurs', 'acces', 'competences', 'fiches', 'config'];
+const DB = Object.fromEntries(COLS.map(c => [c, {}]));
+const loaded = Object.fromEntries(COLS.map(c => [c, false]));
+let backend, unsubData = null;
 const S = {
-  mode: localStorage.getItem('plq_mode') || 'participant',
-  adminOk: sessionStorage.getItem('plq_admin') === '1',
-  tab: 'seances', filter: 'avenir', pFilter: 'tous', q: '',
-  ptab: 'avenir', me: localStorage.getItem('plq_me') || null,
-  loginId: '', signup: false, draft: null, restore: null, updateWorker: null
+  authReady: false, user: null, access: undefined, bootstrapExists: null, authMode: 'login',
+  tab: 'fiches', view: null, fiche: null, eleveId: null, ficheScope: 'miens', showCm: {},
+  q: '', progMode: 'seance', progKey: null, gTab: 'eleves',
+  restore: null, importData: null, updateWorker: null
 };
 
 /* ================= OUTILS ================= */
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const lvl = n => Math.max(0, NIVEAUX.indexOf(n));
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today = () => ymd(new Date());
-const fmtDate = s => s ? new Date(s+'T12:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) : '—';
-const fmtHeure = h => h ? h.replace(':','h') : '';
-const sessStart = s => new Date(`${s.date}T${s.heure || '00:00'}`);
-const isPast = s => new Date(`${s.date}T${s.heure || '23:59'}`) < new Date();
-const fullName = p => p ? `${p.prenom || ''} ${p.nom || ''}`.trim() : '(supprimé)';
-const byName = (a,b) => (a.nom||'').localeCompare(b.nom||'','fr') || (a.prenom||'').localeCompare(b.prenom||'','fr');
-const people = () => Object.values(DB.people).sort(byName);
-const sessionsSorted = () => Object.values(DB.sessions).sort((a,b) => sessStart(a) - sessStart(b));
-const opts = (list, cur) => list.map(v => `<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
+const fmtDate = s => s ? new Date(s + 'T12:00').toLocaleDateString('fr-FR', {weekday:'short', day:'numeric', month:'short', year:'numeric'}) : '—';
+const fmtDateCourt = s => s ? new Date(s + 'T12:00').toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
 const clean = o => { const c = {...o}; delete c.id; return c; };
+const clone = o => JSON.parse(JSON.stringify(o));
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’`]/g, "'").replace(/\s+/g, ' ').trim();
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const personName = p => p ? `${p.prenom || ''} ${p.nom || ''}`.trim() : '(supprimé)';
+const byName = (a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.prenom || '').localeCompare(b.prenom || '', 'fr');
+const initialesDe = (prenom, nom) => ((prenom || '').split(/[\s-]+/).map(x => x[0] || '').join('') + (nom || '').split(/\s+/).map(x => x[0] || '').join('')).toUpperCase();
 
-async function hash(s){
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('plq:' + s));
-  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
-}
+const isResp = () => S.access && S.access.role === 'responsable';
+const myId = () => S.access && S.access.moniteurId;
+const eleves = all => Object.values(DB.eleves).filter(e => all || e.actif !== false).sort(byName);
+const moniteurs = all => Object.values(DB.moniteurs).filter(m => all || m.actif !== false).sort(byName);
+const monName = id => personName(DB.moniteurs[id]);
+const prog = () => DB.config.programme || {};
+const seances = () => (prog().seances && prog().seances.length) ? prog().seances : DEFAULT_SEANCES;
+const seanceLabel = k => (seances().find(s => s.key === k) || {label: k || '?'}).label;
+const seanceCourt = k => { const l = seanceLabel(k); const m = l.match(/^s[ée]ance\s*(\d+)/i); return m ? 'S' + m[1] : l; };
+const comps = () => Object.values(DB.competences).sort((a, b) => (a.ordre ?? 999) - (b.ordre ?? 999) || (a.capacite || '').localeCompare(b.capacite || '', 'fr'));
+const compName = c => c ? (c.capacite || '?').replace(/\s*\n\s*/g, ' ') : '(compétence supprimée)';
+const gTitle = c => ((c && c.groupe) || 'Autres').split('\n')[0].trim();
+const consigne = (cid, key) => ((prog().cells || {})[cid] || {})[key] || '';
+const progComps = key => comps().filter(c => consigne(c.id, key)).map(c => c.id);
+const ficheSort = (a, b) => (a.date || '').localeCompare(b.date || '') || (CREN_RANK[a.creneau] || 0) - (CREN_RANK[b.creneau] || 0) || (a.updatedAt || 0) - (b.updatedAt || 0);
+const lvTag = k => k ? `<span class="lv ${LV[k].cls}" title="${esc(LV[k].label)}">${k}</span>` : '<span class="lv none">—</span>';
 
-function certif(p){
-  if (!p.certifFin) return {cls:'warn', txt:'Certificat non renseigné', ok:true};
-  if (p.certifFin < today()) return {cls:'bad', txt:'Certificat expiré le ' + fmtDate(p.certifFin), ok:false};
-  const lim = new Date(); lim.setDate(lim.getDate() + 30);
-  if (p.certifFin < ymd(lim)) return {cls:'warn', txt:'Certificat expire le ' + fmtDate(p.certifFin), ok:true};
-  return {cls:'ok', txt:"Certificat valide jusqu'au " + fmtDate(p.certifFin), ok:true};
-}
-
-function encadrement(s){
-  const r = Number(DB.settings.ratio || 4);
-  const m = (s.moniteurs||[]).length, e = (s.eleves||[]).length;
-  if (!e) return null;
-  if (!m) return {cls:'bad', txt:'Aucun moniteur affecté'};
-  if (e > m*r) return {cls:'bad', txt:`Encadrement insuffisant : ${e} élèves pour ${m} moniteur(s), max ${r} par moniteur`};
-  return {cls:'ok', txt:`Encadrement OK (${e} élève${e>1?'s':''} / ${m} moniteur${m>1?'s':''})`};
-}
-
-const progMaxLevel = s => (s.programme||[]).reduce((m,it) => {
-  const a = DB.activities[it.actId]; return a ? Math.max(m, lvl(a.niveauMin)) : m;
-}, 0);
-
-function sessionWarnings(s){
-  const w = [];
-  for (const id of [...(s.moniteurs||[]), ...(s.eleves||[])]) {
-    const p = DB.people[id];
-    if (p && !certif(p).ok) w.push(`${fullName(p)} : certificat expiré`);
+function groupedComps(list){
+  const out = [];
+  for (const c of list) {
+    const g = gTitle(c);
+    let grp = out.find(x => x.g === g);
+    if (!grp) out.push(grp = {g, items: []});
+    grp.items.push(c);
   }
-  const req = progMaxLevel(s);
-  if (req > 0) for (const id of s.eleves||[]) {
-    const p = DB.people[id];
-    if (p && lvl(p.niveau) < req) w.push(`${fullName(p)} (${p.niveau||'?'}) : le programme contient des exercices niveau ${NIVEAUX[req]}`);
-  }
-  return w;
+  return out;
 }
 
-function regState(s){
-  if (!s.inscriptionsOuvertes) return {open:false, why:'Inscriptions fermées'};
-  const h = Number(DB.settings.closeH || 0);
-  if (Date.now() > sessStart(s).getTime() - h*3600e3) return {open:false, why:'Inscriptions closes'};
-  return {open:true};
+/* Agrège toutes les fiches d'un élève : présence, grille compétence × séance, historique. */
+function bilan(eid){
+  const fiches = Object.values(DB.fiches).filter(f => (f.eleves || []).includes(eid)).sort(ficheSort);
+  const grid = {}, latest = {}, presence = new Set(), entries = [], notes = [];
+  for (const f of fiches) {
+    presence.add(f.seanceKey);
+    const ev = (f.evals || {})[eid] || {};
+    for (const cid of f.competences || []) {
+      const e = ev[cid];
+      if (!e || (!e.niveau && !e.comment)) continue;
+      const it = {f, cid, niveau: e.niveau || '', comment: e.comment || ''};
+      entries.push(it);
+      if (it.niveau) { (grid[cid] = grid[cid] || {})[f.seanceKey] = it; latest[cid] = it; }
+    }
+    const g = (f.commentaires || {})[eid];
+    if (g) notes.push({f, comment: g});
+  }
+  return {fiches, grid, latest, presence, entries, notes};
 }
+const presenceMoniteur = mid => new Set(Object.values(DB.fiches).filter(f => f.moniteurId === mid).map(f => f.seanceKey));
 
 let toastT;
 function toast(m, bad){
   const t = $('#toast'); t.textContent = m; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
-  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500);
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 4000);
 }
-async function run(fn){ try { await fn(); } catch(e){ console.error(e); toast(e.message || String(e), true); } }
+const ERR = {
+  'auth/invalid-credential': 'E-mail ou mot de passe incorrect.',
+  'auth/wrong-password': 'E-mail ou mot de passe incorrect.',
+  'auth/user-not-found': 'Aucun compte avec cet e-mail. Utilise « Première connexion ».',
+  'auth/invalid-email': 'Adresse e-mail invalide.',
+  'auth/missing-password': 'Mot de passe manquant.',
+  'auth/email-already-in-use': 'Un compte existe déjà avec cet e-mail : connecte-toi, ou utilise « Mot de passe oublié ».',
+  'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).',
+  'auth/too-many-requests': 'Trop de tentatives. Réessaie dans quelques minutes.',
+  'auth/network-request-failed': 'Pas de connexion réseau.',
+  'auth/unauthorized-domain': 'Ce site n’est pas autorisé dans Firebase (Authentication > Paramètres > Domaines autorisés).',
+  'auth/operation-not-allowed': 'La connexion par e-mail et mot de passe n’est pas activée dans Firebase.',
+  'permission-denied': 'Accès refusé par les règles Firestore.'
+};
+const errMsg = e => ERR[e && e.code] || (e && e.message) || String(e);
+async function run(fn){ try { await fn(); } catch (e) { console.error(e); toast(errMsg(e), true); } }
+
+/* Écriture qui ne bloque pas l'écran si le réseau est absent (piscine en sous-sol…). */
+async function saveSoft(promise){
+  const r = await Promise.race([promise.then(() => 'ok'), new Promise(res => setTimeout(() => res('attente'), 4000))]);
+  if (r === 'attente') {
+    promise.catch(e => toast(errMsg(e), true));
+    toast('Enregistré sur l’appareil. Envoi automatique dès le retour du réseau.');
+    return false;
+  }
+  return true;
+}
 
 /* ================= BACKENDS ================= */
 async function initBackend(){
   if (FIREBASE_CONFIG.projectId) {
-    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-    const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const { initializeApp } = await import(SDK + 'firebase-app.js');
+    const fs = await import(SDK + 'firebase-firestore.js');
+    const fa = await import(SDK + 'firebase-auth.js');
     const app = initializeApp(FIREBASE_CONFIG);
     let db;
-    // Cache local : l'appli installée affiche les dernières données même hors connexion.
     try { db = fs.initializeFirestore(app, {localCache: fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
     catch (e) { db = fs.getFirestore(app); }
+    const auth = fa.getAuth(app);
+    fa.useDeviceLanguage(auth);
+    const me = u => u ? {email: (u.email || '').toLowerCase(), verified: !!u.emailVerified} : null;
     backend = {
       mode: 'firebase',
+      onAuth: cb => fa.onAuthStateChanged(auth, u => cb(me(u))),
+      signIn: (e, p) => fa.signInWithEmailAndPassword(auth, e.trim(), p),
+      async signUp(e, p){ const c = await fa.createUserWithEmailAndPassword(auth, e.trim(), p); await fa.sendEmailVerification(c.user); },
+      resetPassword: e => fa.sendPasswordResetEmail(auth, e.trim()),
+      resendVerification: () => fa.sendEmailVerification(auth.currentUser),
+      async refreshUser(){ await auth.currentUser.reload(); await auth.currentUser.getIdToken(true); return me(auth.currentUser); },
+      signOut: () => fa.signOut(auth),
+      async getDoc(c, id){ const d = await fs.getDoc(fs.doc(db, c, id)); return d.exists() ? {id: d.id, ...d.data()} : null; },
       listen(cb){
-        COLS.forEach(c => fs.onSnapshot(fs.collection(db, c), snap => {
-          const o = {}; snap.forEach(d => o[d.id] = {id:d.id, ...d.data()});
+        const uns = COLS.map(c => fs.onSnapshot(fs.collection(db, c), snap => {
+          const o = {}; snap.forEach(d => o[d.id] = {id: d.id, ...d.data()});
           DB[c] = o; loaded[c] = true; cb();
-        }, err => toast('Firestore : ' + err.message, true)));
-        fs.onSnapshot(fs.doc(db,'config','settings'), d => {
-          DB.settings = d.exists() ? d.data() : {}; loaded.settings = true; cb();
-        }, err => toast('Firestore : ' + err.message, true));
+        }, err => toast(errMsg(err), true)));
+        return () => uns.forEach(u => u());
       },
       newId: c => fs.doc(fs.collection(db, c)).id,
-      set: (c,id,data) => fs.setDoc(fs.doc(db,c,id), clean(data)),
-      update: (c,id,data) => fs.updateDoc(fs.doc(db,c,id), clean(data)),
-      del: (c,id) => fs.deleteDoc(fs.doc(db,c,id)),
-      setSettings: data => fs.setDoc(fs.doc(db,'config','settings'), data, {merge:true}),
+      set: (c, id, data) => fs.setDoc(fs.doc(db, c, id), clean(data)),
+      del: (c, id) => fs.deleteDoc(fs.doc(db, c, id)),
       async bulk(ops){
         for (let i = 0; i < ops.length; i += 400) {
           const b = fs.writeBatch(db);
@@ -271,679 +292,900 @@ async function initBackend(){
           }
           await b.commit();
         }
-      },
-      txSession: (id, fn) => fs.runTransaction(db, async tx => {
-        const ref = fs.doc(db,'sessions',id);
-        const snap = await tx.get(ref);
-        if (!snap.exists()) throw new Error('Séance introuvable');
-        tx.update(ref, clean(fn({id, ...snap.data()})));
-      })
-    };
-  } else {
-    const KEY = 'plq_demo_v1';
-    let store;
-    try { store = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
-    store = store || {people:{},activities:{},sessions:{},settings:{}};
-    let cb = () => {};
-    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(e){} };
-    const sync = () => {
-      COLS.forEach(c => { DB[c] = {}; for (const [id,v] of Object.entries(store[c])) DB[c][id] = {id, ...v}; loaded[c] = true; });
-      DB.settings = {...store.settings}; loaded.settings = true; cb();
-    };
-    const commit = () => { persist(); sync(); };
-    backend = {
-      mode: 'local',
-      listen(c){ cb = c; sync(); },
-      newId: () => Date.now().toString(36) + Math.random().toString(36).slice(2,8),
-      async set(c,id,data){ store[c][id] = clean(data); commit(); },
-      async update(c,id,data){ if (!store[c][id]) throw new Error('Introuvable'); Object.assign(store[c][id], clean(data)); commit(); },
-      async del(c,id){ delete store[c][id]; commit(); },
-      async setSettings(data){ Object.assign(store.settings, data); commit(); },
-      async bulk(ops){
-        for (const o of ops) { if (o.op === 'del') delete store[o.c][o.id]; else store[o.c][o.id] = clean(o.data); }
-        commit();
-      },
-      async txSession(id, fn){
-        if (!store.sessions[id]) throw new Error('Séance introuvable');
-        const next = fn(JSON.parse(JSON.stringify({id, ...store.sessions[id]})));
-        Object.assign(store.sessions[id], clean(next)); commit();
       }
     };
+  } else {
+    // Mode démo : tout reste dans le navigateur, mot de passe vérifié localement.
+    const KEY = 'plq2_demo', UKEY = 'plq2_demo_user';
+    let store; try { store = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    store = store || {}; COLS.forEach(c => store[c] = store[c] || {}); store.users = store.users || {};
+    let dataCb = null, cur = localStorage.getItem(UKEY);
+    const authCbs = [];
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
+    const sync = () => {
+      if (!dataCb) return;
+      COLS.forEach(c => { DB[c] = {}; for (const [id, v] of Object.entries(store[c])) DB[c][id] = {id, ...clone(v)}; loaded[c] = true; });
+      dataCb();
+    };
+    const commit = () => { persist(); sync(); };
+    const fail = code => { const e = new Error(code); e.code = code; throw e; };
+    const emit = () => authCbs.forEach(cb => cb(cur ? {email: cur, verified: true} : null));
+    const login = e => { cur = e; localStorage.setItem(UKEY, e); emit(); };
+    backend = {
+      mode: 'local',
+      onAuth(cb){ authCbs.push(cb); setTimeout(() => cb(cur ? {email: cur, verified: true} : null), 0); },
+      async signIn(e, p){ e = e.trim().toLowerCase(); const u = store.users[e]; if (!u || u.p !== p) fail('auth/invalid-credential'); login(e); },
+      async signUp(e, p){ e = e.trim().toLowerCase(); if (store.users[e]) fail('auth/email-already-in-use'); if ((p || '').length < 6) fail('auth/weak-password'); store.users[e] = {p}; persist(); login(e); },
+      async resetPassword(){},
+      async resendVerification(){},
+      async refreshUser(){ return {email: cur, verified: true}; },
+      async signOut(){ cur = null; localStorage.removeItem(UKEY); emit(); },
+      async getDoc(c, id){ const v = store[c][id]; return v ? {id, ...clone(v)} : null; },
+      listen(cb){ dataCb = cb; sync(); return () => { dataCb = null; }; },
+      newId: () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      async set(c, id, d){ store[c][id] = clean(clone(d)); commit(); },
+      async del(c, id){ delete store[c][id]; commit(); },
+      async bulk(ops){ for (const o of ops) { if (o.op === 'del') delete store[o.c][o.id]; else store[o.c][o.id] = clean(clone(o.data)); } commit(); }
+    };
   }
+}
+
+/* ================= SESSION ================= */
+async function onAuthChange(u){
+  S.authReady = true; S.user = u; S.access = undefined; S.view = null; S.authMode = 'login';
+  stopData();
+  render();
+  if (u && u.verified) await checkAccess();
+}
+async function checkAccess(){
+  try {
+    const a = await backend.getDoc('acces', S.user.email);
+    if (a) { S.access = a; startData(); }
+    else { S.access = null; S.bootstrapExists = !!(await backend.getDoc('config', 'bootstrap')); }
+  } catch (e) {
+    S.access = null; S.bootstrapExists = true; toast(errMsg(e), true);
+  }
+  render();
+}
+function startData(){ stopData(); unsubData = backend.listen(onData); }
+function stopData(){
+  if (unsubData) { unsubData(); unsubData = null; }
+  COLS.forEach(c => { DB[c] = {}; loaded[c] = false; });
+}
+function onData(){
+  if (loaded.acces && S.user) {
+    const a = DB.acces[S.user.email];
+    if (!a) { S.access = null; S.bootstrapExists = true; stopData(); render(); return; }
+    S.access = a;
+  }
+  requestRender();
 }
 
 /* ================= RENDU ================= */
 let pendingRender = false;
+const typing = () => { const a = document.activeElement; return a && $('#app').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName); };
 function requestRender(){
-  const a = document.activeElement;
-  if (a && $('#app').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) {
-    if (a.id === 'q') { const pl = $('#plist'); if (pl) pl.innerHTML = peopleListHtml(); return; }
-    pendingRender = true; return;
-  }
+  if (typing()) { if (document.activeElement.id === 'q') { const l = $('#elist'); if (l) l.innerHTML = elevesListHtml(); return; } pendingRender = true; return; }
   render();
 }
-document.addEventListener('focusout', () => setTimeout(() => {
-  const a = document.activeElement;
-  if (pendingRender && !(a && $('#app').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) { pendingRender = false; render(); }
-}, 0));
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender && !typing()) { pendingRender = false; render(); } }, 0));
 
 function render(){
   if (!backend) return;
-  const club = DB.settings.clubName || 'Palanquée';
-  document.title = club + ' — Séances de plongée';
+  const formation = (DB.config.settings || {}).formation || 'Suivi pédagogique';
+  const m = S.access && DB.moniteurs[S.access.moniteurId];
   $('#app').innerHTML = `
     <header>
-      <div class="brand">${esc(club)}<small>Séances de plongée</small></div>
+      <div class="brand">Palanquée<small>${esc(formation)}</small></div>
       <span class="sp"></span>
       <div class="hgroup">
-      ${canInstall() ? '<button type="button" class="hbtn" data-a="install">Installer</button>' : ''}
-      <div class="seg">
-        <button type="button" class="${S.mode==='participant'?'on':''}" data-a="mode" data-v="participant">Participant</button>
-        <button type="button" class="${S.mode==='admin'?'on':''}" data-a="mode" data-v="admin">Admin</button>
-      </div></div>
+        ${canInstall() ? '<button type="button" class="hbtn" data-a="install">Installer</button>' : ''}
+        ${S.user ? `<button type="button" class="hbtn" data-a="logout" title="${esc(S.user.email)}">${esc(m ? m.prenom : S.user.email)} · Déconnexion</button>` : ''}
+      </div>
       <span class="ver" title="Version de l'application">v${APP_VERSION}</span>
     </header>
     ${S.updateWorker ? `<div class="update"><span>Une nouvelle version est disponible.</span><span class="sp"></span><button type="button" class="btn sm p" data-a="applyUpdate">Mettre à jour</button></div>` : ''}
-    ${backend.mode==='local' ? `<div class="demo"><b>Mode démo.</b> Les données restent dans ce navigateur. Renseigne <code>FIREBASE_CONFIG</code> en haut du fichier pour partager la base avec tout le club.</div>` : ''}
-    <main>${S.mode === 'admin' ? viewAdmin() : viewParticipant()}</main>`;
+    ${backend.mode === 'local' ? `<div class="demo"><b>Mode démo.</b> Les données restent dans ce navigateur (aucun e-mail n'est envoyé).</div>` : ''}
+    <main>${mainView()}</main>`;
 }
 
-/* ---------- ADMIN ---------- */
-function viewAdmin(){
-  if (!loaded.settings) return `<div class="card muted">Chargement…</div>`;
-  if (!DB.settings.adminHash) return `
-    <div class="card narrow"><h2>Code administrateur</h2>
-      <p class="muted">Premier lancement : choisis le code qui protégera le mode admin.</p>
-      <form data-f="setAdmin">
-        <label>Code</label><input type="password" name="a" required minlength="4">
-        <label>Confirmer</label><input type="password" name="b" required minlength="4">
-        <div class="row mt"><button class="btn p">Enregistrer</button></div>
-      </form></div>`;
-  if (!S.adminOk) return `
-    <div class="card narrow"><h2>Mode admin</h2>
-      <form data-f="adminLogin"><label>Code</label><input type="password" name="code" required autofocus>
-      <div class="row mt"><button class="btn p">Entrer</button></div></form></div>`;
-  const pending = people().filter(p => p.statut === 'en_attente').length;
-  const tabs = [['seances','Séances'],['personnes','Personnes' + (pending ? `<span class="pill">${pending}</span>` : '')],['activites','Activités'],['reglages','Réglages']];
-  const lb = DB.settings.lastBackup, days = lb ? Math.floor((Date.now() - lb) / 864e5) : null;
-  const hasData = Object.keys(DB.people).length + Object.keys(DB.sessions).length > 0;
-  const remind = S.tab !== 'reglages' && hasData && (days === null || days >= 30)
-    ? `<div class="remind">${days === null ? 'Aucune sauvegarde faite pour l’instant.' : `Dernière sauvegarde il y a ${days} jours.`} <a href="#" data-a="tab" data-v="reglages">Sauvegarder</a></div>` : '';
-  return `<div class="tabs">${tabs.map(([k,l]) => `<button type="button" class="${S.tab===k?'on':''}" data-a="tab" data-v="${k}">${l}</button>`).join('')}</div>` + remind
-    + ({seances:adminSessions, personnes:adminPeople, activites:adminActivities, reglages:adminSettings}[S.tab])();
+function mainView(){
+  const wait = '<div class="card muted">Chargement…</div>';
+  if (!S.authReady) return wait;
+  if (!S.user) return authView();
+  if (!S.user.verified) return verifyView();
+  if (S.access === undefined) return wait;
+  if (S.access === null) return noAccessView();
+  if (!COLS.every(c => loaded[c])) return wait;
+  if (S.view === 'fiche' && S.fiche) return ficheView();
+  if (S.view === 'eleve' && DB.eleves[S.eleveId]) return eleveView(S.eleveId);
+  const tabs = [['fiches', isResp() ? 'Fiches de séance' : 'Mes fiches'], ['eleves', 'Élèves'], ['presence', 'Présence'], ['programme', 'Programme']];
+  if (isResp()) tabs.push(['gestion', 'Gestion']);
+  if (!tabs.some(t => t[0] === S.tab)) S.tab = 'fiches';
+  return `<div class="tabs">${tabs.map(([k, l]) => `<button type="button" class="${S.tab === k ? 'on' : ''}" data-a="tab" data-v="${k}">${l}</button>`).join('')}</div>`
+    + ({fiches: tabFiches, eleves: tabEleves, presence: tabPresence, programme: tabProgramme, gestion: tabGestion}[S.tab])();
 }
 
-const seg = (key, list, cur) => `<div class="seg2">${list.map(([v,l]) => `<button type="button" class="${cur===v?'on':''}" data-a="setf" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+const seg = (action, list, cur) => `<div class="seg2">${list.map(([v, l]) => `<button type="button" class="${cur === v ? 'on' : ''}" data-a="${action}" data-v="${v}">${l}</button>`).join('')}</div>`;
 
-function sessionHead(s){
-  return `<div class="row"><div>
-      <div class="date">${fmtDate(s.date)}${s.heure ? ' · ' + fmtHeure(s.heure) : ''}</div>
-      <div class="muted">${esc(s.lieu || 'Lieu à définir')} · ${esc(s.type || '')}</div></div>
-    <span class="sp"></span>${s.inscriptionsOuvertes ? '<span class="badge ok">Inscriptions ouvertes</span>' : '<span class="badge">Inscriptions fermées</span>'}</div>`;
-}
-
-function programmeHtml(s){
-  const p = s.programme || [];
-  if (!p.length) return '<div class="muted mt">Programme non défini.</div>';
-  return `<ol class="prog">${p.map(it => {
-    const a = DB.activities[it.actId];
-    return `<li><b>${esc(a ? a.nom : '(activité supprimée)')}</b>${a ? ` <span class="muted">${esc(a.categorie)}${a.dureeMin ? ' · ' + a.dureeMin + ' min' : ''}</span>` : ''}${it.note ? `<div class="muted">${esc(it.note)}</div>` : ''}</li>`;
-  }).join('')}</ol>`;
-}
-
-function adminSessions(){
-  let list = sessionsSorted().filter(s => S.filter === 'toutes' || (S.filter === 'avenir' ? !isPast(s) : isPast(s)));
-  if (S.filter === 'passees') list.reverse();
-  return `<div class="row mb"><button type="button" class="btn p" data-a="newSession">+ Nouvelle séance</button><span class="sp"></span>
-    ${seg('filter', [['avenir','À venir'],['passees','Passées'],['toutes','Toutes']], S.filter)}</div>
-    ${list.length ? list.map(sessionCardAdmin).join('') : '<div class="card muted">Aucune séance.</div>'}`;
-}
-
-function sessionCardAdmin(s){
-  const mon = (s.moniteurs||[]).map(id => esc(fullName(DB.people[id])));
-  const el = (s.eleves||[]).map(id => { const p = DB.people[id]; return p ? `${esc(fullName(p))} <span class="muted">(${esc(p.niveau||'?')})</span>` : '(supprimé)'; });
-  const enc = encadrement(s), w = sessionWarnings(s);
-  return `<div class="card">${sessionHead(s)}
-    <div class="mt"><b>Moniteurs :</b> ${mon.length ? mon.join(', ') : '<span class="muted">aucun</span>'}</div>
-    <div><b>Élèves ${(s.eleves||[]).length}${s.capaciteEleves ? '/' + s.capaciteEleves : ''} :</b> ${el.length ? el.join(', ') : '<span class="muted">aucun</span>'}</div>
-    ${enc ? `<div class="mt"><span class="badge ${enc.cls}">${enc.txt}</span></div>` : ''}
-    ${w.length ? `<ul class="warns">${w.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    <details class="mt"><summary>Programme (${(s.programme||[]).length} activité${(s.programme||[]).length>1?'s':''})</summary>${programmeHtml(s)}</details>
-    ${s.notes ? `<div class="muted mt">${esc(s.notes)}</div>` : ''}
-    <div class="row mt">
-      <button type="button" class="btn sm" data-a="editSession" data-id="${s.id}">Modifier</button>
-      <button type="button" class="btn sm" data-a="dupSession" data-id="${s.id}">Dupliquer +7 j</button>
-      <button type="button" class="btn sm" data-a="toggleOpen" data-id="${s.id}">${s.inscriptionsOuvertes ? 'Fermer' : 'Ouvrir'} les inscriptions</button>
-      <span class="sp"></span>
-      <button type="button" class="btn sm d" data-a="delSession" data-id="${s.id}">Supprimer</button>
-    </div></div>`;
-}
-
-function personCheck(p, name, checked){
-  const c = certif(p);
-  return `<label><input type="checkbox" name="${name}" value="${p.id}" ${checked ? 'checked' : ''}>
-    <span class="dot ${c.cls}" title="${esc(c.txt)}"></span>${esc(fullName(p))} <span class="muted">${esc(p.niveau||'?')}</span></label>`;
-}
-
-function actOptions(){
-  const acts = Object.values(DB.activities);
-  const cats = [...new Set([...CATEGORIES, ...acts.map(a => a.categorie)])];
-  return '<option value="">— Ajouter une activité du catalogue —</option>' + cats.map(c => {
-    const l = acts.filter(a => a.categorie === c).sort((a,b) => a.nom.localeCompare(b.nom,'fr'));
-    return l.length ? `<optgroup label="${esc(c)}">${l.map(a => `<option value="${a.id}">${esc(a.nom)} (${esc(a.niveauMin||'Débutant')}+)</option>`).join('')}</optgroup>` : '';
-  }).join('');
-}
-
-function openSessionModal(id, preset){
-  const s = id ? JSON.parse(JSON.stringify(DB.sessions[id])) :
-    (preset || {date:'', heure:'', lieu:'', type:'Piscine', capaciteEleves:8, moniteurs:[], eleves:[], programme:[], inscriptionsOuvertes:true, notes:''});
-  S.draft = {
-    id: id || null,
-    orig: id ? {moniteurs:[...(s.moniteurs||[])], eleves:[...(s.eleves||[])]} : null,
-    programme: (s.programme||[]).map(x => ({...x}))
-  };
-  const mons = people().filter(p => (p.role === 'moniteur' && p.statut === 'actif') || (s.moniteurs||[]).includes(p.id));
-  const els = people().filter(p => (p.role === 'eleve' && p.statut === 'actif') || (s.eleves||[]).includes(p.id));
-  openModal(`
-    <div class="modal-head"><h2>${id ? 'Modifier la séance' : 'Nouvelle séance'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
-    <form data-f="saveSession">
-      <div class="grid2">
-        <div><label>Date</label><input type="date" name="date" value="${esc(s.date)}" required></div>
-        <div><label>Heure</label><input type="time" name="heure" value="${esc(s.heure)}"></div>
-        <div><label>Lieu</label><input name="lieu" value="${esc(s.lieu)}" placeholder="Piscine, site, bateau…"></div>
-        <div><label>Type</label><select name="type">${opts(TYPES, s.type)}</select></div>
-        <div><label>Places élèves (0 = illimité)</label><input type="number" name="cap" min="0" value="${esc(s.capaciteEleves ?? 0)}"></div>
-        <div><label>&nbsp;</label><label class="inline"><input type="checkbox" name="open" ${s.inscriptionsOuvertes ? 'checked' : ''}> Inscriptions ouvertes</label></div>
-      </div>
-      <label>Moniteurs</label>
-      <div class="checklist">${mons.length ? mons.map(p => personCheck(p,'mon',(s.moniteurs||[]).includes(p.id))).join('') : '<p class="muted">Aucun moniteur actif.</p>'}</div>
-      <label>Élèves</label>
-      <div class="checklist">${els.length ? els.map(p => personCheck(p,'el',(s.eleves||[]).includes(p.id))).join('') : '<p class="muted">Aucun élève actif.</p>'}</div>
-      <label>Programme</label>
-      <div class="row nowrap"><select id="progSel">${actOptions()}</select><button type="button" class="btn" data-a="progAdd">Ajouter</button></div>
-      <ul class="pedit" id="prog"></ul>
-      <label>Notes</label><textarea name="notes">${esc(s.notes)}</textarea>
-      <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
-    </form>`);
-  renderProg();
-}
-
-function renderProg(){
-  const p = S.draft.programme;
-  const tot = p.reduce((t,it) => t + (Number(DB.activities[it.actId]?.dureeMin) || 0), 0);
-  $('#prog').innerHTML = p.length ? p.map((it,i) => {
-    const a = DB.activities[it.actId];
-    return `<li><div class="sp"><b>${i+1}. ${esc(a ? a.nom : '(activité supprimée)')}</b>${a?.dureeMin ? ` <span class="muted">${a.dureeMin} min</span>` : ''}
-        <input class="pnote" data-i="${i}" value="${esc(it.note||'')}" placeholder="Consigne pour cette séance (facultatif)"></div>
-      <div class="row nowrap">
-        <button type="button" class="btn sm" data-a="progMove" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'}>↑</button>
-        <button type="button" class="btn sm" data-a="progMove" data-i="${i}" data-d="1" ${i < p.length-1 ? '' : 'disabled'}>↓</button>
-        <button type="button" class="btn sm d" data-a="progDel" data-i="${i}">✕</button></div></li>`;
-  }).join('') + `<li class="muted">Durée totale estimée : ${tot} min</li>` : `<li class="muted">Aucune activité pour l'instant.</li>`;
-}
-
-function adminPeople(){
-  return `<div class="row mb"><button type="button" class="btn p" data-a="newPerson">+ Ajouter</button><span class="sp"></span>
-    ${seg('pFilter', [['tous','Actifs'],['eleve','Élèves'],['moniteur','Moniteurs'],['en_attente','En attente'],['inactif','Inactifs']], S.pFilter)}</div>
-    <input id="q" class="mb" placeholder="Rechercher un nom ou un e-mail…" value="${esc(S.q)}">
-    <div id="plist">${peopleListHtml()}</div>`;
-}
-
-function peopleListHtml(){
-  const q = S.q.trim().toLowerCase();
-  const counts = {};
-  for (const s of Object.values(DB.sessions)) for (const id of [...(s.eleves||[]), ...(s.moniteurs||[])]) counts[id] = (counts[id]||0) + 1;
-  let l = people().filter(p => {
-    if (S.pFilter === 'eleve' || S.pFilter === 'moniteur') return p.role === S.pFilter && p.statut === 'actif';
-    if (S.pFilter === 'tous') return p.statut === 'actif';
-    return p.statut === S.pFilter;
-  });
-  if (q) l = l.filter(p => fullName(p).toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q));
-  if (!l.length) return '<div class="card muted">Personne dans cette liste.</div>';
-  return l.map(p => {
-    const c = certif(p);
-    return `<div class="card tight"><div class="row"><div>
-        <b>${esc(fullName(p))}</b> <span class="chip">${p.role === 'moniteur' ? 'Moniteur' : 'Élève'}</span><span class="chip">${esc(p.niveau||'?')}</span>
-        ${p.statut === 'en_attente' ? '<span class="badge warn">En attente</span>' : ''}${p.statut === 'inactif' ? '<span class="badge">Inactif</span>' : ''}
-        <div class="muted">${esc([p.email, p.tel].filter(Boolean).join(' · '))}</div>
-        <div class="muted"><span class="dot ${c.cls}"></span>${esc(c.txt)} · ${counts[p.id]||0} séance(s)${p.pinHash ? '' : ' · pas encore de PIN'}</div>
-      </div><span class="sp"></span>
-      ${p.statut === 'en_attente' ? `<button type="button" class="btn sm p" data-a="validate" data-id="${p.id}">Valider</button>` : ''}
-      <button type="button" class="btn sm" data-a="editPerson" data-id="${p.id}">Modifier</button></div></div>`;
-  }).join('');
-}
-
-function openPersonModal(id){
-  const p = id ? DB.people[id] : {prenom:'', nom:'', role:'eleve', niveau:'Débutant', email:'', tel:'', certifFin:'', statut:'actif', notes:''};
-  openModal(`
-    <div class="modal-head"><h2>${id ? esc(fullName(p)) : 'Nouvelle personne'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
-    <form data-f="savePerson"><input type="hidden" name="id" value="${id||''}">
-      <div class="grid2">
-        <div><label>Prénom</label><input name="prenom" value="${esc(p.prenom)}" required></div>
-        <div><label>Nom</label><input name="nom" value="${esc(p.nom)}" required></div>
-        <div><label>Rôle</label><select name="role"><option value="eleve" ${p.role==='eleve'?'selected':''}>Élève</option><option value="moniteur" ${p.role==='moniteur'?'selected':''}>Moniteur</option></select></div>
-        <div><label>Niveau</label><select name="niveau">${opts(NIVEAUX, p.niveau)}</select></div>
-        <div><label>E-mail</label><input type="email" name="email" value="${esc(p.email)}"></div>
-        <div><label>Téléphone</label><input type="tel" name="tel" value="${esc(p.tel)}"></div>
-        <div><label>Certificat médical valable jusqu'au</label><input type="date" name="certifFin" value="${esc(p.certifFin)}"></div>
-        <div><label>Statut</label><select name="statut">
-          <option value="actif" ${p.statut==='actif'?'selected':''}>Actif</option>
-          <option value="en_attente" ${p.statut==='en_attente'?'selected':''}>En attente</option>
-          <option value="inactif" ${p.statut==='inactif'?'selected':''}>Inactif</option></select></div>
-      </div>
-      <label>${id && p.pinHash ? 'Réinitialiser le PIN (laisser vide pour ne pas changer)' : 'PIN (facultatif, sinon la personne le choisira à sa 1re connexion)'}</label>
-      <input type="password" name="pin" inputmode="numeric" minlength="4" autocomplete="new-password">
-      <label>Notes</label><textarea name="notes">${esc(p.notes)}</textarea>
-      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delPerson" data-id="${id}">Supprimer</button>` : ''}<span class="sp"></span>
-        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
-    </form>`);
-}
-
-function adminActivities(){
-  const acts = Object.values(DB.activities);
-  const head = `<div class="row mb"><button type="button" class="btn p" data-a="newAct">+ Ajouter une activité</button>${acts.length ? '' : '<button type="button" class="btn" data-a="seedActs">Charger le catalogue de base</button>'}</div>`;
-  if (!acts.length) return head + `<div class="card muted">Catalogue vide. Tu peux charger une base d'exercices classiques et l'adapter ensuite.</div>`;
-  const used = {};
-  for (const s of Object.values(DB.sessions)) for (const it of s.programme||[]) used[it.actId] = (used[it.actId]||0) + 1;
-  const cats = [...new Set([...CATEGORIES, ...acts.map(a => a.categorie)])];
-  return head + cats.map(c => {
-    const l = acts.filter(a => a.categorie === c).sort((a,b) => lvl(a.niveauMin) - lvl(b.niveauMin) || a.nom.localeCompare(b.nom,'fr'));
-    if (!l.length) return '';
-    return `<h3>${esc(c)}</h3>` + l.map(a => `<div class="card tight"><div class="row"><div>
-        <b>${esc(a.nom)}</b> <span class="chip">${esc(a.niveauMin||'Débutant')}+</span>${a.dureeMin ? `<span class="muted">${a.dureeMin} min</span>` : ''}
-        ${a.description ? `<div class="muted">${esc(a.description)}</div>` : ''}
-        <div class="muted">Prévue dans ${used[a.id]||0} séance(s)</div></div><span class="sp"></span>
-        <button type="button" class="btn sm" data-a="editAct" data-id="${a.id}">Modifier</button></div></div>`).join('');
-  }).join('');
-}
-
-function openActModal(id){
-  const a = id ? DB.activities[id] : {nom:'', categorie:'Technique', niveauMin:'Débutant', dureeMin:10, description:''};
-  openModal(`
-    <div class="modal-head"><h2>${id ? 'Modifier l’activité' : 'Nouvelle activité'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
-    <form data-f="saveAct"><input type="hidden" name="id" value="${id||''}">
-      <label>Nom</label><input name="nom" value="${esc(a.nom)}" required>
-      <div class="grid2">
-        <div><label>Catégorie</label><input name="categorie" list="cats" value="${esc(a.categorie)}" required><datalist id="cats">${CATEGORIES.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-        <div><label>Niveau minimum</label><select name="niveauMin">${opts(NIVEAUX, a.niveauMin)}</select></div>
-        <div><label>Durée indicative (min)</label><input type="number" name="dureeMin" min="0" value="${esc(a.dureeMin)}"></div>
-      </div>
-      <label>Description / objectifs</label><textarea name="description">${esc(a.description)}</textarea>
-      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delAct" data-id="${id}">Supprimer</button>` : ''}<span class="sp"></span>
-        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
-    </form>`);
-}
-
-function adminSettings(){
-  const st = DB.settings;
-  return `<div class="card"><h3>Club</h3><form data-f="saveSettings">
-      <label>Nom affiché</label><input name="clubName" value="${esc(st.clubName||'')}" placeholder="Palanquée">
-      <div class="grid2">
-        <div><label>Élèves max par moniteur</label><input type="number" name="ratio" min="1" max="12" value="${esc(st.ratio||4)}"></div>
-        <div><label>Clôture des inscriptions (h avant)</label><input type="number" name="closeH" min="0" value="${esc(st.closeH||0)}"></div>
-      </div>
-      <label class="inline mt"><input type="checkbox" name="blockCertif" ${st.blockCertif !== false ? 'checked' : ''}> Refuser l'inscription en ligne si le certificat médical est expiré</label>
-      <div class="row mt"><button class="btn p">Enregistrer</button></div></form></div>
-    <div class="card"><h3>Code administrateur</h3><form data-f="changeAdmin">
-      <div class="grid2"><div><label>Nouveau code</label><input type="password" name="a" minlength="4" required></div>
-      <div><label>Confirmer</label><input type="password" name="b" minlength="4" required></div></div>
-      <div class="row mt"><button class="btn p">Changer le code</button></div></form></div>
-    ${backupCard()}
-    <div class="card"><button type="button" class="btn" data-a="lock">Verrouiller le mode admin</button></div>`;
-}
-
-function backupCard(){
-  const lb = DB.settings.lastBackup;
-  const c = k => Object.keys(DB[k]).length;
-  return `<div class="card"><h3>Sauvegarde et restauration</h3>
-    <div class="stats"><div><b>${c('people')}</b><span class="muted">personnes</span></div><div><b>${c('sessions')}</b><span class="muted">séances</span></div><div><b>${c('activities')}</b><span class="muted">activités</span></div></div>
-    <p class="muted">${lb ? 'Dernière sauvegarde : ' + new Date(lb).toLocaleString('fr-FR', {dateStyle:'long', timeStyle:'short'}) : 'Aucune sauvegarde enregistrée.'}</p>
-    <div class="row"><button type="button" class="btn p" data-a="exportData">Télécharger une sauvegarde</button>
-      <label class="btn" style="margin:0;color:var(--ink)">Restaurer un fichier…<input type="file" id="importFile" accept=".json,application/json" hidden></label></div>
-    <p class="muted mt">Le fichier JSON contient personnes, séances, activités et réglages (jamais le code admin). Range-le hors du navigateur, sur ton cloud par exemple.</p></div>
-    <div class="card muted">Palanquée v${APP_VERSION} · ${backend.mode === 'firebase' ? 'Base Firebase : ' + esc(FIREBASE_CONFIG.projectId) : 'Mode démo (navigateur)'}</div>`;
-}
-
-/* ---------- PARTICIPANT ---------- */
-function viewParticipant(){
-  if (!loaded.people || !loaded.sessions) return `<div class="card muted">Chargement…</div>`;
-  const me = S.me && DB.people[S.me];
-  if (!me) return S.signup ? signupForm() : loginForm();
-  const c = certif(me);
-  let html = `<div class="card"><div class="row"><div><b>Bonjour ${esc(me.prenom||'')}</b>
-      <div class="muted">${me.role === 'moniteur' ? 'Moniteur' : 'Élève'} · ${esc(me.niveau||'?')} · <span class="dot ${c.cls}"></span>${esc(c.txt)}</div></div>
-      <span class="sp"></span><button type="button" class="btn sm" data-a="logout">Changer d'utilisateur</button></div></div>`;
-  if (me.statut === 'en_attente') return html + `<div class="card">Ton compte attend la validation d'un administrateur. Tu pourras t'inscrire aux séances dès qu'il sera validé.</div>`;
-  if (me.statut === 'inactif') return html + `<div class="card">Ton compte est désactivé. Contacte le club.</div>`;
-  const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
-  const all = sessionsSorted();
-  const hist = all.filter(s => isPast(s) && (s[role]||[]).includes(me.id)).reverse();
-  const upcoming = all.filter(s => !isPast(s) && (s.inscriptionsOuvertes || (s[role]||[]).includes(me.id)));
-  html += `<div class="tabs"><button type="button" class="${S.ptab==='avenir'?'on':''}" data-a="ptab" data-v="avenir">À venir (${upcoming.length})</button>
-    <button type="button" class="${S.ptab==='historique'?'on':''}" data-a="ptab" data-v="historique">Mon historique (${hist.length})</button></div>`;
-  const list = S.ptab === 'avenir' ? upcoming : hist;
-  return html + (list.length ? list.map(s => sessionCardP(s, me, role)).join('') :
-    `<div class="card muted">${S.ptab === 'avenir' ? 'Aucune séance ouverte pour le moment.' : 'Aucune séance passée.'}</div>`);
-}
-
-function sessionCardP(s, me, role){
-  const inIt = (s[role]||[]).includes(me.id);
-  const n = (s.eleves||[]).length, cap = Number(s.capaciteEleves) || 0;
-  const left = cap ? cap - n : null;
-  const mon = (s.moniteurs||[]).map(id => fullName(DB.people[id]));
-  const st = regState(s);
-  let btn = '';
-  if (!isPast(s)) {
-    if (inIt) btn = st.open ? `<button type="button" class="btn d" data-a="unreg" data-id="${s.id}">Se désinscrire</button>`
-                            : `<span class="muted">Désinscription close : préviens directement ton moniteur.</span>`;
-    else if (!st.open) btn = `<span class="muted">${st.why}</span>`;
-    else if (role === 'eleves' && left !== null && left <= 0) btn = '<span class="badge bad">Complet</span>';
-    else btn = `<button type="button" class="btn p" data-a="reg" data-id="${s.id}">${role === 'moniteurs' ? 'Encadrer cette séance' : "M'inscrire"}</button>`;
-  }
-  const req = progMaxLevel(s);
-  const lvlNote = role === 'eleves' && req > lvl(me.niveau) ? `<div class="mt"><span class="badge warn">Certains exercices sont prévus à partir du niveau ${NIVEAUX[req]}</span></div>` : '';
-  const elList = role === 'moniteurs' ? `<div class="muted">Élèves : ${(s.eleves||[]).length ? (s.eleves||[]).map(id => { const p = DB.people[id]; return p ? `${esc(fullName(p))} (${esc(p.niveau||'?')})` : '?'; }).join(', ') : 'aucun pour l’instant'}</div>` : '';
-  return `<div class="card ${inIt ? 'mine' : ''}">${sessionHead(s)}
-    <div class="mt">${inIt ? `<span class="badge ok">${role === 'moniteurs' ? 'Tu encadres' : 'Tu es inscrit'}</span> ` : ''}
-      <span class="muted">Moniteur(s) : ${mon.length ? esc(mon.join(', ')) : 'à définir'} · ${cap ? `${Math.max(0,left)} place(s) sur ${cap}` : `${n} élève(s)`}</span></div>
-    ${elList}${lvlNote}
-    <details class="mt" ${inIt ? 'open' : ''}><summary>Programme</summary>${programmeHtml(s)}</details>
-    ${s.notes ? `<div class="muted mt">${esc(s.notes)}</div>` : ''}
-    ${btn ? `<div class="row mt">${btn}</div>` : ''}</div>`;
-}
-
-function pinLabel(id){
-  const p = DB.people[id];
-  return p && !p.pinHash ? 'Première connexion : choisis ton PIN (4 chiffres min.)' : 'PIN';
-}
-
-function loginForm(){
-  const list = people().filter(p => p.statut !== 'inactif');
-  const first = S.loginId && DB.people[S.loginId] && !DB.people[S.loginId].pinHash;
+/* ---------- AUTHENTIFICATION ---------- */
+function authView(){
+  const m = S.authMode;
+  const links = `<p class="muted mt">
+    ${m !== 'login' ? '<a href="#" data-a="authMode" data-v="login">J’ai déjà un mot de passe</a><br>' : ''}
+    ${m !== 'signup' ? '<a href="#" data-a="authMode" data-v="signup">Première connexion : créer mon mot de passe</a><br>' : ''}
+    ${m !== 'reset' ? '<a href="#" data-a="authMode" data-v="reset">Mot de passe oublié</a>' : ''}</p>`;
+  if (m === 'signup') return `<div class="card narrow"><h2>Première connexion</h2>
+    <p class="muted">Utilise l’adresse e-mail que tu as donnée au responsable de la formation. Un e-mail de confirmation te sera envoyé.</p>
+    <form data-f="signup"><label>E-mail</label><input type="email" name="email" required autocomplete="email">
+      <label>Mot de passe (6 caractères min.)</label><input type="password" name="p" required minlength="6" autocomplete="new-password">
+      <label>Confirmer</label><input type="password" name="p2" required minlength="6" autocomplete="new-password">
+      <div class="row mt"><button class="btn p">Créer mon accès</button></div></form>${links}</div>`;
+  if (m === 'reset') return `<div class="card narrow"><h2>Mot de passe oublié</h2>
+    <form data-f="reset"><label>E-mail</label><input type="email" name="email" required autocomplete="email">
+      <div class="row mt"><button class="btn p">Recevoir un lien de réinitialisation</button></div></form>${links}</div>`;
   return `<div class="card narrow"><h2>Connexion</h2>
-    <form data-f="login">
-      <label>Qui es-tu ?</label>
-      <select name="id" id="loginSel" required><option value="">— Choisir —</option>
-        ${list.map(p => `<option value="${p.id}" ${S.loginId===p.id?'selected':''}>${esc(fullName(p))}${p.role === 'moniteur' ? ' (moniteur)' : ''}</option>`).join('')}</select>
-      <label id="pinLbl">${pinLabel(S.loginId)}</label>
-      <input type="password" name="pin" inputmode="numeric" required minlength="4" autocomplete="current-password">
-      <div id="pin2wrap" ${first ? '' : 'hidden'}><label>Confirme ton PIN</label><input type="password" name="pin2" inputmode="numeric"></div>
-      <div class="row mt"><button class="btn p">Se connecter</button></div>
-    </form>
-    <p class="muted mt">Pas dans la liste ? <a href="#" data-a="signup">Demander la création de ton compte</a></p></div>`;
+    <form data-f="login"><label>E-mail</label><input type="email" name="email" required autocomplete="email">
+      <label>Mot de passe</label><input type="password" name="p" required autocomplete="current-password">
+      <div class="row mt"><button class="btn p">Se connecter</button></div></form>${links}</div>`;
+}
+function verifyView(){
+  return `<div class="card narrow"><h2>Confirme ton adresse</h2>
+    <p>Un e-mail de confirmation a été envoyé à <b>${esc(S.user.email)}</b>. Clique sur le lien qu’il contient (pense à regarder dans les spams), puis reviens ici.</p>
+    <div class="row mt"><button type="button" class="btn p" data-a="verified">C’est fait</button><button type="button" class="btn" data-a="resend">Renvoyer l’e-mail</button></div></div>`;
+}
+function noAccessView(){
+  const boot = S.bootstrapExists === false ? `<div class="card narrow"><h3>Premier lancement</h3>
+    <p class="muted">Aucun responsable de formation n’est encore enregistré. Si c’est toi, crée ton profil : tu pourras ensuite importer le fichier Excel et ajouter les moniteurs.</p>
+    <form data-f="bootstrap"><div class="grid2"><div><label>Prénom</label><input name="prenom" required></div><div><label>Nom</label><input name="nom" required></div></div>
+    <div class="row mt"><button class="btn p">Devenir responsable de la formation</button></div></form></div>` : '';
+  return `<div class="card narrow"><h2>Accès non autorisé</h2>
+    <p>L’adresse <b>${esc(S.user.email)}</b> n’est pas enregistrée comme moniteur. Demande au responsable de la formation de l’ajouter dans Gestion &gt; Moniteurs, puis reconnecte-toi.</p>
+    <div class="row mt"><button type="button" class="btn" data-a="recheck">Réessayer</button></div></div>${boot}`;
 }
 
-function signupForm(){
-  return `<div class="card narrow"><h2>Créer mon compte</h2>
-    <p class="muted">Ta demande sera validée par un administrateur avant que tu puisses t'inscrire aux séances.</p>
-    <form data-f="signup">
-      <div class="grid2">
-        <div><label>Prénom</label><input name="prenom" required></div>
-        <div><label>Nom</label><input name="nom" required></div>
-        <div><label>Je suis</label><select name="role"><option value="eleve">Élève</option><option value="moniteur">Moniteur</option></select></div>
-        <div><label>Niveau actuel</label><select name="niveau">${opts(NIVEAUX,'Débutant')}</select></div>
-      </div>
-      <label>E-mail</label><input type="email" name="email">
-      <label>Téléphone</label><input type="tel" name="tel">
-      <label>Certificat médical valable jusqu'au</label><input type="date" name="certifFin">
-      <div class="grid2">
-        <div><label>PIN (4 chiffres min.)</label><input type="password" name="pin" inputmode="numeric" minlength="4" required autocomplete="new-password"></div>
-        <div><label>Confirmer</label><input type="password" name="pin2" inputmode="numeric" minlength="4" required></div>
-      </div>
-      <div class="row mt"><button type="button" class="btn" data-a="signupCancel">Retour</button><span class="sp"></span><button class="btn p">Envoyer la demande</button></div>
-    </form></div>`;
+/* ---------- FICHES ---------- */
+function draftKey(){ return 'plq2_draft_' + (S.user ? S.user.email : ''); }
+function saveDraft(){ try { localStorage.setItem(draftKey(), JSON.stringify(S.fiche)); } catch (e) {} }
+function readDraft(){ try { return JSON.parse(localStorage.getItem(draftKey())); } catch (e) { return null; } }
+function dropDraft(){ try { localStorage.removeItem(draftKey()); } catch (e) {} }
+
+function tabFiches(){
+  const all = isResp() && S.ficheScope === 'toutes';
+  const list = Object.values(DB.fiches).filter(f => all || f.moniteurId === myId()).sort(ficheSort).reverse();
+  const draft = readDraft();
+  let html = `<div class="row mb"><button type="button" class="btn p" data-a="newFiche">+ Nouvelle fiche de séance</button><span class="sp"></span>
+    ${isResp() ? seg('ficheScope', [['miens', 'Mes fiches'], ['toutes', 'Toutes']], S.ficheScope) : ''}</div>`;
+  if (draft) html += `<div class="card" style="border-color:#efd48b;background:#fffaf0"><div class="row"><div><b>Fiche non enregistrée</b>
+      <div class="muted">${esc(seanceLabel(draft.seanceKey))} · ${fmtDate(draft.date)} · ${(draft.eleves || []).length} élève(s)</div></div><span class="sp"></span>
+      <button type="button" class="btn sm" data-a="dropDraft">Abandonner</button><button type="button" class="btn sm p" data-a="resumeDraft">Reprendre</button></div></div>`;
+  if (!comps().length) html += `<div class="card muted">Le référentiel de compétences est vide. ${isResp() ? 'Importe le fichier Excel de suivi dans Gestion &gt; Données.' : 'Le responsable de la formation doit d’abord l’importer.'}</div>`;
+  if (!list.length) return html + '<div class="card muted">Aucune fiche pour l’instant.</div>';
+  return html + list.map(f => {
+    const nbEv = Object.values(f.evals || {}).reduce((n, ev) => n + Object.values(ev).filter(x => x.niveau).length, 0);
+    return `<div class="card tight"><div class="row"><div>
+      <b>${esc(seanceLabel(f.seanceKey))}</b> <span class="muted">· ${fmtDate(f.date)} · ${CRENEAUX[f.creneau] || ''}</span>
+      ${all ? `<div class="muted">Moniteur : ${esc(monName(f.moniteurId))}</div>` : ''}
+      <div class="muted">${(f.eleves || []).map(id => esc(personName(DB.eleves[id]))).join(', ') || 'Aucun élève'}</div>
+      <div class="muted">${(f.competences || []).length} compétence(s) · ${nbEv} évaluation(s)</div></div><span class="sp"></span>
+      ${(isResp() || f.moniteurId === myId()) ? `<button type="button" class="btn sm" data-a="editFiche" data-id="${f.id}">Modifier</button>` : ''}</div></div>`;
+  }).join('');
+}
+
+function nextSeanceKey(){
+  const all = Object.values(DB.fiches).sort(ficheSort);
+  const last = all[all.length - 1], keys = seances().map(s => s.key);
+  if (!last) return keys[0];
+  if (last.date === today()) return last.seanceKey;
+  const i = keys.indexOf(last.seanceKey);
+  return keys[Math.min(i + 1, keys.length - 1)] || keys[0];
+}
+function newFiche(){
+  S.fiche = {id: null, date: today(), seanceKey: nextSeanceKey(), creneau: 'FULL', moniteurId: myId(), mode: 'programme', eleves: [], competences: [], evals: {}, commentaires: {}};
+  S.fiche.competences = progComps(S.fiche.seanceKey);
+  S.showCm = {}; S.view = 'fiche'; saveDraft(); render(); scrollTo(0, 0);
+}
+function ficheRows(){
+  const f = S.fiche;
+  const base = f.mode === 'programme' ? progComps(f.seanceKey) : [];
+  return [...base, ...f.competences.filter(c => !base.includes(c))];
+}
+const overlap = (a, b) => a === 'FULL' || b === 'FULL' || a === b;
+function takenBy(){
+  const f = S.fiche, m = {};
+  for (const o of Object.values(DB.fiches)) {
+    if (o.id === f.id || o.moniteurId === f.moniteurId || o.date !== f.date || o.seanceKey !== f.seanceKey || !overlap(o.creneau, f.creneau)) continue;
+    for (const e of o.eleves || []) (m[e] = m[e] || []).push((DB.moniteurs[o.moniteurId] || {}).initiales || '?');
+  }
+  return m;
+}
+function compOptions(exclude, first){
+  return `<option value="">${first}</option>` + groupedComps(comps().filter(c => !exclude.includes(c.id)))
+    .map(g => `<optgroup label="${esc(g.g)}">${g.items.map(c => `<option value="${c.id}">${esc(compName(c))}</option>`).join('')}</optgroup>`).join('');
+}
+
+function ficheView(){
+  const f = S.fiche, taken = takenBy(), rows = ficheRows();
+  const sel = comps().filter(c => f.competences.includes(c.id));
+  const els = eleves().concat(f.eleves.filter(id => DB.eleves[id] && DB.eleves[id].actif === false).map(id => DB.eleves[id]));
+  const theo = (prog().theorie || {})[f.seanceKey];
+  return `<div class="row mb"><button type="button" class="btn sm" data-a="closeFiche">← Retour</button><h2>${f.id ? 'Modifier la fiche' : 'Nouvelle fiche de séance'}</h2></div>
+  <div class="card">
+    <div class="muted">Moniteur</div><b>${esc(monName(f.moniteurId))}</b>
+    <div class="grid2">
+      <div><label>Date</label><input type="date" id="fDate" value="${esc(f.date)}"></div>
+      <div><label>Séance</label><select id="fSeance">${seances().map(s => `<option value="${s.key}" ${s.key === f.seanceKey ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></div>
+    </div>
+    <label>Créneau piscine</label>${seg('fCren', Object.entries(CRENEAUX), f.creneau)}
+  </div>
+  <div class="card"><h3>Élèves pris en charge (${f.eleves.length})</h3>
+    <div>${els.map(e => `<button type="button" class="tchip ${f.eleves.includes(e.id) ? 'on' : ''}" data-a="fEleve" data-id="${e.id}">${esc(personName(e))}${taken[e.id] ? ` <small>· ${esc(taken[e.id].join(', '))}</small>` : ''}</button>`).join('') || '<span class="muted">Aucun élève enregistré.</span>'}</div>
+    ${Object.keys(taken).length ? '<p class="muted">Les initiales signalent un élève déjà pris en charge par un autre moniteur sur ce créneau.</p>' : ''}
+  </div>
+  <div class="card"><h3>Compétences testées (${f.competences.length})</h3>
+    ${seg('fMode', [['programme', 'Séance du programme'], ['libre', 'Séance personnalisée']], f.mode)}
+    ${theo ? `<p class="muted">Théorie prévue : ${esc(theo)}</p>` : ''}
+    <div class="mt">${rows.length ? rows.map(cid => { const c = DB.competences[cid]; const cons = consigne(cid, f.seanceKey);
+      return `<label class="crow"><input type="checkbox" class="fcomp" data-id="${cid}" ${f.competences.includes(cid) ? 'checked' : ''}>
+        <div><b>${esc(compName(c))}</b> <span class="muted">· ${esc(gTitle(c))}</span>${cons ? `<div class="muted pre">${esc(cons)}</div>` : ''}</div></label>`; }).join('')
+      : `<p class="muted">${f.mode === 'programme' ? 'Rien n’est prévu au programme pour cette séance.' : 'Ajoute les compétences travaillées.'}</p>`}</div>
+    <div class="row nowrap mt"><select id="fAdd">${compOptions(rows, '+ Ajouter une compétence…')}</select><button type="button" class="btn" data-a="fAddComp">Ajouter</button></div>
+  </div>
+  <div class="card"><h3>Évaluation</h3>
+    <div class="legend mb">${LV_KEYS.map(k => `${lvTag(k)} ${LV[k].label}`).join(' · ')} · ✎ commentaire. Un second appui sur un niveau l’efface.</div>
+    ${!f.eleves.length || !sel.length ? '<p class="muted">Choisis au moins un élève et une compétence.</p>' : f.eleves.map(eid => {
+      const ev = f.evals[eid] || {}, done = sel.filter(c => (ev[c.id] || {}).niveau).length;
+      return `<div class="evcard"><div class="row"><b>${esc(personName(DB.eleves[eid]))}</b><span class="sp"></span><span class="muted" id="cnt-${eid}">${done}/${sel.length}</span></div>
+        ${sel.map(c => { const x = ev[c.id] || {}; const open = x.comment || S.showCm[eid + '|' + c.id];
+          return `<div class="evrow"><div class="evname">${esc(compName(c))}</div><div class="lvbtns">
+            ${LV_KEYS.map(k => `<button type="button" class="lvb ${LV[k].cls} ${x.niveau === k ? 'on' : ''}" data-a="lv" data-e="${eid}" data-c="${c.id}" data-v="${k}" title="${esc(LV[k].label)}">${k}</button>`).join('')}
+            <button type="button" class="lvb cm ${x.comment ? 'has' : ''}" data-a="cm" data-e="${eid}" data-c="${c.id}" title="Commentaire sur cette compétence">✎</button></div>
+            ${open ? `<input class="fcm" id="cm-${eid}-${c.id}" data-e="${eid}" data-c="${c.id}" value="${esc(x.comment || '')}" placeholder="Commentaire sur cette compétence">` : ''}</div>`; }).join('')}
+        <label>Commentaire général sur la séance</label>
+        <textarea class="fgc" data-e="${eid}" placeholder="Difficulté rencontrée, ressenti, point à revoir…">${esc(f.commentaires[eid] || '')}</textarea></div>`;
+    }).join('')}
+  </div>
+  <div class="row mt">${f.id ? '<button type="button" class="btn d" data-a="delFiche">Supprimer la fiche</button>' : ''}<span class="sp"></span>
+    <button type="button" class="btn" data-a="closeFiche">Annuler</button><button type="button" class="btn p" data-a="saveFiche">Enregistrer la fiche</button></div>`;
+}
+
+/* ---------- ÉLÈVES ---------- */
+function tabEleves(){
+  return `<div class="row mb"><input id="q" placeholder="Rechercher un élève…" value="${esc(S.q)}" style="flex:1;min-width:180px">
+    <button type="button" class="btn" data-a="exportXlsx">Exporter le suivi (Excel)</button></div>
+    <div id="elist">${elevesListHtml()}</div>`;
+}
+function elevesListHtml(){
+  const q = norm(S.q), total = comps().length, nbS = seances().length;
+  const list = eleves().filter(e => !q || norm(personName(e)).includes(q));
+  if (!list.length) return `<div class="card muted">${Object.keys(DB.eleves).length ? 'Aucun résultat.' : 'Aucun élève enregistré.'}</div>`;
+  return list.map(e => {
+    const b = bilan(e.id), l = Object.values(b.latest);
+    const n = k => l.filter(x => x.niveau === k).length;
+    const ok = n('A') + n('M'), pct = total ? Math.round(ok / total * 100) : 0;
+    return `<div class="card tight" data-a="openEleve" data-id="${e.id}" style="cursor:pointer"><div class="row"><div style="flex:1;min-width:200px">
+      <b>${esc(personName(e))}</b> <span class="muted">${esc(e.initiales || '')}</span>
+      <div class="muted">Présent à ${b.presence.size}/${nbS} séances${b.fiches.length ? ' · dernière : ' + esc(seanceLabel(b.fiches[b.fiches.length - 1].seanceKey)) : ''}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div></div>
+      <div class="row">${lvTag('ECA')} ${n('ECA')} ${lvTag('A')} ${n('A')} ${lvTag('M')} ${n('M')}</div></div>
+      <div class="muted">${ok}/${total} compétences acquises ou maîtrisées</div></div>`;
+  }).join('');
+}
+
+function eleveView(eid){
+  const e = DB.eleves[eid], b = bilan(eid), C = comps(), SE = seances();
+  const l = Object.values(b.latest), n = k => l.filter(x => x.niveau === k).length;
+  const ok = n('A') + n('M'), pct = C.length ? Math.round(ok / C.length * 100) : 0;
+  const entryLine = it => `<div class="hist">${lvTag(it.niveau)} <b>${esc(seanceLabel(it.f.seanceKey))}</b> · ${fmtDate(it.f.date)} · ${CRENEAUX[it.f.creneau] || ''}<br>
+    <span class="muted">Moniteur : ${esc(monName(it.f.moniteurId))}</span>${it.comment ? `<div class="pre">${esc(it.comment)}</div>` : ''}</div>`;
+  const compsHtml = groupedComps(C).map(g => `<h3>${esc(g.g)}</h3>` + g.items.map(c => {
+    const its = b.entries.filter(x => x.cid === c.id), last = b.latest[c.id];
+    const chips = SE.filter(s => b.grid[c.id] && b.grid[c.id][s.key]).map(s => { const it = b.grid[c.id][s.key];
+      return `<span class="lv ${LV[it.niveau].cls}" title="${esc(seanceLabel(s.key) + ' · ' + monName(it.f.moniteurId))}">${esc(seanceCourt(s.key))} ${it.niveau}${it.comment ? ' ✎' : ''}</span>`; }).join(' ');
+    return `<div class="comp"><div class="row"><div style="flex:1;min-width:180px">${esc(compName(c))}</div>${lvTag(last && last.niveau)}</div>
+      ${chips ? `<div class="mt">${chips}</div>` : ''}
+      ${its.length ? `<details class="mt"><summary>Détail (${its.length})</summary>${its.slice().reverse().map(entryLine).join('')}</details>` : ''}</div>`;
+  }).join('')).join('');
+  const seancesHtml = b.fiches.slice().reverse().map(f => {
+    const ev = (f.evals || {})[eid] || {}, g = (f.commentaires || {})[eid];
+    const lines = (f.competences || []).filter(cid => ev[cid] && (ev[cid].niveau || ev[cid].comment))
+      .map(cid => `<div class="row" style="align-items:flex-start;padding:4px 0">${lvTag(ev[cid].niveau)}<div style="flex:1">${esc(compName(DB.competences[cid]))}${ev[cid].comment ? `<div class="muted pre">${esc(ev[cid].comment)}</div>` : ''}</div></div>`).join('');
+    return `<div class="card tight"><b>${esc(seanceLabel(f.seanceKey))}</b> <span class="muted">· ${fmtDate(f.date)} · ${CRENEAUX[f.creneau] || ''}</span>
+      <div class="muted">Moniteur : <b>${esc(monName(f.moniteurId))}</b></div>
+      <div class="mt">${lines || '<span class="muted">Présent, aucune évaluation saisie.</span>'}</div>
+      ${g ? `<div class="hist"><b>Commentaire général</b><div class="pre">${esc(g)}</div></div>` : ''}</div>`;
+  }).join('');
+  return `<div class="row mb"><button type="button" class="btn sm" data-a="closeView">← Élèves</button><h2>${esc(personName(e))}</h2></div>
+    <div class="card"><div class="stats"><div><b>${b.presence.size}/${SE.length}</b><span class="muted">séances</span></div>
+      <div><b>${ok}/${C.length}</b><span class="muted">acquises ou maîtrisées</span></div><div><b>${n('ECA')}</b><span class="muted">en cours</span></div></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="muted mt">Présent : ${SE.filter(s => b.presence.has(s.key)).map(s => esc(seanceCourt(s.key))).join(', ') || 'aucune séance'}</div></div>
+    <div class="card"><h3>Compétences</h3><div class="legend">Dernier niveau à droite. Pastilles : niveau par séance, ✎ = commentaire du moniteur.</div>${compsHtml || '<p class="muted">Référentiel vide.</p>'}</div>
+    <h3>Séances</h3>${seancesHtml || '<div class="card muted">Aucune séance enregistrée pour cet élève.</div>'}`;
+}
+
+/* ---------- PRÉSENCE ---------- */
+function tabPresence(){
+  const SE = seances();
+  const table = (title, people, pres) => `<div class="tbl mb"><table><thead><tr><th>${title}</th>${SE.map(s => `<th title="${esc(s.label)}">${esc(seanceCourt(s.key))}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+    ${people.map(p => { const set = pres(p.id); return `<tr><td>${esc(personName(p))}</td>${SE.map(s => `<td>${set.has(s.key) ? '✕' : ''}</td>`).join('')}<td><b>${set.size}</b></td></tr>`; }).join('')
+      || `<tr><td colspan="${SE.length + 2}" class="muted">Personne.</td></tr>`}</tbody></table></div>`;
+  return `<p class="muted">Une croix dès qu’une personne apparaît sur une fiche de la séance, quel que soit le créneau.</p>
+    ${table('Élèves', eleves(), id => bilan(id).presence)}${table('Moniteurs', moniteurs(), presenceMoniteur)}`;
+}
+
+/* ---------- PROGRAMME ---------- */
+function tabProgramme(){
+  const head = `<div class="row mb">${seg('progMode', [['seance', 'Par séance'], ['ref', 'Référentiel']], S.progMode)}<span class="sp"></span>
+    ${isResp() && S.progMode === 'ref' ? '<button type="button" class="btn p" data-a="newComp">+ Compétence</button>' : ''}</div>`;
+  if (S.progMode === 'ref') {
+    const C = comps();
+    if (!C.length) return head + '<div class="card muted">Référentiel vide.</div>';
+    return head + groupedComps(C).map(g => `<div class="card"><h3>${esc(g.g)}</h3>${g.items.map(c => `<div class="comp"><div class="row"><b style="flex:1">${esc(compName(c))}</b><span class="chip">${esc(c.type || '')}</span>
+      ${isResp() ? `<button type="button" class="btn sm" data-a="editComp" data-id="${c.id}">Modifier</button>` : ''}</div>
+      <details class="mt"><summary>Critères</summary>
+        ${[['MFT', c.mft], ['Action', c.action], ['Critères de réalisation', c.cr], ['Critères d’évaluation', c.ce]].filter(x => x[1]).map(([t, v]) => `<div class="mt"><b class="muted">${t}</b><div class="pre">${esc(v)}</div></div>`).join('')}
+      </details></div>`).join('')}</div>`).join('');
+  }
+  const SE = seances();
+  const key = SE.some(s => s.key === S.progKey) ? S.progKey : SE[0].key;
+  const list = comps().filter(c => consigne(c.id, key));
+  const theo = (prog().theorie || {})[key] || '';
+  return head + `<div class="mb">${SE.map(s => `<button type="button" class="tchip ${s.key === key ? 'on' : ''}" data-a="progKey" data-v="${s.key}">${esc(s.label)}</button>`).join('')}</div>
+    <div class="card"><h3>${esc(seanceLabel(key))}</h3>
+      ${isResp() ? `<label>Théorie</label><div class="row nowrap"><input id="progTheo" value="${esc(theo)}" placeholder="Thème du cours théorique"><button type="button" class="btn" data-a="saveTheo" data-k="${key}">OK</button></div>`
+        : theo ? `<p><b>Théorie :</b> ${esc(theo)}</p>` : ''}
+      ${list.length ? groupedComps(list).map(g => `<h3>${esc(g.g)}</h3>` + g.items.map(c => `<div class="comp"><div class="row" style="align-items:flex-start"><div style="flex:1"><b>${esc(compName(c))}</b><div class="muted pre">${esc(consigne(c.id, key))}</div></div>
+        ${isResp() ? `<button type="button" class="btn sm" data-a="editCell" data-id="${c.id}" data-k="${key}">Modifier</button><button type="button" class="btn sm d" data-a="delCell" data-id="${c.id}" data-k="${key}">✕</button>` : ''}</div></div>`).join('')).join('')
+        : '<p class="muted">Aucune compétence prévue pour cette séance.</p>'}
+      ${isResp() ? `<h3>Ajouter au programme</h3><select id="cellComp">${compOptions(list.map(c => c.id), 'Choisir une compétence…')}</select>
+        <textarea id="cellText" class="mt" placeholder="Consigne pour cette séance (ex. : Monter son matériel seul, tps < 5 min)"></textarea>
+        <div class="row mt"><button type="button" class="btn p" data-a="addCell" data-k="${key}">Ajouter</button></div>` : ''}
+    </div>`;
+}
+async function saveProg(patch){
+  const p = prog();
+  await backend.set('config', 'programme', {seances: seances(), cells: p.cells || {}, theorie: p.theorie || {}, ...patch});
+}
+
+/* ---------- GESTION (responsable) ---------- */
+function tabGestion(){
+  const head = `<div class="mb">${seg('gTab', [['eleves', 'Élèves'], ['moniteurs', 'Moniteurs'], ['seances', 'Séances'], ['donnees', 'Données']], S.gTab)}</div>`;
+  if (S.gTab === 'eleves') {
+    const list = eleves(true);
+    return head + `<div class="row mb"><button type="button" class="btn p" data-a="editEleve">+ Ajouter un élève</button><span class="muted">${list.filter(e => e.actif !== false).length} actif(s)</span></div>`
+      + (list.map(e => `<div class="card tight"><div class="row"><div><b>${esc(personName(e))}</b> <span class="muted">${esc(e.initiales || '')}</span>${e.actif === false ? ' <span class="badge">Inactif</span>' : ''}
+        <div class="muted">${esc([e.email, e.tel].filter(Boolean).join(' · '))}</div></div><span class="sp"></span>
+        <button type="button" class="btn sm" data-a="editEleve" data-id="${e.id}">Modifier</button></div></div>`).join('') || '<div class="card muted">Aucun élève.</div>');
+  }
+  if (S.gTab === 'moniteurs') {
+    const list = moniteurs(true);
+    const roleOf = m => m.email && DB.acces[m.email] ? DB.acces[m.email].role : null;
+    return head + `<p class="muted">Un moniteur peut se connecter dès que son e-mail est renseigné ici : il crée lui-même son mot de passe via « Première connexion ».</p>
+      <div class="row mb"><button type="button" class="btn p" data-a="editMoniteur">+ Ajouter un moniteur</button></div>`
+      + (list.map(m => { const r = roleOf(m); return `<div class="card tight"><div class="row"><div><b>${esc(personName(m))}</b> <span class="muted">${esc(m.initiales || '')}</span>
+        ${r === 'responsable' ? ' <span class="badge ok">Responsable</span>' : ''}${m.actif === false ? ' <span class="badge">Inactif</span>' : ''}
+        <div class="muted">${m.email ? esc(m.email) + (r ? '' : ' · accès désactivé') : '<span style="color:var(--warn)">E-mail manquant : pas d’accès à l’appli</span>'}</div></div><span class="sp"></span>
+        <button type="button" class="btn sm" data-a="editMoniteur" data-id="${m.id}">Modifier</button></div></div>`; }).join('') || '<div class="card muted">Aucun moniteur.</div>');
+  }
+  if (S.gTab === 'seances') {
+    const SE = seances();
+    return head + `<p class="muted">Liste et ordre des séances de la formation (colonnes du programme et de la présence).</p>`
+      + SE.map((s, i) => `<div class="card tight"><div class="row nowrap"><input class="seLabel" data-k="${s.key}" value="${esc(s.label)}">
+        <button type="button" class="btn sm" data-a="seMove" data-k="${s.key}" data-d="-1" ${i ? '' : 'disabled'}>↑</button>
+        <button type="button" class="btn sm" data-a="seMove" data-k="${s.key}" data-d="1" ${i < SE.length - 1 ? '' : 'disabled'}>↓</button>
+        <button type="button" class="btn sm d" data-a="seDel" data-k="${s.key}">✕</button></div></div>`).join('')
+      + `<form data-f="seAdd" class="row nowrap mt"><input name="label" placeholder="Nouvelle séance (ex. Séance 13)" required><button class="btn p">Ajouter</button></form>`;
+  }
+  const st = DB.config.settings || {}, c = k => Object.keys(DB[k]).length;
+  return head + `<div class="card"><h3>Formation</h3><form data-f="saveSettings" class="row nowrap"><input name="formation" value="${esc(st.formation || '')}" placeholder="Formation N1 2026-2027"><button class="btn p">OK</button></form></div>
+    <div class="card"><h3>Fichier Excel de suivi</h3>
+      <p class="muted">L’import lit l’onglet « Programme » (référentiel, consignes par séance, théorie) et l’onglet « Présence séance » (listes d’élèves et de moniteurs). Les évaluations déjà saisies ne sont pas touchées.</p>
+      <div class="row"><label class="btn" style="margin:0;color:var(--ink)">Importer un fichier Excel…<input type="file" id="xlsxFile" accept=".xlsx" hidden></label>
+      <button type="button" class="btn p" data-a="exportXlsx">Exporter le suivi pédagogique</button></div></div>
+    <div class="card"><h3>Sauvegarde et restauration</h3>
+      <div class="stats"><div><b>${c('eleves')}</b><span class="muted">élèves</span></div><div><b>${c('fiches')}</b><span class="muted">fiches</span></div><div><b>${c('competences')}</b><span class="muted">compétences</span></div></div>
+      <p class="muted">${st.lastBackup ? 'Dernière sauvegarde : ' + new Date(st.lastBackup).toLocaleString('fr-FR', {dateStyle: 'long', timeStyle: 'short'}) : 'Aucune sauvegarde enregistrée.'}</p>
+      <div class="row"><button type="button" class="btn" data-a="exportJson">Télécharger une sauvegarde (JSON)</button>
+      <label class="btn" style="margin:0;color:var(--ink)">Restaurer…<input type="file" id="jsonFile" accept=".json,application/json" hidden></label></div></div>
+    <div class="card muted">Palanquée v${APP_VERSION} · ${backend.mode === 'firebase' ? 'Firebase : ' + esc(FIREBASE_CONFIG.projectId) : 'Mode démo'}</div>`;
+}
+
+function openEleveModal(id){
+  const e = id ? DB.eleves[id] : {prenom: '', nom: '', initiales: '', email: '', tel: '', notes: '', actif: true};
+  const has = id && Object.values(DB.fiches).some(f => (f.eleves || []).includes(id));
+  openModal(`<div class="modal-head"><h2>${id ? esc(personName(e)) : 'Nouvel élève'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="saveEleve"><input type="hidden" name="id" value="${id || ''}">
+      <div class="grid2"><div><label>Prénom</label><input name="prenom" value="${esc(e.prenom)}" required></div><div><label>Nom</label><input name="nom" value="${esc(e.nom)}" required></div>
+      <div><label>Initiales</label><input name="initiales" value="${esc(e.initiales)}" placeholder="auto"></div><div><label>Téléphone</label><input name="tel" value="${esc(e.tel)}"></div></div>
+      <label>E-mail</label><input type="email" name="email" value="${esc(e.email)}">
+      <label>Notes</label><textarea name="notes">${esc(e.notes)}</textarea>
+      <label class="inline mt"><input type="checkbox" name="actif" ${e.actif !== false ? 'checked' : ''}> Élève actif (visible dans les fiches)</label>
+      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delEleve" data-id="${id}" ${has ? 'disabled title="Des fiches le concernent : décoche « actif » à la place"' : ''}>Supprimer</button>` : ''}<span class="sp"></span>
+        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div></form>`);
+}
+function openMoniteurModal(id){
+  const m = id ? DB.moniteurs[id] : {prenom: '', nom: '', initiales: '', email: '', actif: true};
+  const r = m.email && DB.acces[m.email] ? DB.acces[m.email].role : null;
+  const self = id && id === myId();
+  openModal(`<div class="modal-head"><h2>${id ? esc(personName(m)) : 'Nouveau moniteur'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="saveMoniteur"><input type="hidden" name="id" value="${id || ''}">
+      <div class="grid2"><div><label>Prénom</label><input name="prenom" value="${esc(m.prenom)}" required></div><div><label>Nom</label><input name="nom" value="${esc(m.nom)}" required></div>
+      <div><label>Initiales</label><input name="initiales" value="${esc(m.initiales)}" placeholder="auto"></div><div><label>E-mail personnel (connexion)</label><input type="email" name="email" value="${esc(m.email)}"></div></div>
+      <label class="inline mt"><input type="checkbox" name="resp" ${r === 'responsable' ? 'checked' : ''} ${self ? 'disabled' : ''}> Responsable de la formation (gestion, programme, export)</label>
+      <label class="inline"><input type="checkbox" name="actif" ${m.actif !== false ? 'checked' : ''} ${self ? 'disabled' : ''}> Actif (peut se connecter)</label>
+      ${self ? '<p class="muted">Tu ne peux pas retirer ton propre rôle ni te désactiver.</p>' : ''}
+      <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div></form>`);
+}
+function openCompModal(id){
+  const c = id ? DB.competences[id] : {aptitude: '', groupe: '', type: 'Technique', capacite: '', mft: '', action: '', cr: '', ce: '', ordre: comps().length};
+  openModal(`<div class="modal-head"><h2>${id ? 'Modifier la compétence' : 'Nouvelle compétence'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="saveComp"><input type="hidden" name="id" value="${id || ''}">
+      <label>Capacité (nom de l’exercice)</label><input name="capacite" value="${esc(c.capacite)}" required>
+      <div class="grid2"><div><label>Compétence (groupe)</label><input name="groupe" list="grps" value="${esc(gTitle(id ? c : null) === 'Autres' && !c.groupe ? '' : c.groupe)}"><datalist id="grps">${[...new Set(comps().map(x => x.groupe).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
+      <div><label>Type</label><input name="type" list="types" value="${esc(c.type)}"><datalist id="types"><option value="Technique"><option value="Comportement"><option value="Théorie"></datalist></div>
+      <div><label>Aptitude</label><input name="aptitude" value="${esc(c.aptitude)}"></div><div><label>Ordre</label><input type="number" name="ordre" value="${esc(c.ordre ?? 0)}"></div></div>
+      <label>MFT (extraits)</label><textarea name="mft">${esc(c.mft)}</textarea>
+      <label>Action</label><textarea name="action">${esc(c.action)}</textarea>
+      <label>Critères de réalisation</label><textarea name="cr">${esc(c.cr)}</textarea>
+      <label>Critères d’évaluation</label><textarea name="ce">${esc(c.ce)}</textarea>
+      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delComp" data-id="${id}">Supprimer</button>` : ''}<span class="sp"></span>
+        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div></form>`);
 }
 
 /* ================= MODALE ================= */
 function openModal(html){ $('#modal').innerHTML = `<div class="modal-bg" data-a="modalBg"><div class="modal">${html}</div></div>`; }
-function closeModal(){ $('#modal').innerHTML = ''; S.draft = null; S.restore = null; }
+function closeModal(){ $('#modal').innerHTML = ''; S.restore = null; S.importData = null; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeModal(); });
+
+/* ================= EXCEL ================= */
+let excelP;
+function loadExcel(){
+  return excelP = excelP || new Promise((res, rej) => {
+    if (window.ExcelJS) return res(window.ExcelJS);
+    const s = document.createElement('script'); s.src = EXCELJS_URL;
+    s.onload = () => res(window.ExcelJS);
+    s.onerror = () => { excelP = null; rej(new Error('Impossible de charger le module Excel (connexion réseau ?)')); };
+    document.head.appendChild(s);
+  });
+}
+function cellText(v){
+  if (v == null) return '';
+  if (v instanceof Date) return ymd(v);
+  if (typeof v === 'object') {
+    if (v.richText) return v.richText.map(t => t.text).join('').replace(/\r/g, '').trim();
+    if (v.text != null) return String(v.text).trim();
+    if (v.result != null) return String(v.result).trim();
+    return '';
+  }
+  return String(v).replace(/\r/g, '').trim();
+}
+function splitName(full){
+  const w = full.replace(/\s+/g, ' ').trim().split(' ');
+  const isUp = x => /[A-ZÀ-Ý]/.test(x) && x === x.toUpperCase();
+  const up = w.filter(isUp), lo = w.filter(x => !isUp(x));
+  if (up.length && lo.length) return {prenom: lo.join(' '), nom: up.join(' ')};
+  return {prenom: w.slice(0, -1).join(' ') || w[0], nom: w.length > 1 ? w[w.length - 1] : ''};
+}
+function parseProgramme(ws){
+  let hr = null;
+  for (let r = 1; r <= Math.min(20, ws.rowCount) && !hr; r++)
+    ws.getRow(r).eachCell((c) => { if (norm(cellText(c.value)).startsWith('capacite')) hr = r; });
+  if (!hr) throw new Error('Onglet Programme : ligne d’en-tête (Capacité…) introuvable.');
+  const head = {};
+  ws.getRow(hr).eachCell((c, col) => {
+    const t = norm(cellText(c.value));
+    if (t.startsWith('aptitude')) head.aptitude = col;
+    else if (t.startsWith('competence')) head.groupe = col;
+    else if (t.startsWith('type')) head.type = col;
+    else if (t.startsWith('capacite')) head.capacite = col;
+    else if (t.startsWith('mft')) head.mft = col;
+    else if (t.startsWith('action')) head.action = col;
+    else if (t.includes('realisation')) head.cr = col;
+    else if (t.includes("d'evaluation")) head.ce = col;
+  });
+  const startCol = Math.max(...Object.values(head)) + 1;
+  const seances = [];
+  ws.getRow(hr - 1).eachCell((c, col) => {
+    if (col < startCol) return;
+    const label = cellText(c.value).replace(/\s+/g, ' ').trim();
+    if (!label) return;
+    const m = label.match(/^s[ée]ances?\s*(\d+)/i);
+    const key = m ? 's' + m[1] : slug(label);
+    if (!seances.some(s => s.key === key)) seances.push({key, label: m ? 'Séance ' + m[1] : label, col});
+  });
+  if (!seances.length) throw new Error('Onglet Programme : aucune colonne de séance trouvée.');
+  const comps = [], theorie = {};
+  let apt = '', grp = '', ordre = 0;
+  for (let r = hr + 1; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r);
+    const g = col => col ? cellText(row.getCell(col).value) : '';
+    const cap = g(head.capacite);
+    if (!cap) {
+      let before = ''; for (let c = 1; c < startCol; c++) before += ' ' + cellText(row.getCell(c).value);
+      if (/th[ée]orie/i.test(before)) seances.forEach(s => { const t = cellText(row.getCell(s.col).value); if (t) theorie[s.key] = t; });
+      continue;
+    }
+    if (g(head.aptitude)) apt = g(head.aptitude);
+    if (g(head.groupe)) grp = g(head.groupe);
+    const cells = {};
+    seances.forEach(s => { const t = cellText(row.getCell(s.col).value); if (t) cells[s.key] = t; });
+    comps.push({aptitude: apt, groupe: grp, type: g(head.type), capacite: cap, mft: g(head.mft), action: g(head.action), cr: g(head.cr), ce: g(head.ce), ordre: ordre++, cells});
+  }
+  return {seances: seances.map(({key, label}) => ({key, label})), comps, theorie};
+}
+function parsePresence(ws){
+  const out = {eleves: [], moniteurs: []}; let mode = null;
+  for (let r = 1; r <= ws.rowCount; r++) {
+    const a = cellText(ws.getRow(r).getCell(1).value), b = cellText(ws.getRow(r).getCell(2).value);
+    if (!a) continue;
+    const n = norm(a);
+    if (n.startsWith('eleve')) { mode = 'eleves'; continue; }
+    if (n.startsWith('moniteur')) { mode = 'moniteurs'; continue; }
+    if (!mode) continue;
+    out[mode].push({...splitName(a), initiales: b});
+  }
+  return out;
+}
+async function readXlsx(file){
+  const ExcelJS = await loadExcel();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const wsP = wb.worksheets.find(w => norm(w.name).startsWith('programme'));
+  const wsR = wb.worksheets.find(w => norm(w.name).includes('presence'));
+  if (!wsP && !wsR) throw new Error('Onglets « Programme » et « Présence séance » introuvables dans ce fichier.');
+  const data = {name: file.name, prog: wsP ? parseProgramme(wsP) : null, pres: wsR ? parsePresence(wsR) : {eleves: [], moniteurs: []}};
+  S.importData = data;
+  const known = (list, arr) => arr.filter(p => !list.some(x => norm(personName(x)) === norm(personName(p)))).length;
+  const newE = known(Object.values(DB.eleves), data.pres.eleves), newM = known(Object.values(DB.moniteurs), data.pres.moniteurs);
+  openModal(`<div class="modal-head"><h2>Importer ${esc(file.name)}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="applyImport">
+      ${data.prog ? `<label class="inline"><input type="checkbox" name="prog" checked> Référentiel et programme : ${data.prog.comps.length} compétences, ${data.prog.seances.length} séances (${data.prog.seances.map(s => esc(s.label)).join(', ')})</label>
+        <p class="muted">Remplace le programme actuel. Les compétences déjà connues (même nom de capacité) gardent leur identifiant, les évaluations existantes restent liées.</p>` : '<p class="muted">Pas d’onglet Programme.</p>'}
+      <label class="inline"><input type="checkbox" name="eleves" ${newE ? 'checked' : ''}> Élèves : ${data.pres.eleves.length} dans le fichier, ${newE} nouveau(x)</label>
+      <label class="inline"><input type="checkbox" name="moniteurs" ${newM ? 'checked' : ''}> Moniteurs : ${data.pres.moniteurs.length} dans le fichier, ${newM} nouveau(x)</label>
+      <p class="muted">Les moniteurs importés n’ont pas d’e-mail : ajoute-le ensuite dans Gestion &gt; Moniteurs pour leur ouvrir l’accès.</p>
+      <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Importer</button></div></form>`);
+}
+
+function sheetName(base, used){
+  let n = base.replace(/[\\\/\?\*\[\]:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Élève';
+  let i = 2; const root = n;
+  while (used.has(n.toLowerCase())) n = root.slice(0, 27) + ' (' + i++ + ')';
+  used.add(n.toLowerCase());
+  return n;
+}
+async function exportXlsx(){
+  toast('Préparation du fichier Excel…');
+  const ExcelJS = await loadExcel();
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Palanquée'; wb.created = new Date();
+  const SE = seances(), C = comps(), formation = (DB.config.settings || {}).formation || 'Formation';
+  const line = {style: 'thin', color: {argb: 'FFC9D6E2'}};
+  const border = {top: line, left: line, bottom: line, right: line};
+  const FILL = {ECA: 'FFFDE3A7', A: 'FFCFE5F7', M: 'FFC9EBD6'};
+  const fill = argb => ({type: 'pattern', pattern: 'solid', fgColor: {argb}});
+  const styleHead = row => row.eachCell(c => { c.fill = fill('FF0B5D8A'); c.font = {bold: true, color: {argb: 'FFFFFFFF'}}; c.alignment = {wrapText: true, vertical: 'middle', horizontal: 'center'}; c.border = border; });
+  const styleBody = (row, from) => row.eachCell({includeEmpty: true}, (c, col) => { c.border = border; c.alignment = {wrapText: true, vertical: 'top', horizontal: col >= from ? 'center' : 'left'}; });
+  const ref = c => [c.aptitude || '', c.groupe || '', c.type || '', c.capacite || '', c.mft || '', c.action || '', c.cr || '', c.ce || ''];
+  const refCols = [['Aptitude', 16], ['Compétence', 26], ['Type', 12], ['Capacité', 24], ['MFT (extraits)', 30], ['Action', 30], ['Critères de réalisation (CR)', 30], ["Critères d'évaluation (CE)", 30]];
+
+  // Onglet Programme
+  const wp = wb.addWorksheet('Programme', {views: [{state: 'frozen', xSplit: 4, ySplit: 1}]});
+  wp.columns = [...refCols.map(([header, width]) => ({header, width})), ...SE.map(s => ({header: s.label, width: 24}))];
+  styleHead(wp.getRow(1));
+  C.forEach(c => styleBody(wp.addRow([...ref(c), ...SE.map(s => consigne(c.id, s.key))]), 99));
+  const theo = prog().theorie || {};
+  if (Object.keys(theo).length) { const r = wp.addRow(['', '', '', 'Théorie', '', '', '', '', ...SE.map(s => theo[s.key] || '')]); styleBody(r, 99); r.font = {italic: true}; }
+
+  // Onglet Présence séance
+  const pr = wb.addWorksheet('Présence séance', {views: [{state: 'frozen', xSplit: 2, ySplit: 1}]});
+  pr.columns = [{header: 'Élèves', width: 28}, {header: 'Initiales', width: 9}, ...SE.map(s => ({header: s.label, width: 11})), {header: 'Total', width: 8}];
+  styleHead(pr.getRow(1));
+  const presRow = (p, set) => styleBody(pr.addRow([personName(p), p.initiales || '', ...SE.map(s => set.has(s.key) ? 'X' : ''), set.size]), 3);
+  eleves(true).forEach(e => presRow(e, bilan(e.id).presence));
+  pr.addRow([]);
+  const mh = pr.addRow(['Moniteurs', 'Initiales', ...SE.map(s => s.label), 'Total']); styleHead(mh);
+  moniteurs(true).forEach(m => presRow(m, presenceMoniteur(m.id)));
+
+  // Un onglet par élève
+  const used = new Set(['programme', 'présence séance']);
+  for (const e of eleves(true)) {
+    const b = bilan(e.id);
+    const ws = wb.addWorksheet(sheetName(personName(e), used), {views: [{state: 'frozen', xSplit: 3, ySplit: 3}]});
+    ws.columns = [{width: 26}, {width: 12}, {width: 26}, {width: 26}, {width: 26}, {width: 26}, {width: 26}, ...SE.map(() => ({width: 11}))];
+    const last = 7 + SE.length;
+    const t = ws.addRow([`${personName(e)} — ${formation} — présent à ${b.presence.size} séance(s) sur ${SE.length}`]);
+    t.font = {bold: true, size: 14}; ws.mergeCells(1, 1, 1, last);
+    const lg = ws.addRow(['ECA = En cours d’acquisition · A = Acquis · M = Maîtrisé. Le moniteur et son commentaire figurent en note sur chaque cellule et dans le détail en bas de l’onglet.']);
+    lg.font = {italic: true, color: {argb: 'FF5B6F82'}}; ws.mergeCells(2, 1, 2, last);
+    styleHead(ws.addRow(['Compétence', 'Type', 'Capacité', 'MFT (extraits)', 'Action', 'Critères de réalisation (CR)', "Critères d'évaluation (CE)", ...SE.map(s => s.label)]));
+    for (const c of C) {
+      const row = ws.addRow([c.groupe || '', c.type || '', c.capacite || '', c.mft || '', c.action || '', c.cr || '', c.ce || '', ...SE.map(s => ((b.grid[c.id] || {})[s.key] || {}).niveau || '')]);
+      styleBody(row, 8);
+      SE.forEach((s, i) => {
+        const it = (b.grid[c.id] || {})[s.key]; if (!it) return;
+        const cell = row.getCell(8 + i);
+        cell.fill = fill(FILL[it.niveau]); cell.font = {bold: true};
+        cell.note = `${monName(it.f.moniteurId)} — ${fmtDateCourt(it.f.date)} (${CRENEAUX[it.f.creneau] || ''})${it.comment ? '\n' + it.comment : ''}`;
+      });
+    }
+    ws.addRow([]);
+    const dt = ws.addRow(['Détail des séances']); dt.font = {bold: true, size: 12};
+    styleHead(ws.addRow(['Séance', 'Date', 'Créneau', 'Moniteur', 'Compétence', 'Niveau', 'Commentaire']));
+    for (const f of b.fiches) {
+      const ev = (f.evals || {})[e.id] || {}, base = [seanceLabel(f.seanceKey), fmtDateCourt(f.date), CRENEAUX[f.creneau] || '', monName(f.moniteurId)];
+      let any = false;
+      for (const cid of f.competences || []) {
+        const x = ev[cid]; if (!x || (!x.niveau && !x.comment)) continue; any = true;
+        const r = ws.addRow([...base, compName(DB.competences[cid]), x.niveau ? `${x.niveau} (${LV[x.niveau].label})` : '', x.comment || '']);
+        styleBody(r, 99); if (x.niveau) r.getCell(6).fill = fill(FILL[x.niveau]);
+      }
+      const g = (f.commentaires || {})[e.id];
+      if (g) { any = true; const r = ws.addRow([...base, 'Commentaire général', '', g]); styleBody(r, 99); r.getCell(5).font = {italic: true}; }
+      if (!any) styleBody(ws.addRow([...base, 'Présent, aucune évaluation saisie', '', '']), 99);
+    }
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  download(new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), `Suivi_Peda_${slug(formation) || 'formation'}_${today()}.xlsx`);
+  toast('Fichier Excel téléchargé');
+}
+
+/* ================= SAUVEGARDE JSON ================= */
+function download(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+const stamp = () => { const d = new Date(); return `${ymd(d)}-${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`; };
+function snapshot(){
+  const data = {};
+  for (const c of COLS) data[c] = Object.fromEntries(Object.entries(DB[c]).filter(([id]) => !(c === 'config' && id === 'bootstrap')).map(([id, v]) => [id, clean(v)]));
+  return {app: 'palanquee', format: 2, version: APP_VERSION, exportedAt: new Date().toISOString(), data};
+}
+const downloadJson = (obj, name) => download(new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'}), name);
+async function readJson(file){
+  let d;
+  try { d = JSON.parse(await file.text()); } catch (e) { throw new Error('Fichier illisible : ce n’est pas un JSON valide.'); }
+  if (!d || d.app !== 'palanquee' || d.format !== 2 || !d.data) throw new Error('Ce fichier n’est pas une sauvegarde Palanquée v2.');
+  COLS.forEach(c => { if (!d.data[c] || typeof d.data[c] !== 'object') d.data[c] = {}; });
+  S.restore = d;
+  const n = c => Object.keys(d.data[c]).length, cur = c => Object.keys(DB[c]).length;
+  openModal(`<div class="modal-head"><h2>Restaurer une sauvegarde</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <p class="muted">${esc(file.name)} · ${new Date(d.exportedAt).toLocaleString('fr-FR', {dateStyle: 'long', timeStyle: 'short'})} · v${esc(d.version)}</p>
+    <div class="stats"><div><b>${n('eleves')}</b><span class="muted">élèves (${cur('eleves')} actuellement)</span></div><div><b>${n('fiches')}</b><span class="muted">fiches (${cur('fiches')})</span></div><div><b>${n('competences')}</b><span class="muted">compétences (${cur('competences')})</span></div></div>
+    <p><b>Fusionner</b> : ajoute le contenu du fichier et remplace les éléments identiques. Rien n’est supprimé.</p>
+    <p><b>Remplacer tout</b> : la base redevient exactement le fichier (ton propre accès est conservé). Une sauvegarde de l’état actuel est téléchargée juste avant.</p>
+    <div class="row mt"><button type="button" class="btn" data-a="closeModal">Annuler</button><span class="sp"></span>
+      <button type="button" class="btn d" data-a="restoreReplace">Remplacer tout</button><button type="button" class="btn p" data-a="restoreMerge">Fusionner</button></div>`);
+}
+async function applyRestore(replace){
+  const d = S.restore; if (!d) return;
+  if (replace && !confirm('Tout ce qui n’est pas dans le fichier sera supprimé. Continuer ?')) return;
+  if (replace) downloadJson(snapshot(), `palanquee-avant-restauration-${stamp()}.json`);
+  const ops = [], keep = (c, id) => (c === 'acces' && id === S.user.email) || (c === 'config' && id === 'bootstrap');
+  for (const c of COLS) {
+    if (replace) for (const id of Object.keys(DB[c])) if (!(id in d.data[c]) && !keep(c, id)) ops.push({op: 'del', c, id});
+    for (const [id, v] of Object.entries(d.data[c])) if (!keep(c, id)) ops.push({op: 'set', c, id, data: v});
+  }
+  await backend.bulk(ops);
+  closeModal();
+  toast(`Restauration terminée (${ops.filter(o => o.op === 'set').length} éléments${replace ? ', ' + ops.filter(o => o.op === 'del').length + ' supprimés' : ''})`);
+}
 
 /* ================= ACTIONS ================= */
 const A = {
-  mode: d => { S.mode = d.v; localStorage.setItem('plq_mode', d.v); render(); },
-  tab: d => { S.tab = d.v; render(); },
-  ptab: d => { S.ptab = d.v; render(); },
-  setf: d => { S[d.k] = d.v; render(); },
-  lock: () => { S.adminOk = false; sessionStorage.removeItem('plq_admin'); render(); },
+  tab: d => { S.tab = d.v; S.view = null; render(); },
+  ficheScope: d => { S.ficheScope = d.v; render(); },
+  progMode: d => { S.progMode = d.v; render(); },
+  progKey: d => { S.progKey = d.v; render(); },
+  gTab: d => { S.gTab = d.v; render(); },
+  authMode: d => { S.authMode = d.v; render(); },
   closeModal, modalBg: closeModal,
+  closeView: () => { S.view = null; render(); },
+  logout: async () => { S.tab = 'fiches'; S.gTab = 'eleves'; S.q = ''; S.ficheScope = 'miens'; await backend.signOut(); },
+  verified: async () => { const u = await backend.refreshUser(); if (!u.verified) return toast('Adresse pas encore confirmée. Clique sur le lien de l’e-mail.', true); await onAuthChange(u); },
+  resend: async () => { await backend.resendVerification(); toast('E-mail renvoyé'); },
+  recheck: async () => { S.access = undefined; render(); await checkAccess(); },
 
-  newSession: () => openSessionModal(null),
-  editSession: d => openSessionModal(d.id),
-  dupSession: d => {
-    const s = DB.sessions[d.id]; const dt = new Date(s.date + 'T12:00'); dt.setDate(dt.getDate() + 7);
-    openSessionModal(null, {...JSON.parse(JSON.stringify(clean(s))), date: ymd(dt), eleves: []});
+  newFiche,
+  editFiche: d => { S.fiche = {evals: {}, commentaires: {}, competences: [], eleves: [], mode: 'libre', ...clone(DB.fiches[d.id])}; S.showCm = {}; S.view = 'fiche'; render(); scrollTo(0, 0); },
+  resumeDraft: () => { S.fiche = readDraft(); S.showCm = {}; S.view = 'fiche'; render(); },
+  dropDraft: () => { if (confirm('Abandonner cette fiche non enregistrée ?')) { dropDraft(); render(); } },
+  closeFiche: () => {
+    if (!S.fiche.id && (S.fiche.eleves.length || Object.keys(S.fiche.evals).length) && !confirm('Quitter sans enregistrer ? La fiche reste disponible en brouillon.')) return;
+    if (S.fiche.id) dropDraft();
+    S.view = null; S.fiche = null; render();
   },
-  toggleOpen: async d => { await backend.update('sessions', d.id, {inscriptionsOuvertes: !DB.sessions[d.id].inscriptionsOuvertes}); },
-  delSession: async d => {
-    const s = DB.sessions[d.id];
-    if (!confirm(`Supprimer la séance du ${fmtDate(s.date)} ? Les inscriptions seront perdues.`)) return;
-    await backend.del('sessions', d.id); toast('Séance supprimée');
+  fCren: d => { S.fiche.creneau = d.v; saveDraft(); render(); },
+  fMode: d => {
+    const f = S.fiche; f.mode = d.v;
+    if (d.v === 'programme') progComps(f.seanceKey).forEach(c => { if (!f.competences.includes(c)) f.competences.push(c); });
+    saveDraft(); render();
   },
-  progAdd: () => { const v = $('#progSel').value; if (!v) return; S.draft.programme.push({actId: v, note: ''}); $('#progSel').value = ''; renderProg(); },
-  progMove: d => { const p = S.draft.programme, i = +d.i, j = i + +d.d; [p[i], p[j]] = [p[j], p[i]]; renderProg(); },
-  progDel: d => { S.draft.programme.splice(+d.i, 1); renderProg(); },
+  fEleve: d => { const f = S.fiche; f.eleves = f.eleves.includes(d.id) ? f.eleves.filter(x => x !== d.id) : [...f.eleves, d.id]; saveDraft(); render(); },
+  fAddComp: () => { const v = $('#fAdd').value; if (!v) return; if (!S.fiche.competences.includes(v)) S.fiche.competences.push(v); saveDraft(); render(); },
+  lv: (d, t) => {
+    const f = S.fiche, ev = f.evals[d.e] = f.evals[d.e] || {}, x = ev[d.c] = ev[d.c] || {};
+    x.niveau = x.niveau === d.v ? '' : d.v;
+    document.querySelectorAll(`[data-a="lv"][data-e="${d.e}"][data-c="${d.c}"]`).forEach(b => b.classList.toggle('on', b.dataset.v === x.niveau));
+    const sel = f.competences.filter(c => DB.competences[c]);
+    const cnt = $('#cnt-' + d.e); if (cnt) cnt.textContent = `${sel.filter(c => (ev[c] || {}).niveau).length}/${sel.length}`;
+    saveDraft();
+  },
+  cm: d => { S.showCm[d.e + '|' + d.c] = true; render(); const i = document.getElementById(`cm-${d.e}-${d.c}`); if (i) i.focus(); },
+  saveFiche: async () => {
+    const f = S.fiche;
+    if (!f.date || !f.seanceKey) return toast('Date et séance obligatoires', true);
+    if (!f.eleves.length) return toast('Choisis au moins un élève', true);
+    const compsSel = f.competences.filter(c => DB.competences[c]);
+    if (!compsSel.length) return toast('Choisis au moins une compétence', true);
+    const evals = {}, commentaires = {};
+    for (const e of f.eleves) {
+      for (const c of compsSel) {
+        const x = (f.evals[e] || {})[c]; if (!x) continue;
+        const v = {niveau: x.niveau || '', comment: (x.comment || '').trim()};
+        if (v.niveau || v.comment) (evals[e] = evals[e] || {})[c] = v;
+      }
+      const g = (f.commentaires[e] || '').trim(); if (g) commentaires[e] = g;
+    }
+    const id = f.id || backend.newId('fiches');
+    const old = f.id ? DB.fiches[f.id] || {} : {};
+    const data = {date: f.date, seanceKey: f.seanceKey, creneau: f.creneau, mode: f.mode, moniteurId: old.moniteurId || f.moniteurId,
+      eleves: f.eleves, competences: compsSel, evals, commentaires, createdAt: old.createdAt || Date.now(), updatedAt: Date.now()};
+    const p = backend.set('fiches', id, data);
+    dropDraft(); S.view = null; S.fiche = null; S.tab = 'fiches'; render();
+    if (await saveSoft(p)) toast('Fiche enregistrée');
+  },
+  delFiche: async () => {
+    if (!confirm('Supprimer définitivement cette fiche et ses évaluations ?')) return;
+    await backend.del('fiches', S.fiche.id); dropDraft(); S.view = null; S.fiche = null; render(); toast('Fiche supprimée');
+  },
 
-  newPerson: () => openPersonModal(null),
-  editPerson: d => openPersonModal(d.id),
-  validate: async d => { await backend.update('people', d.id, {statut: 'actif'}); toast('Compte validé'); },
-  delPerson: async d => {
-    const p = DB.people[d.id];
-    const inS = Object.values(DB.sessions).filter(s => (s.eleves||[]).includes(d.id) || (s.moniteurs||[]).includes(d.id));
-    if (!confirm(`Supprimer ${fullName(p)} ?${inS.length ? `\nIl sera retiré de ${inS.length} séance(s), historique compris. Pour garder l'historique, passe plutôt la personne en « Inactif ».` : ''}`)) return;
-    for (const s of inS) await backend.txSession(s.id, cur => ({eleves: (cur.eleves||[]).filter(x => x !== d.id), moniteurs: (cur.moniteurs||[]).filter(x => x !== d.id)}));
-    await backend.del('people', d.id);
-    closeModal(); toast('Personne supprimée');
+  openEleve: d => { S.eleveId = d.id; S.view = 'eleve'; render(); scrollTo(0, 0); },
+  exportXlsx: () => exportXlsx(),
+
+  saveTheo: async d => { const theorie = {...(prog().theorie || {})}; const v = $('#progTheo').value.trim(); if (v) theorie[d.k] = v; else delete theorie[d.k]; await saveProg({theorie}); toast('Enregistré'); },
+  addCell: async d => {
+    const cid = $('#cellComp').value, txt = $('#cellText').value.trim();
+    if (!cid) return toast('Choisis une compétence', true);
+    const cells = clone(prog().cells || {}); (cells[cid] = cells[cid] || {})[d.k] = txt || 'À travailler';
+    await saveProg({cells}); toast('Ajouté au programme');
+  },
+  editCell: d => openModal(`<div class="modal-head"><h2>${esc(compName(DB.competences[d.id]))}</h2></div><p class="muted">${esc(seanceLabel(d.k))}</p>
+    <form data-f="saveCell"><input type="hidden" name="cid" value="${d.id}"><input type="hidden" name="k" value="${d.k}">
+    <textarea name="txt" rows="5">${esc(consigne(d.id, d.k))}</textarea>
+    <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div></form>`),
+  delCell: async d => {
+    if (!confirm('Retirer cette compétence du programme de la séance ?')) return;
+    const cells = clone(prog().cells || {}); if (cells[d.id]) delete cells[d.id][d.k];
+    await saveProg({cells});
+  },
+  newComp: () => openCompModal(null),
+  editComp: d => openCompModal(d.id),
+  delComp: async d => {
+    const used = Object.values(DB.fiches).filter(f => (f.competences || []).includes(d.id)).length;
+    if (!confirm(used ? `Cette compétence a été évaluée dans ${used} fiche(s). Elle y apparaîtra comme « compétence supprimée ». Supprimer quand même ?` : 'Supprimer cette compétence ?')) return;
+    const cells = clone(prog().cells || {}); delete cells[d.id];
+    await backend.del('competences', d.id); await saveProg({cells}); closeModal();
   },
 
-  newAct: () => openActModal(null),
-  editAct: d => openActModal(d.id),
-  delAct: async d => {
-    const n = Object.values(DB.sessions).filter(s => (s.programme||[]).some(it => it.actId === d.id)).length;
-    if (!confirm(`Supprimer « ${DB.activities[d.id].nom} » ?${n ? `\nElle apparaît dans ${n} séance(s) et y sera affichée comme « activité supprimée ».` : ''}`)) return;
-    await backend.del('activities', d.id); closeModal(); toast('Activité supprimée');
+  editEleve: d => openEleveModal(d.id),
+  delEleve: async d => { if (!confirm('Supprimer cet élève ?')) return; await backend.del('eleves', d.id); closeModal(); },
+  editMoniteur: d => openMoniteurModal(d.id),
+
+  seMove: async d => {
+    const SE = clone(seances()), i = SE.findIndex(s => s.key === d.k), j = i + Number(d.d);
+    [SE[i], SE[j]] = [SE[j], SE[i]]; await saveProg({seances: SE});
   },
-  seedActs: async () => {
-    await backend.bulk(CATALOGUE_DE_BASE.map(([nom, categorie, niveauMin, dureeMin]) =>
-      ({op:'set', c:'activities', id: backend.newId('activities'), data: {nom, categorie, niveauMin, dureeMin, description: ''}})));
-    toast(`${CATALOGUE_DE_BASE.length} activités ajoutées`);
+  seDel: async d => {
+    const used = Object.values(DB.fiches).filter(f => f.seanceKey === d.k).length;
+    if (used) return toast(`Impossible : ${used} fiche(s) utilisent cette séance.`, true);
+    if (!confirm(`Supprimer « ${seanceLabel(d.k)} » et son programme ?`)) return;
+    const cells = clone(prog().cells || {}); Object.values(cells).forEach(m => delete m[d.k]);
+    const theorie = {...(prog().theorie || {})}; delete theorie[d.k];
+    await saveProg({seances: seances().filter(s => s.key !== d.k), cells, theorie});
   },
 
-  exportData: async () => {
-    downloadJson(snapshot(), backupName());
-    await backend.setSettings({lastBackup: Date.now()});
+  exportJson: async () => {
+    const settings = {...clean(DB.config.settings || {}), lastBackup: Date.now()};
+    const snap = snapshot(); snap.data.config.settings = settings;
+    downloadJson(snap, `palanquee-sauvegarde-${stamp()}.json`);
+    await saveSoft(backend.set('config', 'settings', settings));
     toast('Sauvegarde téléchargée');
   },
   restoreMerge: () => applyRestore(false),
   restoreReplace: () => applyRestore(true),
+
   install: async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null; render();
-    } else if (isIOS()) {
-      openModal(`<div class="modal-head"><h2>Installer sur iPhone / iPad</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
-        <ol><li>Ouvre cette page dans <b>Safari</b>.</li><li>Touche le bouton <b>Partager</b> (carré avec une flèche vers le haut).</li><li>Choisis <b>Sur l'écran d'accueil</b>, puis <b>Ajouter</b>.</li></ol>`);
-    }
+    if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; render(); }
+    else if (isIOS()) openModal(`<div class="modal-head"><h2>Installer sur iPhone / iPad</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+      <ol><li>Ouvre cette page dans <b>Safari</b>.</li><li>Touche <b>Partager</b> (carré avec une flèche vers le haut).</li><li>Choisis <b>Sur l’écran d’accueil</b>, puis <b>Ajouter</b>.</li></ol>`);
   },
-  applyUpdate: () => { if (S.updateWorker) S.updateWorker.postMessage('skipWaiting'); },
-
-  signup: () => { S.signup = true; render(); },
-  signupCancel: () => { S.signup = false; render(); },
-  logout: () => { S.me = null; localStorage.removeItem('plq_me'); render(); },
-
-  reg: async d => {
-    const me = DB.people[S.me]; const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
-    if (DB.settings.blockCertif !== false && !certif(me).ok) return toast('Certificat médical expiré : inscription impossible. Mets-le à jour auprès du club.', true);
-    await backend.txSession(d.id, cur => {
-      if (!regState(cur).open) throw new Error('Les inscriptions sont fermées');
-      const arr = [...(cur[role]||[])];
-      if (!arr.includes(me.id)) {
-        if (role === 'eleves' && cur.capaciteEleves && arr.length >= cur.capaciteEleves) throw new Error('Séance complète');
-        arr.push(me.id);
-      }
-      return {[role]: arr};
-    });
-    toast('Inscription enregistrée');
-  },
-  unreg: async d => {
-    const me = DB.people[S.me]; const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
-    if (!confirm('Confirmer la désinscription ?')) return;
-    await backend.txSession(d.id, cur => {
-      if (!regState(cur).open) throw new Error('La désinscription en ligne est close');
-      return {[role]: (cur[role]||[]).filter(x => x !== me.id)};
-    });
-    toast('Désinscription enregistrée');
-  }
+  applyUpdate: () => { if (S.updateWorker) S.updateWorker.postMessage('skipWaiting'); }
 };
 
 /* ================= FORMULAIRES ================= */
 const F = {
-  setAdmin: async f => {
-    const a = f.a.value, b = f.b.value;
-    if (a !== b) return toast('Les deux codes ne correspondent pas', true);
-    await backend.setSettings({adminHash: await hash('admin:' + a), ratio: DB.settings.ratio || 4});
-    S.adminOk = true; sessionStorage.setItem('plq_admin', '1'); render();
-  },
-  adminLogin: async f => {
-    if (await hash('admin:' + f.code.value) !== DB.settings.adminHash) return toast('Code incorrect', true);
-    S.adminOk = true; sessionStorage.setItem('plq_admin', '1'); render();
-  },
-  changeAdmin: async f => {
-    if (f.a.value !== f.b.value) return toast('Les deux codes ne correspondent pas', true);
-    await backend.setSettings({adminHash: await hash('admin:' + f.a.value)}); f.reset(); toast('Code modifié');
-  },
-  saveSettings: async f => {
-    await backend.setSettings({clubName: f.clubName.value.trim(), ratio: Number(f.ratio.value) || 4, closeH: Number(f.closeH.value) || 0, blockCertif: f.blockCertif.checked});
-    toast('Réglages enregistrés');
-  },
-  saveSession: async f => {
-    const fd = new FormData(f);
-    const mon = fd.getAll('mon'), el = fd.getAll('el');
-    const data = {
-      date: fd.get('date'), heure: fd.get('heure') || '', lieu: fd.get('lieu').trim(), type: fd.get('type'),
-      capaciteEleves: Number(fd.get('cap')) || 0, inscriptionsOuvertes: fd.get('open') === 'on',
-      notes: fd.get('notes').trim(), programme: S.draft.programme
-    };
-    if (data.capaciteEleves && el.length > data.capaciteEleves && !confirm(`${el.length} élèves cochés pour ${data.capaciteEleves} places. Enregistrer quand même ?`)) return;
-    if (!S.draft.id) {
-      await backend.set('sessions', backend.newId('sessions'), {...data, moniteurs: mon, eleves: el, createdAt: Date.now()});
-    } else {
-      // Fusion : on applique uniquement ce que l'admin a coché/décoché, pour ne pas écraser
-      // une inscription faite par un participant pendant que la fenêtre était ouverte.
-      const o = S.draft.orig;
-      const merge = (curArr, orig, now) => {
-        const rem = orig.filter(x => !now.includes(x)), add = now.filter(x => !orig.includes(x));
-        const r = (curArr||[]).filter(x => !rem.includes(x));
-        add.forEach(x => { if (!r.includes(x)) r.push(x); });
-        return r;
-      };
-      await backend.txSession(S.draft.id, cur => ({...data, moniteurs: merge(cur.moniteurs, o.moniteurs, mon), eleves: merge(cur.eleves, o.eleves, el)}));
-    }
-    closeModal(); toast('Séance enregistrée');
-  },
-  savePerson: async f => {
-    const fd = new FormData(f), id = fd.get('id');
-    const data = {
-      prenom: fd.get('prenom').trim(), nom: fd.get('nom').trim(), role: fd.get('role'), niveau: fd.get('niveau'),
-      email: fd.get('email').trim(), tel: fd.get('tel').trim(), certifFin: fd.get('certifFin'), statut: fd.get('statut'), notes: fd.get('notes').trim()
-    };
-    const pin = fd.get('pin');
-    if (pin && pin.length < 4) return toast('PIN : 4 caractères minimum', true);
-    const pid = id || backend.newId('people');
-    if (pin) data.pinHash = await hash(pid + ':' + pin);
-    if (id) await backend.update('people', id, data);
-    else await backend.set('people', pid, {...data, pinHash: data.pinHash || '', createdAt: Date.now()});
-    closeModal(); toast('Enregistré');
-  },
-  saveAct: async f => {
-    const fd = new FormData(f), id = fd.get('id');
-    const data = {nom: fd.get('nom').trim(), categorie: fd.get('categorie').trim() || 'Autre', niveauMin: fd.get('niveauMin'), dureeMin: Number(fd.get('dureeMin')) || 0, description: fd.get('description').trim()};
-    if (id) await backend.update('activities', id, data); else await backend.set('activities', backend.newId('activities'), data);
-    closeModal(); toast('Activité enregistrée');
-  },
-  login: async f => {
-    const fd = new FormData(f), p = DB.people[fd.get('id')], pin = fd.get('pin');
-    if (!p) return toast('Choisis ton nom dans la liste', true);
-    if (!p.pinHash) {
-      if (pin.length < 4) return toast('PIN : 4 caractères minimum', true);
-      if (pin !== fd.get('pin2')) return toast('Les deux PIN ne correspondent pas', true);
-      await backend.update('people', p.id, {pinHash: await hash(p.id + ':' + pin)});
-    } else if (await hash(p.id + ':' + pin) !== p.pinHash) return toast('PIN incorrect', true);
-    S.me = p.id; localStorage.setItem('plq_me', p.id); S.loginId = ''; render();
-  },
+  login: async f => { await backend.signIn(f.email.value, f.p.value); },
   signup: async f => {
-    const fd = new FormData(f);
-    if (fd.get('pin') !== fd.get('pin2')) return toast('Les deux PIN ne correspondent pas', true);
-    const prenom = fd.get('prenom').trim(), nom = fd.get('nom').trim();
-    const dup = people().find(p => fullName(p).toLowerCase() === `${prenom} ${nom}`.toLowerCase());
-    if (dup) return toast('Un compte existe déjà à ce nom : connecte-toi ou contacte le club', true);
-    const id = backend.newId('people');
-    await backend.set('people', id, {
-      prenom, nom, role: fd.get('role'), niveau: fd.get('niveau'), email: fd.get('email').trim(), tel: fd.get('tel').trim(),
-      certifFin: fd.get('certifFin'), statut: 'en_attente', notes: '', pinHash: await hash(id + ':' + fd.get('pin')), createdAt: Date.now()
-    });
-    S.me = id; localStorage.setItem('plq_me', id); S.signup = false; render();
+    if (f.p.value !== f.p2.value) return toast('Les deux mots de passe ne correspondent pas', true);
+    await backend.signUp(f.email.value, f.p.value);
+  },
+  reset: async f => { await backend.resetPassword(f.email.value); toast('Si un compte existe, un lien de réinitialisation vient d’être envoyé.'); S.authMode = 'login'; render(); },
+  bootstrap: async f => {
+    const email = S.user.email, mid = backend.newId('moniteurs');
+    const prenom = f.prenom.value.trim(), nom = f.nom.value.trim();
+    await backend.bulk([
+      {op: 'set', c: 'config', id: 'bootstrap', data: {by: email, at: Date.now()}},
+      {op: 'set', c: 'acces', id: email, data: {moniteurId: mid, role: 'responsable'}}
+    ]);
+    await backend.set('moniteurs', mid, {prenom, nom, initiales: initialesDe(prenom, nom), email, actif: true});
+    await backend.set('config', 'programme', {seances: DEFAULT_SEANCES, cells: {}, theorie: {}});
+    S.tab = 'gestion'; S.gTab = 'donnees';
+    await checkAccess();
+  },
+  saveSettings: async f => { await backend.set('config', 'settings', {...clean(DB.config.settings || {}), formation: f.formation.value.trim()}); toast('Enregistré'); },
+  saveEleve: async f => {
+    const id = f.id.value || backend.newId('eleves'), prenom = f.prenom.value.trim(), nom = f.nom.value.trim();
+    await backend.set('eleves', id, {...clean(DB.eleves[id] || {}), prenom, nom, initiales: f.initiales.value.trim() || initialesDe(prenom, nom),
+      email: f.email.value.trim(), tel: f.tel.value.trim(), notes: f.notes.value.trim(), actif: f.actif.checked});
+    closeModal(); toast('Élève enregistré');
+  },
+  saveMoniteur: async f => {
+    const id = f.id.value || backend.newId('moniteurs'), old = DB.moniteurs[id] || {};
+    const prenom = f.prenom.value.trim(), nom = f.nom.value.trim(), email = f.email.value.trim().toLowerCase();
+    const self = id === myId();
+    const actif = self ? true : f.actif.checked;
+    const role = self ? 'responsable' : (f.resp.checked ? 'responsable' : 'moniteur');
+    if (email && Object.values(DB.moniteurs).some(m => m.id !== id && (m.email || '').toLowerCase() === email)) return toast('Cet e-mail est déjà utilisé par un autre moniteur', true);
+    if (self && email !== (old.email || '').toLowerCase()) return toast('Tu ne peux pas changer ton propre e-mail de connexion ici', true);
+    const ops = [{op: 'set', c: 'moniteurs', id, data: {...clean(old), prenom, nom, initiales: f.initiales.value.trim() || initialesDe(prenom, nom), email, actif}}];
+    const oldEmail = (old.email || '').toLowerCase();
+    if (oldEmail && oldEmail !== email && DB.acces[oldEmail]) ops.push({op: 'del', c: 'acces', id: oldEmail});
+    if (email && actif) ops.push({op: 'set', c: 'acces', id: email, data: {moniteurId: id, role}});
+    else if (email && DB.acces[email]) ops.push({op: 'del', c: 'acces', id: email});
+    await backend.bulk(ops); closeModal(); toast('Moniteur enregistré');
+  },
+  saveComp: async f => {
+    const id = f.id.value || backend.newId('competences');
+    const v = k => f[k].value.trim();
+    await backend.set('competences', id, {aptitude: v('aptitude'), groupe: v('groupe'), type: v('type'), capacite: v('capacite'), mft: v('mft'), action: v('action'), cr: v('cr'), ce: v('ce'), ordre: Number(f.ordre.value) || 0});
+    closeModal(); toast('Compétence enregistrée');
+  },
+  saveCell: async f => { const cells = clone(prog().cells || {}); (cells[f.cid.value] = cells[f.cid.value] || {})[f.k.value] = f.txt.value.trim() || 'À travailler'; await saveProg({cells}); closeModal(); },
+  seAdd: async f => {
+    const label = f.label.value.trim(); let key = slug(label) || 'seance', i = 2;
+    const m = label.match(/^s[ée]ance\s*(\d+)$/i); if (m) key = 's' + m[1];
+    while (seances().some(s => s.key === key)) key = (slug(label) || 'seance') + '-' + i++;
+    await saveProg({seances: [...seances(), {key, label}]});
+  },
+  applyImport: async f => {
+    const d = S.importData; if (!d) return;
+    const ops = [];
+    if (d.prog && f.prog && f.prog.checked) {
+      const known = {}; Object.values(DB.competences).forEach(c => known[norm(c.capacite)] = c.id);
+      const cells = {};
+      for (const c of d.prog.comps) {
+        const {cells: cc, ...rest} = c, id = known[norm(c.capacite)] || backend.newId('competences');
+        known[norm(c.capacite)] = id;
+        ops.push({op: 'set', c: 'competences', id, data: rest});
+        if (Object.keys(cc).length) cells[id] = cc;
+      }
+      ops.push({op: 'set', c: 'config', id: 'programme', data: {seances: d.prog.seances, cells, theorie: d.prog.theorie}});
+    }
+    const addPeople = (col, list) => {
+      const names = new Set(Object.values(DB[col]).map(p => norm(personName(p))));
+      for (const p of list) if (!names.has(norm(personName(p)))) {
+        names.add(norm(personName(p)));
+        ops.push({op: 'set', c: col, id: backend.newId(col), data: {...p, initiales: p.initiales || initialesDe(p.prenom, p.nom), actif: true, ...(col === 'moniteurs' ? {email: ''} : {})}});
+      }
+    };
+    if (f.eleves.checked) addPeople('eleves', d.pres.eleves);
+    if (f.moniteurs.checked) addPeople('moniteurs', d.pres.moniteurs);
+    if (!ops.length) return toast('Rien à importer', true);
+    await backend.bulk(ops); closeModal(); toast(`Import terminé (${ops.length} éléments)`);
   }
 };
-
-const SETTINGS_KEYS = ['clubName','ratio','closeH','blockCertif'];
-
-function snapshot(){
-  const settings = {};
-  SETTINGS_KEYS.forEach(k => { if (DB.settings[k] !== undefined) settings[k] = DB.settings[k]; });
-  const strip = o => Object.fromEntries(Object.entries(o).map(([id, v]) => [id, clean(v)]));
-  return {app: 'palanquee', format: 1, version: APP_VERSION, exportedAt: new Date().toISOString(),
-    settings, people: strip(DB.people), activities: strip(DB.activities), sessions: strip(DB.sessions)};
-}
-function backupName(prefix = 'palanquee-sauvegarde'){
-  const d = new Date();
-  return `${prefix}-${ymd(d)}-${String(d.getHours()).padStart(2,'0')}h${String(d.getMinutes()).padStart(2,'0')}.json`;
-}
-function downloadJson(obj, name){
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'}));
-  a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-async function importFile(file){
-  if (!file) return;
-  let data;
-  try { data = JSON.parse(await file.text()); } catch (e) { throw new Error('Fichier illisible : ce n’est pas un JSON valide'); }
-  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-  if (!isObj(data) || !COLS.every(c => data[c] === undefined || isObj(data[c])) || !COLS.some(c => isObj(data[c])))
-    throw new Error('Ce fichier n’est pas une sauvegarde Palanquée');
-  COLS.forEach(c => { if (!isObj(data[c])) data[c] = {}; });
-  S.restore = data;
-  const n = c => Object.keys(data[c]).length, cur = c => Object.keys(DB[c]).length;
-  openModal(`<div class="modal-head"><h2>Restaurer une sauvegarde</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
-    <p class="muted">${esc(file.name)}${data.exportedAt ? ' · créée le ' + new Date(data.exportedAt).toLocaleString('fr-FR', {dateStyle:'long', timeStyle:'short'}) : ''}${data.version ? ' · v' + esc(data.version) : ''}</p>
-    <div class="stats"><div><b>${n('people')}</b><span class="muted">personnes (${cur('people')} actuellement)</span></div>
-      <div><b>${n('sessions')}</b><span class="muted">séances (${cur('sessions')})</span></div>
-      <div><b>${n('activities')}</b><span class="muted">activités (${cur('activities')})</span></div></div>
-    <p><b>Fusionner</b> : ajoute le contenu du fichier et remplace les éléments identiques. Rien n’est supprimé.</p>
-    <p><b>Remplacer tout</b> : la base redevient exactement le fichier. Tout ce qui a été créé depuis est effacé. Une sauvegarde de l’état actuel est téléchargée juste avant, par sécurité.</p>
-    <div class="row mt"><button type="button" class="btn" data-a="closeModal">Annuler</button><span class="sp"></span>
-      <button type="button" class="btn d" data-a="restoreReplace">Remplacer tout</button><button type="button" class="btn p" data-a="restoreMerge">Fusionner</button></div>`);
-}
-
-async function applyRestore(replace){
-  const data = S.restore; if (!data) return;
-  if (replace && !confirm('Tout ce qui n’est pas dans le fichier sera supprimé. Continuer ?')) return;
-  if (replace) downloadJson(snapshot(), backupName('palanquee-avant-restauration'));
-  const ops = [];
-  for (const c of COLS) {
-    if (replace) for (const id of Object.keys(DB[c])) if (!(id in data[c])) ops.push({op:'del', c, id});
-    for (const [id, v] of Object.entries(data[c])) ops.push({op:'set', c, id, data: v});
-  }
-  await backend.bulk(ops);
-  const st = {};
-  if (data.settings) SETTINGS_KEYS.forEach(k => { if (data.settings[k] !== undefined) st[k] = data.settings[k]; });
-  if (Object.keys(st).length) await backend.setSettings(st);
-  S.restore = null; closeModal();
-  toast(`Restauration terminée (${ops.filter(o => o.op === 'set').length} éléments${replace ? ', ' + ops.filter(o => o.op === 'del').length + ' supprimés' : ''})`);
-}
 
 /* ================= ÉVÉNEMENTS ================= */
 document.addEventListener('click', e => {
@@ -957,17 +1199,34 @@ document.addEventListener('submit', e => {
   e.preventDefault(); run(() => F[f.dataset.f](f));
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'q') { S.q = e.target.value; $('#plist').innerHTML = peopleListHtml(); }
-  if (e.target.classList.contains('pnote') && S.draft) S.draft.programme[+e.target.dataset.i].note = e.target.value;
+  const t = e.target;
+  if (t.id === 'q') { S.q = t.value; $('#elist').innerHTML = elevesListHtml(); }
+  if (t.classList.contains('fcm') && S.fiche) { const ev = S.fiche.evals[t.dataset.e] = S.fiche.evals[t.dataset.e] || {}; (ev[t.dataset.c] = ev[t.dataset.c] || {}).comment = t.value; saveDraft(); }
+  if (t.classList.contains('fgc') && S.fiche) { S.fiche.commentaires[t.dataset.e] = t.value; saveDraft(); }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'importFile') { const file = e.target.files[0]; e.target.value = ''; run(() => importFile(file)); }
-  if (e.target.id === 'loginSel') {
-    S.loginId = e.target.value;
-    $('#pinLbl').textContent = pinLabel(S.loginId);
-    const p = DB.people[S.loginId];
-    $('#pin2wrap').hidden = !(p && !p.pinHash);
+  const t = e.target;
+  if (t.id === 'fDate' && S.fiche) { S.fiche.date = t.value; saveDraft(); render(); }
+  if (t.id === 'fSeance' && S.fiche) {
+    const f = S.fiche, oldProg = progComps(f.seanceKey);
+    f.seanceKey = t.value;
+    if (f.mode === 'programme') {
+      const hasData = c => f.eleves.some(el => { const x = (f.evals[el] || {})[c]; return x && (x.niveau || x.comment); });
+      f.competences = [...progComps(f.seanceKey), ...f.competences.filter(c => !oldProg.includes(c) || hasData(c))].filter((c, i, a) => a.indexOf(c) === i);
+    }
+    saveDraft(); render();
   }
+  if (t.classList.contains('fcomp') && S.fiche) {
+    const f = S.fiche, id = t.dataset.id;
+    f.competences = t.checked ? [...f.competences.filter(c => c !== id), id] : f.competences.filter(c => c !== id);
+    saveDraft(); render();
+  }
+  if (t.classList.contains('seLabel')) {
+    const SE = clone(seances()), s = SE.find(x => x.key === t.dataset.k);
+    if (s && t.value.trim()) { s.label = t.value.trim(); run(() => saveProg({seances: SE})); }
+  }
+  if (t.id === 'xlsxFile') { const file = t.files[0]; t.value = ''; if (file) run(() => readXlsx(file)); }
+  if (t.id === 'jsonFile') { const file = t.files[0]; t.value = ''; if (file) run(() => readJson(file)); }
 });
 
 /* ================= APPLICATION INSTALLABLE ================= */
@@ -996,8 +1255,9 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 (async () => {
   $('#app').innerHTML = '<main><div class="card muted">Chargement…</div></main>';
   try { await initBackend(); }
-  catch (e) { $('#app').innerHTML = `<main><div class="card">Impossible de se connecter à Firebase : ${esc(e.message)}</div></main>`; return; }
-  backend.listen(requestRender);
+  catch (e) { $('#app').innerHTML = `<main><div class="card">Impossible de charger Firebase : ${esc(errMsg(e))}</div></main>`; return; }
+  render();
+  backend.onAuth(u => run(() => onAuthChange(u)));
 })();
 </script>
 </body>

@@ -1,7 +1,7 @@
 {
-  "name": "Palanquée — Séances de plongée",
+  "name": "Palanquée — Suivi pédagogique",
   "short_name": "Palanquée",
-  "description": "Inscriptions, encadrement et programme des séances de plongée du club.",
+  "description": "Suivi pédagogique de la formation de plongée : fiches de séance, progression des élèves, présence.",
   "lang": "fr",
   "id": "./plongee-seances.html",
   "start_url": "./plongee-seances.html",

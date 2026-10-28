@@ -46,9 +46,9 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Fichiers propres à Palanquée et SDK Firebase (versionné) : cache d'abord.
+  // Fichiers propres à Palanquée, SDK Firebase et module Excel (versionnés) : cache d'abord.
   const own = url.origin === location.origin && /\/(palanquee-[^/]*|icons\/palanquee-[^/]*)$/.test(url.pathname);
-  if (own || url.hostname === 'www.gstatic.com') {
+  if (own || url.hostname === 'www.gstatic.com' || (url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('/exceljs@'))) {
     e.respondWith(caches.match(req).then(m => m || fetch(req).then(res => putInCache(req, res))));
   }
   // Tout le reste (Firestore, fichiers des autres sites) passe directement au réseau.

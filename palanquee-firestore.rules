@@ -1,0 +1,48 @@
+rules_version = '2';
+// Règles Firestore de Palanquée (suivi pédagogique).
+// À coller dans la console Firebase : Firestore Database > Règles, puis « Publier ».
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function accesPath() { return /databases/$(database)/documents/acces/$(myEmail()); }
+    function isMoniteur() { return signedIn() && exists(accesPath()); }
+    function isResp() { return isMoniteur() && get(accesPath()).data.role == 'responsable'; }
+    function myMoniteurId() { return get(accesPath()).data.moniteurId; }
+
+    // Par défaut : lecture pour tout moniteur reconnu, écriture réservée au responsable.
+    match /{collection}/{docId} {
+      allow read: if isMoniteur();
+      allow write: if isResp();
+    }
+
+    // Chacun peut lire sa propre fiche d'accès pour savoir s'il est autorisé.
+    match /acces/{mail} {
+      allow read: if signedIn() && mail == myEmail();
+      // Premier lancement uniquement : le premier compte devient responsable.
+      allow create: if signedIn() && mail == myEmail()
+        && request.resource.data.role == 'responsable'
+        && !exists(/databases/$(database)/documents/config/bootstrap)
+        && getAfter(/databases/$(database)/documents/config/bootstrap).data.by == myEmail();
+    }
+
+    match /config/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.by == myEmail()
+        && !exists(/databases/$(database)/documents/config/bootstrap);
+    }
+
+    // Fiches de séance : chaque moniteur crée, modifie et supprime uniquement les siennes.
+    match /fiches/{ficheId} {
+      allow create: if isMoniteur() && request.resource.data.moniteurId == myMoniteurId();
+      allow update: if isMoniteur()
+        && resource.data.moniteurId == myMoniteurId()
+        && request.resource.data.moniteurId == resource.data.moniteurId;
+      allow delete: if isMoniteur() && resource.data.moniteurId == myMoniteurId();
+    }
+  }
+}
