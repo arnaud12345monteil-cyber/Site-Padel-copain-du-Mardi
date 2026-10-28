@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palanquée — Séances de plongée</title>
+<!--
+  CONFIGURATION
+  1. Crée un projet Firebase, active Firestore, colle la config web dans FIREBASE_CONFIG ci-dessous.
+  2. Tant que projectId est vide, l'appli tourne en MODE DÉMO (données dans le navigateur uniquement).
+  3. Collections utilisées : people, activities, sessions, config/settings.
+
+  Règles Firestore minimales (à durcir, voir remarques) :
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{db}/documents {
+      match /{document=**} { allow read, write: if true; }
+    }
+  }
+-->
+<style>
+:root{--bg:#f2f6f9;--card:#fff;--ink:#0f2233;--muted:#5b6f82;--line:#dbe4ec;--brand:#0b5d8a;--brand-d:#06324d;--chip:#e6f1f8;--ok:#1d8a4b;--warn:#b87300;--bad:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+header{background:linear-gradient(135deg,var(--brand-d),var(--brand));color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+.brand{font-weight:800;font-size:18px;letter-spacing:.2px}
+.brand small{display:block;font-weight:500;font-size:12px;opacity:.75}
+.sp{flex:1}
+.seg{display:flex;background:rgba(255,255,255,.15);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.seg button.on{background:#fff;color:var(--brand)}
+.seg2{display:flex;background:#e3ebf1;border-radius:9px;padding:3px;flex-wrap:wrap}
+.seg2 button{border:0;background:none;padding:6px 10px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--muted);font-size:13px}
+.seg2 button.on{background:#fff;color:var(--brand);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+main{max-width:980px;margin:0 auto;padding:16px}
+.demo{max-width:980px;margin:12px auto 0;padding:10px 14px;background:#fff6df;border:1px solid #efd48b;border-radius:10px;font-size:13px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px}
+.tabs button{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:600;white-space:nowrap;color:var(--muted)}
+.tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.pill{background:var(--bad);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.card.mine{border-color:#7fb8d8;box-shadow:inset 3px 0 0 var(--brand)}
+.card.tight{padding:10px 12px;margin-bottom:6px}
+.narrow{max-width:440px;margin-left:auto;margin-right:auto}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nowrap{flex-wrap:nowrap}
+.mt{margin-top:10px}.mb{margin-bottom:12px}
+h2{margin:0 0 6px;font-size:20px}h3{margin:18px 0 8px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.card h3{margin-top:0}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 13px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.btn:hover{border-color:#b7c7d4}
+.btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.d{color:var(--bad)}
+.btn.sm{padding:5px 9px;font-size:13px}
+.btn:disabled{opacity:.35;cursor:default}
+.chip{display:inline-block;background:var(--chip);color:var(--brand);border-radius:999px;padding:2px 9px;font-size:12px;margin:2px 4px 2px 0;font-weight:600}
+.badge{display:inline-block;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;background:#eef2f5;color:var(--muted)}
+.badge.ok{background:#e3f4ea;color:var(--ok)}.badge.warn{background:#fdf1dc;color:var(--warn)}.badge.bad{background:#fbe5e2;color:var(--bad)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#aab}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.muted{color:var(--muted);font-size:13px}
+.date{font-weight:700;font-size:16px;text-transform:capitalize}
+.warns{margin:8px 0 0;padding-left:18px;color:var(--warn);font-size:13px}
+details summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--brand)}
+ol.prog{margin:8px 0 0;padding-left:20px}ol.prog li{margin:4px 0}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:60px;resize:vertical}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px;color:var(--muted)}
+label.inline{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink)}
+label.inline input{width:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}}
+.checklist{max-height:210px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:2px 10px}
+.checklist label{display:flex;gap:8px;align-items:center;font-weight:400;color:var(--ink);margin:7px 0;font-size:14px}
+.checklist input{width:auto}
+ul.pedit{list-style:none;margin:8px 0 0;padding:0}
+ul.pedit li{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px}
+ul.pedit li input{margin-top:6px;padding:6px 8px;font-size:13px}
+.modal-bg{position:fixed;inset:0;background:rgba(6,30,46,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 10px;overflow-y:auto;z-index:20}
+.modal{background:#fff;border-radius:14px;max-width:660px;width:100%;padding:18px 18px 16px}
+.modal-head{display:flex;align-items:center;margin-bottom:4px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:50;max-width:90vw;font-size:14px}
+.toast.bad{background:var(--bad)}
+a{color:var(--brand)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script type="module">
+/* ================= CONFIG ================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAr7roHXWagY8LgDpn1mpLyUStpl4T4YMk",
+  authDomain: "palanquee-c934c.firebaseapp.com",
+  projectId: "palanquee-c934c",
+  storageBucket: "palanquee-c934c.firebasestorage.app",
+  messagingSenderId: "14173816618",
+  appId: "1:14173816618:web:ce7a5abad27463b6f04053"
+};
+
+// Ordre = hiérarchie (sert aux comparaisons de niveau). Adapte si ta structure n'est pas FFESSM.
+const NIVEAUX = ['Débutant','N1','N2','N3','N4','E1','E2','E3','E4'];
+const TYPES = ['Piscine','Fosse','Mer','Lac','Carrière'];
+const CATEGORIES = ['Aisance','Technique','Sécurité','Matériel','Théorie'];
+const CATALOGUE_DE_BASE = [
+  ['Palmage de surface','Aisance','Débutant',10],
+  ['Apnée et canard','Aisance','Débutant',10],
+  ['Capelage / décapelage en surface','Aisance','Débutant',10],
+  ['Vidage de masque','Technique','Débutant',10],
+  ["Lâcher et reprise d'embout",'Technique','Débutant',10],
+  ['Respiration sur détendeur de secours','Technique','Débutant',10],
+  ['Stabilisation au poumon-ballast','Technique','Débutant',15],
+  ['Utilisation du gilet (gonflage / purge)','Technique','Débutant',15],
+  ['Remontée contrôlée','Technique','Débutant',10],
+  ['Signes de communication','Sécurité','Débutant',10],
+  ["Panne d'air : échange d'embout",'Sécurité','Débutant',15],
+  ['Remontée assistée','Sécurité','N1',15],
+  ['Tractage en surface','Sécurité','N1',10],
+  ['Remontée sur expiration','Sécurité','N2',10],
+  ['Orientation au compas','Sécurité','N2',15],
+  ['Montage et démontage du bloc','Matériel','Débutant',15],
+  ['Vérifications avant immersion','Matériel','Débutant',5],
+  ['Physique : pressions et volumes','Théorie','Débutant',30],
+  ['Barotraumatismes','Théorie','Débutant',30],
+  ['Accident de décompression et tables','Théorie','N1',45],
+  ['Réglementation et prérogatives','Théorie','N1',30],
+  ["Planification d'une plongée",'Théorie','N2',45]
+];
+
+/* ================= ÉTAT ================= */
+const COLS = ['people','activities','sessions'];
+const DB = {people:{},activities:{},sessions:{},settings:{}};
+const loaded = {people:false,activities:false,sessions:false,settings:false};
+let backend;
+const S = {
+  mode: localStorage.getItem('plq_mode') || 'participant',
+  adminOk: sessionStorage.getItem('plq_admin') === '1',
+  tab: 'seances', filter: 'avenir', pFilter: 'tous', q: '',
+  ptab: 'avenir', me: localStorage.getItem('plq_me') || null,
+  loginId: '', signup: false, draft: null
+};
+
+/* ================= OUTILS ================= */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lvl = n => Math.max(0, NIVEAUX.indexOf(n));
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = () => ymd(new Date());
+const fmtDate = s => s ? new Date(s+'T12:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) : '—';
+const fmtHeure = h => h ? h.replace(':','h') : '';
+const sessStart = s => new Date(`${s.date}T${s.heure || '00:00'}`);
+const isPast = s => new Date(`${s.date}T${s.heure || '23:59'}`) < new Date();
+const fullName = p => p ? `${p.prenom || ''} ${p.nom || ''}`.trim() : '(supprimé)';
+const byName = (a,b) => (a.nom||'').localeCompare(b.nom||'','fr') || (a.prenom||'').localeCompare(b.prenom||'','fr');
+const people = () => Object.values(DB.people).sort(byName);
+const sessionsSorted = () => Object.values(DB.sessions).sort((a,b) => sessStart(a) - sessStart(b));
+const opts = (list, cur) => list.map(v => `<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
+const clean = o => { const c = {...o}; delete c.id; return c; };
+
+async function hash(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('plq:' + s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function certif(p){
+  if (!p.certifFin) return {cls:'warn', txt:'Certificat non renseigné', ok:true};
+  if (p.certifFin < today()) return {cls:'bad', txt:'Certificat expiré le ' + fmtDate(p.certifFin), ok:false};
+  const lim = new Date(); lim.setDate(lim.getDate() + 30);
+  if (p.certifFin < ymd(lim)) return {cls:'warn', txt:'Certificat expire le ' + fmtDate(p.certifFin), ok:true};
+  return {cls:'ok', txt:"Certificat valide jusqu'au " + fmtDate(p.certifFin), ok:true};
+}
+
+function encadrement(s){
+  const r = Number(DB.settings.ratio || 4);
+  const m = (s.moniteurs||[]).length, e = (s.eleves||[]).length;
+  if (!e) return null;
+  if (!m) return {cls:'bad', txt:'Aucun moniteur affecté'};
+  if (e > m*r) return {cls:'bad', txt:`Encadrement insuffisant : ${e} élèves pour ${m} moniteur(s), max ${r} par moniteur`};
+  return {cls:'ok', txt:`Encadrement OK (${e} élève${e>1?'s':''} / ${m} moniteur${m>1?'s':''})`};
+}
+
+const progMaxLevel = s => (s.programme||[]).reduce((m,it) => {
+  const a = DB.activities[it.actId]; return a ? Math.max(m, lvl(a.niveauMin)) : m;
+}, 0);
+
+function sessionWarnings(s){
+  const w = [];
+  for (const id of [...(s.moniteurs||[]), ...(s.eleves||[])]) {
+    const p = DB.people[id];
+    if (p && !certif(p).ok) w.push(`${fullName(p)} : certificat expiré`);
+  }
+  const req = progMaxLevel(s);
+  if (req > 0) for (const id of s.eleves||[]) {
+    const p = DB.people[id];
+    if (p && lvl(p.niveau) < req) w.push(`${fullName(p)} (${p.niveau||'?'}) : le programme contient des exercices niveau ${NIVEAUX[req]}`);
+  }
+  return w;
+}
+
+function regState(s){
+  if (!s.inscriptionsOuvertes) return {open:false, why:'Inscriptions fermées'};
+  const h = Number(DB.settings.closeH || 0);
+  if (Date.now() > sessStart(s).getTime() - h*3600e3) return {open:false, why:'Inscriptions closes'};
+  return {open:true};
+}
+
+let toastT;
+function toast(m, bad){
+  const t = $('#toast'); t.textContent = m; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500);
+}
+async function run(fn){ try { await fn(); } catch(e){ console.error(e); toast(e.message || String(e), true); } }
+
+/* ================= BACKENDS ================= */
+async function initBackend(){
+  if (FIREBASE_CONFIG.projectId) {
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const db = fs.getFirestore(initializeApp(FIREBASE_CONFIG));
+    backend = {
+      mode: 'firebase',
+      listen(cb){
+        COLS.forEach(c => fs.onSnapshot(fs.collection(db, c), snap => {
+          const o = {}; snap.forEach(d => o[d.id] = {id:d.id, ...d.data()});
+          DB[c] = o; loaded[c] = true; cb();
+        }, err => toast('Firestore : ' + err.message, true)));
+        fs.onSnapshot(fs.doc(db,'config','settings'), d => {
+          DB.settings = d.exists() ? d.data() : {}; loaded.settings = true; cb();
+        }, err => toast('Firestore : ' + err.message, true));
+      },
+      newId: c => fs.doc(fs.collection(db, c)).id,
+      set: (c,id,data) => fs.setDoc(fs.doc(db,c,id), clean(data)),
+      update: (c,id,data) => fs.updateDoc(fs.doc(db,c,id), clean(data)),
+      del: (c,id) => fs.deleteDoc(fs.doc(db,c,id)),
+      setSettings: data => fs.setDoc(fs.doc(db,'config','settings'), data, {merge:true}),
+      txSession: (id, fn) => fs.runTransaction(db, async tx => {
+        const ref = fs.doc(db,'sessions',id);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('Séance introuvable');
+        tx.update(ref, clean(fn({id, ...snap.data()})));
+      })
+    };
+  } else {
+    const KEY = 'plq_demo_v1';
+    let store;
+    try { store = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
+    store = store || {people:{},activities:{},sessions:{},settings:{}};
+    let cb = () => {};
+    const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(e){} };
+    const sync = () => {
+      COLS.forEach(c => { DB[c] = {}; for (const [id,v] of Object.entries(store[c])) DB[c][id] = {id, ...v}; loaded[c] = true; });
+      DB.settings = {...store.settings}; loaded.settings = true; cb();
+    };
+    const commit = () => { persist(); sync(); };
+    backend = {
+      mode: 'local',
+      listen(c){ cb = c; sync(); },
+      newId: () => Date.now().toString(36) + Math.random().toString(36).slice(2,8),
+      async set(c,id,data){ store[c][id] = clean(data); commit(); },
+      async update(c,id,data){ if (!store[c][id]) throw new Error('Introuvable'); Object.assign(store[c][id], clean(data)); commit(); },
+      async del(c,id){ delete store[c][id]; commit(); },
+      async setSettings(data){ Object.assign(store.settings, data); commit(); },
+      async txSession(id, fn){
+        if (!store.sessions[id]) throw new Error('Séance introuvable');
+        const next = fn(JSON.parse(JSON.stringify({id, ...store.sessions[id]})));
+        Object.assign(store.sessions[id], clean(next)); commit();
+      }
+    };
+  }
+}
+
+/* ================= RENDU ================= */
+let pendingRender = false;
+function requestRender(){
+  const a = document.activeElement;
+  if (a && $('#app').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) {
+    if (a.id === 'q') { const pl = $('#plist'); if (pl) pl.innerHTML = peopleListHtml(); return; }
+    pendingRender = true; return;
+  }
+  render();
+}
+document.addEventListener('focusout', () => setTimeout(() => {
+  const a = document.activeElement;
+  if (pendingRender && !(a && $('#app').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) { pendingRender = false; render(); }
+}, 0));
+
+function render(){
+  const club = DB.settings.clubName || 'Palanquée';
+  document.title = club + ' — Séances de plongée';
+  $('#app').innerHTML = `
+    <header>
+      <div class="brand">${esc(club)}<small>Séances de plongée</small></div>
+      <span class="sp"></span>
+      <div class="seg">
+        <button type="button" class="${S.mode==='participant'?'on':''}" data-a="mode" data-v="participant">Participant</button>
+        <button type="button" class="${S.mode==='admin'?'on':''}" data-a="mode" data-v="admin">Admin</button>
+      </div>
+    </header>
+    ${backend.mode==='local' ? `<div class="demo"><b>Mode démo.</b> Les données restent dans ce navigateur. Renseigne <code>FIREBASE_CONFIG</code> en haut du fichier pour partager la base avec tout le club.</div>` : ''}
+    <main>${S.mode === 'admin' ? viewAdmin() : viewParticipant()}</main>`;
+}
+
+/* ---------- ADMIN ---------- */
+function viewAdmin(){
+  if (!loaded.settings) return `<div class="card muted">Chargement…</div>`;
+  if (!DB.settings.adminHash) return `
+    <div class="card narrow"><h2>Code administrateur</h2>
+      <p class="muted">Premier lancement : choisis le code qui protégera le mode admin.</p>
+      <form data-f="setAdmin">
+        <label>Code</label><input type="password" name="a" required minlength="4">
+        <label>Confirmer</label><input type="password" name="b" required minlength="4">
+        <div class="row mt"><button class="btn p">Enregistrer</button></div>
+      </form></div>`;
+  if (!S.adminOk) return `
+    <div class="card narrow"><h2>Mode admin</h2>
+      <form data-f="adminLogin"><label>Code</label><input type="password" name="code" required autofocus>
+      <div class="row mt"><button class="btn p">Entrer</button></div></form></div>`;
+  const pending = people().filter(p => p.statut === 'en_attente').length;
+  const tabs = [['seances','Séances'],['personnes','Personnes' + (pending ? `<span class="pill">${pending}</span>` : '')],['activites','Activités'],['reglages','Réglages']];
+  return `<div class="tabs">${tabs.map(([k,l]) => `<button type="button" class="${S.tab===k?'on':''}" data-a="tab" data-v="${k}">${l}</button>`).join('')}</div>`
+    + ({seances:adminSessions, personnes:adminPeople, activites:adminActivities, reglages:adminSettings}[S.tab])();
+}
+
+const seg = (key, list, cur) => `<div class="seg2">${list.map(([v,l]) => `<button type="button" class="${cur===v?'on':''}" data-a="setf" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+
+function sessionHead(s){
+  return `<div class="row"><div>
+      <div class="date">${fmtDate(s.date)}${s.heure ? ' · ' + fmtHeure(s.heure) : ''}</div>
+      <div class="muted">${esc(s.lieu || 'Lieu à définir')} · ${esc(s.type || '')}</div></div>
+    <span class="sp"></span>${s.inscriptionsOuvertes ? '<span class="badge ok">Inscriptions ouvertes</span>' : '<span class="badge">Inscriptions fermées</span>'}</div>`;
+}
+
+function programmeHtml(s){
+  const p = s.programme || [];
+  if (!p.length) return '<div class="muted mt">Programme non défini.</div>';
+  return `<ol class="prog">${p.map(it => {
+    const a = DB.activities[it.actId];
+    return `<li><b>${esc(a ? a.nom : '(activité supprimée)')}</b>${a ? ` <span class="muted">${esc(a.categorie)}${a.dureeMin ? ' · ' + a.dureeMin + ' min' : ''}</span>` : ''}${it.note ? `<div class="muted">${esc(it.note)}</div>` : ''}</li>`;
+  }).join('')}</ol>`;
+}
+
+function adminSessions(){
+  let list = sessionsSorted().filter(s => S.filter === 'toutes' || (S.filter === 'avenir' ? !isPast(s) : isPast(s)));
+  if (S.filter === 'passees') list.reverse();
+  return `<div class="row mb"><button type="button" class="btn p" data-a="newSession">+ Nouvelle séance</button><span class="sp"></span>
+    ${seg('filter', [['avenir','À venir'],['passees','Passées'],['toutes','Toutes']], S.filter)}</div>
+    ${list.length ? list.map(sessionCardAdmin).join('') : '<div class="card muted">Aucune séance.</div>'}`;
+}
+
+function sessionCardAdmin(s){
+  const mon = (s.moniteurs||[]).map(id => esc(fullName(DB.people[id])));
+  const el = (s.eleves||[]).map(id => { const p = DB.people[id]; return p ? `${esc(fullName(p))} <span class="muted">(${esc(p.niveau||'?')})</span>` : '(supprimé)'; });
+  const enc = encadrement(s), w = sessionWarnings(s);
+  return `<div class="card">${sessionHead(s)}
+    <div class="mt"><b>Moniteurs :</b> ${mon.length ? mon.join(', ') : '<span class="muted">aucun</span>'}</div>
+    <div><b>Élèves ${(s.eleves||[]).length}${s.capaciteEleves ? '/' + s.capaciteEleves : ''} :</b> ${el.length ? el.join(', ') : '<span class="muted">aucun</span>'}</div>
+    ${enc ? `<div class="mt"><span class="badge ${enc.cls}">${enc.txt}</span></div>` : ''}
+    ${w.length ? `<ul class="warns">${w.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <details class="mt"><summary>Programme (${(s.programme||[]).length} activité${(s.programme||[]).length>1?'s':''})</summary>${programmeHtml(s)}</details>
+    ${s.notes ? `<div class="muted mt">${esc(s.notes)}</div>` : ''}
+    <div class="row mt">
+      <button type="button" class="btn sm" data-a="editSession" data-id="${s.id}">Modifier</button>
+      <button type="button" class="btn sm" data-a="dupSession" data-id="${s.id}">Dupliquer +7 j</button>
+      <button type="button" class="btn sm" data-a="toggleOpen" data-id="${s.id}">${s.inscriptionsOuvertes ? 'Fermer' : 'Ouvrir'} les inscriptions</button>
+      <span class="sp"></span>
+      <button type="button" class="btn sm d" data-a="delSession" data-id="${s.id}">Supprimer</button>
+    </div></div>`;
+}
+
+function personCheck(p, name, checked){
+  const c = certif(p);
+  return `<label><input type="checkbox" name="${name}" value="${p.id}" ${checked ? 'checked' : ''}>
+    <span class="dot ${c.cls}" title="${esc(c.txt)}"></span>${esc(fullName(p))} <span class="muted">${esc(p.niveau||'?')}</span></label>`;
+}
+
+function actOptions(){
+  const acts = Object.values(DB.activities);
+  const cats = [...new Set([...CATEGORIES, ...acts.map(a => a.categorie)])];
+  return '<option value="">— Ajouter une activité du catalogue —</option>' + cats.map(c => {
+    const l = acts.filter(a => a.categorie === c).sort((a,b) => a.nom.localeCompare(b.nom,'fr'));
+    return l.length ? `<optgroup label="${esc(c)}">${l.map(a => `<option value="${a.id}">${esc(a.nom)} (${esc(a.niveauMin||'Débutant')}+)</option>`).join('')}</optgroup>` : '';
+  }).join('');
+}
+
+function openSessionModal(id, preset){
+  const s = id ? JSON.parse(JSON.stringify(DB.sessions[id])) :
+    (preset || {date:'', heure:'', lieu:'', type:'Piscine', capaciteEleves:8, moniteurs:[], eleves:[], programme:[], inscriptionsOuvertes:true, notes:''});
+  S.draft = {
+    id: id || null,
+    orig: id ? {moniteurs:[...(s.moniteurs||[])], eleves:[...(s.eleves||[])]} : null,
+    programme: (s.programme||[]).map(x => ({...x}))
+  };
+  const mons = people().filter(p => (p.role === 'moniteur' && p.statut === 'actif') || (s.moniteurs||[]).includes(p.id));
+  const els = people().filter(p => (p.role === 'eleve' && p.statut === 'actif') || (s.eleves||[]).includes(p.id));
+  openModal(`
+    <div class="modal-head"><h2>${id ? 'Modifier la séance' : 'Nouvelle séance'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="saveSession">
+      <div class="grid2">
+        <div><label>Date</label><input type="date" name="date" value="${esc(s.date)}" required></div>
+        <div><label>Heure</label><input type="time" name="heure" value="${esc(s.heure)}"></div>
+        <div><label>Lieu</label><input name="lieu" value="${esc(s.lieu)}" placeholder="Piscine, site, bateau…"></div>
+        <div><label>Type</label><select name="type">${opts(TYPES, s.type)}</select></div>
+        <div><label>Places élèves (0 = illimité)</label><input type="number" name="cap" min="0" value="${esc(s.capaciteEleves ?? 0)}"></div>
+        <div><label>&nbsp;</label><label class="inline"><input type="checkbox" name="open" ${s.inscriptionsOuvertes ? 'checked' : ''}> Inscriptions ouvertes</label></div>
+      </div>
+      <label>Moniteurs</label>
+      <div class="checklist">${mons.length ? mons.map(p => personCheck(p,'mon',(s.moniteurs||[]).includes(p.id))).join('') : '<p class="muted">Aucun moniteur actif.</p>'}</div>
+      <label>Élèves</label>
+      <div class="checklist">${els.length ? els.map(p => personCheck(p,'el',(s.eleves||[]).includes(p.id))).join('') : '<p class="muted">Aucun élève actif.</p>'}</div>
+      <label>Programme</label>
+      <div class="row nowrap"><select id="progSel">${actOptions()}</select><button type="button" class="btn" data-a="progAdd">Ajouter</button></div>
+      <ul class="pedit" id="prog"></ul>
+      <label>Notes</label><textarea name="notes">${esc(s.notes)}</textarea>
+      <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
+    </form>`);
+  renderProg();
+}
+
+function renderProg(){
+  const p = S.draft.programme;
+  const tot = p.reduce((t,it) => t + (Number(DB.activities[it.actId]?.dureeMin) || 0), 0);
+  $('#prog').innerHTML = p.length ? p.map((it,i) => {
+    const a = DB.activities[it.actId];
+    return `<li><div class="sp"><b>${i+1}. ${esc(a ? a.nom : '(activité supprimée)')}</b>${a?.dureeMin ? ` <span class="muted">${a.dureeMin} min</span>` : ''}
+        <input class="pnote" data-i="${i}" value="${esc(it.note||'')}" placeholder="Consigne pour cette séance (facultatif)"></div>
+      <div class="row nowrap">
+        <button type="button" class="btn sm" data-a="progMove" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'}>↑</button>
+        <button type="button" class="btn sm" data-a="progMove" data-i="${i}" data-d="1" ${i < p.length-1 ? '' : 'disabled'}>↓</button>
+        <button type="button" class="btn sm d" data-a="progDel" data-i="${i}">✕</button></div></li>`;
+  }).join('') + `<li class="muted">Durée totale estimée : ${tot} min</li>` : `<li class="muted">Aucune activité pour l'instant.</li>`;
+}
+
+function adminPeople(){
+  return `<div class="row mb"><button type="button" class="btn p" data-a="newPerson">+ Ajouter</button><span class="sp"></span>
+    ${seg('pFilter', [['tous','Actifs'],['eleve','Élèves'],['moniteur','Moniteurs'],['en_attente','En attente'],['inactif','Inactifs']], S.pFilter)}</div>
+    <input id="q" class="mb" placeholder="Rechercher un nom ou un e-mail…" value="${esc(S.q)}">
+    <div id="plist">${peopleListHtml()}</div>`;
+}
+
+function peopleListHtml(){
+  const q = S.q.trim().toLowerCase();
+  const counts = {};
+  for (const s of Object.values(DB.sessions)) for (const id of [...(s.eleves||[]), ...(s.moniteurs||[])]) counts[id] = (counts[id]||0) + 1;
+  let l = people().filter(p => {
+    if (S.pFilter === 'eleve' || S.pFilter === 'moniteur') return p.role === S.pFilter && p.statut === 'actif';
+    if (S.pFilter === 'tous') return p.statut === 'actif';
+    return p.statut === S.pFilter;
+  });
+  if (q) l = l.filter(p => fullName(p).toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q));
+  if (!l.length) return '<div class="card muted">Personne dans cette liste.</div>';
+  return l.map(p => {
+    const c = certif(p);
+    return `<div class="card tight"><div class="row"><div>
+        <b>${esc(fullName(p))}</b> <span class="chip">${p.role === 'moniteur' ? 'Moniteur' : 'Élève'}</span><span class="chip">${esc(p.niveau||'?')}</span>
+        ${p.statut === 'en_attente' ? '<span class="badge warn">En attente</span>' : ''}${p.statut === 'inactif' ? '<span class="badge">Inactif</span>' : ''}
+        <div class="muted">${esc([p.email, p.tel].filter(Boolean).join(' · '))}</div>
+        <div class="muted"><span class="dot ${c.cls}"></span>${esc(c.txt)} · ${counts[p.id]||0} séance(s)${p.pinHash ? '' : ' · pas encore de PIN'}</div>
+      </div><span class="sp"></span>
+      ${p.statut === 'en_attente' ? `<button type="button" class="btn sm p" data-a="validate" data-id="${p.id}">Valider</button>` : ''}
+      <button type="button" class="btn sm" data-a="editPerson" data-id="${p.id}">Modifier</button></div></div>`;
+  }).join('');
+}
+
+function openPersonModal(id){
+  const p = id ? DB.people[id] : {prenom:'', nom:'', role:'eleve', niveau:'Débutant', email:'', tel:'', certifFin:'', statut:'actif', notes:''};
+  openModal(`
+    <div class="modal-head"><h2>${id ? esc(fullName(p)) : 'Nouvelle personne'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="savePerson"><input type="hidden" name="id" value="${id||''}">
+      <div class="grid2">
+        <div><label>Prénom</label><input name="prenom" value="${esc(p.prenom)}" required></div>
+        <div><label>Nom</label><input name="nom" value="${esc(p.nom)}" required></div>
+        <div><label>Rôle</label><select name="role"><option value="eleve" ${p.role==='eleve'?'selected':''}>Élève</option><option value="moniteur" ${p.role==='moniteur'?'selected':''}>Moniteur</option></select></div>
+        <div><label>Niveau</label><select name="niveau">${opts(NIVEAUX, p.niveau)}</select></div>
+        <div><label>E-mail</label><input type="email" name="email" value="${esc(p.email)}"></div>
+        <div><label>Téléphone</label><input type="tel" name="tel" value="${esc(p.tel)}"></div>
+        <div><label>Certificat médical valable jusqu'au</label><input type="date" name="certifFin" value="${esc(p.certifFin)}"></div>
+        <div><label>Statut</label><select name="statut">
+          <option value="actif" ${p.statut==='actif'?'selected':''}>Actif</option>
+          <option value="en_attente" ${p.statut==='en_attente'?'selected':''}>En attente</option>
+          <option value="inactif" ${p.statut==='inactif'?'selected':''}>Inactif</option></select></div>
+      </div>
+      <label>${id && p.pinHash ? 'Réinitialiser le PIN (laisser vide pour ne pas changer)' : 'PIN (facultatif, sinon la personne le choisira à sa 1re connexion)'}</label>
+      <input type="password" name="pin" inputmode="numeric" minlength="4" autocomplete="new-password">
+      <label>Notes</label><textarea name="notes">${esc(p.notes)}</textarea>
+      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delPerson" data-id="${id}">Supprimer</button>` : ''}<span class="sp"></span>
+        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
+    </form>`);
+}
+
+function adminActivities(){
+  const acts = Object.values(DB.activities);
+  const head = `<div class="row mb"><button type="button" class="btn p" data-a="newAct">+ Ajouter une activité</button>${acts.length ? '' : '<button type="button" class="btn" data-a="seedActs">Charger le catalogue de base</button>'}</div>`;
+  if (!acts.length) return head + `<div class="card muted">Catalogue vide. Tu peux charger une base d'exercices classiques et l'adapter ensuite.</div>`;
+  const used = {};
+  for (const s of Object.values(DB.sessions)) for (const it of s.programme||[]) used[it.actId] = (used[it.actId]||0) + 1;
+  const cats = [...new Set([...CATEGORIES, ...acts.map(a => a.categorie)])];
+  return head + cats.map(c => {
+    const l = acts.filter(a => a.categorie === c).sort((a,b) => lvl(a.niveauMin) - lvl(b.niveauMin) || a.nom.localeCompare(b.nom,'fr'));
+    if (!l.length) return '';
+    return `<h3>${esc(c)}</h3>` + l.map(a => `<div class="card tight"><div class="row"><div>
+        <b>${esc(a.nom)}</b> <span class="chip">${esc(a.niveauMin||'Débutant')}+</span>${a.dureeMin ? `<span class="muted">${a.dureeMin} min</span>` : ''}
+        ${a.description ? `<div class="muted">${esc(a.description)}</div>` : ''}
+        <div class="muted">Prévue dans ${used[a.id]||0} séance(s)</div></div><span class="sp"></span>
+        <button type="button" class="btn sm" data-a="editAct" data-id="${a.id}">Modifier</button></div></div>`).join('');
+  }).join('');
+}
+
+function openActModal(id){
+  const a = id ? DB.activities[id] : {nom:'', categorie:'Technique', niveauMin:'Débutant', dureeMin:10, description:''};
+  openModal(`
+    <div class="modal-head"><h2>${id ? 'Modifier l’activité' : 'Nouvelle activité'}</h2><span class="sp"></span><button type="button" class="btn sm" data-a="closeModal">Fermer</button></div>
+    <form data-f="saveAct"><input type="hidden" name="id" value="${id||''}">
+      <label>Nom</label><input name="nom" value="${esc(a.nom)}" required>
+      <div class="grid2">
+        <div><label>Catégorie</label><input name="categorie" list="cats" value="${esc(a.categorie)}" required><datalist id="cats">${CATEGORIES.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+        <div><label>Niveau minimum</label><select name="niveauMin">${opts(NIVEAUX, a.niveauMin)}</select></div>
+        <div><label>Durée indicative (min)</label><input type="number" name="dureeMin" min="0" value="${esc(a.dureeMin)}"></div>
+      </div>
+      <label>Description / objectifs</label><textarea name="description">${esc(a.description)}</textarea>
+      <div class="row mt">${id ? `<button type="button" class="btn d" data-a="delAct" data-id="${id}">Supprimer</button>` : ''}<span class="sp"></span>
+        <button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div>
+    </form>`);
+}
+
+function adminSettings(){
+  const st = DB.settings;
+  return `<div class="card"><h3>Club</h3><form data-f="saveSettings">
+      <label>Nom affiché</label><input name="clubName" value="${esc(st.clubName||'')}" placeholder="Palanquée">
+      <div class="grid2">
+        <div><label>Élèves max par moniteur</label><input type="number" name="ratio" min="1" max="12" value="${esc(st.ratio||4)}"></div>
+        <div><label>Clôture des inscriptions (h avant)</label><input type="number" name="closeH" min="0" value="${esc(st.closeH||0)}"></div>
+      </div>
+      <label class="inline mt"><input type="checkbox" name="blockCertif" ${st.blockCertif !== false ? 'checked' : ''}> Refuser l'inscription en ligne si le certificat médical est expiré</label>
+      <div class="row mt"><button class="btn p">Enregistrer</button></div></form></div>
+    <div class="card"><h3>Code administrateur</h3><form data-f="changeAdmin">
+      <div class="grid2"><div><label>Nouveau code</label><input type="password" name="a" minlength="4" required></div>
+      <div><label>Confirmer</label><input type="password" name="b" minlength="4" required></div></div>
+      <div class="row mt"><button class="btn p">Changer le code</button></div></form></div>
+    <div class="card"><h3>Sauvegarde</h3>
+      <p class="muted">Export complet (personnes, activités, séances) en JSON. L'import écrase les éléments portant le même identifiant ; il sert aussi à passer du mode démo à Firebase.</p>
+      <div class="row"><button type="button" class="btn" data-a="exportData">Exporter</button>
+      <label class="btn" style="margin:0;color:var(--ink)">Importer<input type="file" id="importFile" accept=".json,application/json" hidden></label></div></div>
+    <div class="card"><button type="button" class="btn" data-a="lock">Verrouiller le mode admin</button></div>`;
+}
+
+/* ---------- PARTICIPANT ---------- */
+function viewParticipant(){
+  if (!loaded.people || !loaded.sessions) return `<div class="card muted">Chargement…</div>`;
+  const me = S.me && DB.people[S.me];
+  if (!me) return S.signup ? signupForm() : loginForm();
+  const c = certif(me);
+  let html = `<div class="card"><div class="row"><div><b>Bonjour ${esc(me.prenom||'')}</b>
+      <div class="muted">${me.role === 'moniteur' ? 'Moniteur' : 'Élève'} · ${esc(me.niveau||'?')} · <span class="dot ${c.cls}"></span>${esc(c.txt)}</div></div>
+      <span class="sp"></span><button type="button" class="btn sm" data-a="logout">Changer d'utilisateur</button></div></div>`;
+  if (me.statut === 'en_attente') return html + `<div class="card">Ton compte attend la validation d'un administrateur. Tu pourras t'inscrire aux séances dès qu'il sera validé.</div>`;
+  if (me.statut === 'inactif') return html + `<div class="card">Ton compte est désactivé. Contacte le club.</div>`;
+  const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
+  const all = sessionsSorted();
+  const hist = all.filter(s => isPast(s) && (s[role]||[]).includes(me.id)).reverse();
+  const upcoming = all.filter(s => !isPast(s) && (s.inscriptionsOuvertes || (s[role]||[]).includes(me.id)));
+  html += `<div class="tabs"><button type="button" class="${S.ptab==='avenir'?'on':''}" data-a="ptab" data-v="avenir">À venir (${upcoming.length})</button>
+    <button type="button" class="${S.ptab==='historique'?'on':''}" data-a="ptab" data-v="historique">Mon historique (${hist.length})</button></div>`;
+  const list = S.ptab === 'avenir' ? upcoming : hist;
+  return html + (list.length ? list.map(s => sessionCardP(s, me, role)).join('') :
+    `<div class="card muted">${S.ptab === 'avenir' ? 'Aucune séance ouverte pour le moment.' : 'Aucune séance passée.'}</div>`);
+}
+
+function sessionCardP(s, me, role){
+  const inIt = (s[role]||[]).includes(me.id);
+  const n = (s.eleves||[]).length, cap = Number(s.capaciteEleves) || 0;
+  const left = cap ? cap - n : null;
+  const mon = (s.moniteurs||[]).map(id => fullName(DB.people[id]));
+  const st = regState(s);
+  let btn = '';
+  if (!isPast(s)) {
+    if (inIt) btn = st.open ? `<button type="button" class="btn d" data-a="unreg" data-id="${s.id}">Se désinscrire</button>`
+                            : `<span class="muted">Désinscription close : préviens directement ton moniteur.</span>`;
+    else if (!st.open) btn = `<span class="muted">${st.why}</span>`;
+    else if (role === 'eleves' && left !== null && left <= 0) btn = '<span class="badge bad">Complet</span>';
+    else btn = `<button type="button" class="btn p" data-a="reg" data-id="${s.id}">${role === 'moniteurs' ? 'Encadrer cette séance' : "M'inscrire"}</button>`;
+  }
+  const req = progMaxLevel(s);
+  const lvlNote = role === 'eleves' && req > lvl(me.niveau) ? `<div class="mt"><span class="badge warn">Certains exercices sont prévus à partir du niveau ${NIVEAUX[req]}</span></div>` : '';
+  const elList = role === 'moniteurs' ? `<div class="muted">Élèves : ${(s.eleves||[]).length ? (s.eleves||[]).map(id => { const p = DB.people[id]; return p ? `${esc(fullName(p))} (${esc(p.niveau||'?')})` : '?'; }).join(', ') : 'aucun pour l’instant'}</div>` : '';
+  return `<div class="card ${inIt ? 'mine' : ''}">${sessionHead(s)}
+    <div class="mt">${inIt ? `<span class="badge ok">${role === 'moniteurs' ? 'Tu encadres' : 'Tu es inscrit'}</span> ` : ''}
+      <span class="muted">Moniteur(s) : ${mon.length ? esc(mon.join(', ')) : 'à définir'} · ${cap ? `${Math.max(0,left)} place(s) sur ${cap}` : `${n} élève(s)`}</span></div>
+    ${elList}${lvlNote}
+    <details class="mt" ${inIt ? 'open' : ''}><summary>Programme</summary>${programmeHtml(s)}</details>
+    ${s.notes ? `<div class="muted mt">${esc(s.notes)}</div>` : ''}
+    ${btn ? `<div class="row mt">${btn}</div>` : ''}</div>`;
+}
+
+function pinLabel(id){
+  const p = DB.people[id];
+  return p && !p.pinHash ? 'Première connexion : choisis ton PIN (4 chiffres min.)' : 'PIN';
+}
+
+function loginForm(){
+  const list = people().filter(p => p.statut !== 'inactif');
+  const first = S.loginId && DB.people[S.loginId] && !DB.people[S.loginId].pinHash;
+  return `<div class="card narrow"><h2>Connexion</h2>
+    <form data-f="login">
+      <label>Qui es-tu ?</label>
+      <select name="id" id="loginSel" required><option value="">— Choisir —</option>
+        ${list.map(p => `<option value="${p.id}" ${S.loginId===p.id?'selected':''}>${esc(fullName(p))}${p.role === 'moniteur' ? ' (moniteur)' : ''}</option>`).join('')}</select>
+      <label id="pinLbl">${pinLabel(S.loginId)}</label>
+      <input type="password" name="pin" inputmode="numeric" required minlength="4" autocomplete="current-password">
+      <div id="pin2wrap" ${first ? '' : 'hidden'}><label>Confirme ton PIN</label><input type="password" name="pin2" inputmode="numeric"></div>
+      <div class="row mt"><button class="btn p">Se connecter</button></div>
+    </form>
+    <p class="muted mt">Pas dans la liste ? <a href="#" data-a="signup">Demander la création de ton compte</a></p></div>`;
+}
+
+function signupForm(){
+  return `<div class="card narrow"><h2>Créer mon compte</h2>
+    <p class="muted">Ta demande sera validée par un administrateur avant que tu puisses t'inscrire aux séances.</p>
+    <form data-f="signup">
+      <div class="grid2">
+        <div><label>Prénom</label><input name="prenom" required></div>
+        <div><label>Nom</label><input name="nom" required></div>
+        <div><label>Je suis</label><select name="role"><option value="eleve">Élève</option><option value="moniteur">Moniteur</option></select></div>
+        <div><label>Niveau actuel</label><select name="niveau">${opts(NIVEAUX,'Débutant')}</select></div>
+      </div>
+      <label>E-mail</label><input type="email" name="email">
+      <label>Téléphone</label><input type="tel" name="tel">
+      <label>Certificat médical valable jusqu'au</label><input type="date" name="certifFin">
+      <div class="grid2">
+        <div><label>PIN (4 chiffres min.)</label><input type="password" name="pin" inputmode="numeric" minlength="4" required autocomplete="new-password"></div>
+        <div><label>Confirmer</label><input type="password" name="pin2" inputmode="numeric" minlength="4" required></div>
+      </div>
+      <div class="row mt"><button type="button" class="btn" data-a="signupCancel">Retour</button><span class="sp"></span><button class="btn p">Envoyer la demande</button></div>
+    </form></div>`;
+}
+
+/* ================= MODALE ================= */
+function openModal(html){ $('#modal').innerHTML = `<div class="modal-bg" data-a="modalBg"><div class="modal">${html}</div></div>`; }
+function closeModal(){ $('#modal').innerHTML = ''; S.draft = null; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeModal(); });
+
+/* ================= ACTIONS ================= */
+const A = {
+  mode: d => { S.mode = d.v; localStorage.setItem('plq_mode', d.v); render(); },
+  tab: d => { S.tab = d.v; render(); },
+  ptab: d => { S.ptab = d.v; render(); },
+  setf: d => { S[d.k] = d.v; render(); },
+  lock: () => { S.adminOk = false; sessionStorage.removeItem('plq_admin'); render(); },
+  closeModal, modalBg: closeModal,
+
+  newSession: () => openSessionModal(null),
+  editSession: d => openSessionModal(d.id),
+  dupSession: d => {
+    const s = DB.sessions[d.id]; const dt = new Date(s.date + 'T12:00'); dt.setDate(dt.getDate() + 7);
+    openSessionModal(null, {...JSON.parse(JSON.stringify(clean(s))), date: ymd(dt), eleves: []});
+  },
+  toggleOpen: async d => { await backend.update('sessions', d.id, {inscriptionsOuvertes: !DB.sessions[d.id].inscriptionsOuvertes}); },
+  delSession: async d => {
+    const s = DB.sessions[d.id];
+    if (!confirm(`Supprimer la séance du ${fmtDate(s.date)} ? Les inscriptions seront perdues.`)) return;
+    await backend.del('sessions', d.id); toast('Séance supprimée');
+  },
+  progAdd: () => { const v = $('#progSel').value; if (!v) return; S.draft.programme.push({actId: v, note: ''}); $('#progSel').value = ''; renderProg(); },
+  progMove: d => { const p = S.draft.programme, i = +d.i, j = i + +d.d; [p[i], p[j]] = [p[j], p[i]]; renderProg(); },
+  progDel: d => { S.draft.programme.splice(+d.i, 1); renderProg(); },
+
+  newPerson: () => openPersonModal(null),
+  editPerson: d => openPersonModal(d.id),
+  validate: async d => { await backend.update('people', d.id, {statut: 'actif'}); toast('Compte validé'); },
+  delPerson: async d => {
+    const p = DB.people[d.id];
+    const inS = Object.values(DB.sessions).filter(s => (s.eleves||[]).includes(d.id) || (s.moniteurs||[]).includes(d.id));
+    if (!confirm(`Supprimer ${fullName(p)} ?${inS.length ? `\nIl sera retiré de ${inS.length} séance(s), historique compris. Pour garder l'historique, passe plutôt la personne en « Inactif ».` : ''}`)) return;
+    for (const s of inS) await backend.txSession(s.id, cur => ({eleves: (cur.eleves||[]).filter(x => x !== d.id), moniteurs: (cur.moniteurs||[]).filter(x => x !== d.id)}));
+    await backend.del('people', d.id);
+    closeModal(); toast('Personne supprimée');
+  },
+
+  newAct: () => openActModal(null),
+  editAct: d => openActModal(d.id),
+  delAct: async d => {
+    const n = Object.values(DB.sessions).filter(s => (s.programme||[]).some(it => it.actId === d.id)).length;
+    if (!confirm(`Supprimer « ${DB.activities[d.id].nom} » ?${n ? `\nElle apparaît dans ${n} séance(s) et y sera affichée comme « activité supprimée ».` : ''}`)) return;
+    await backend.del('activities', d.id); closeModal(); toast('Activité supprimée');
+  },
+  seedActs: async () => {
+    await Promise.all(CATALOGUE_DE_BASE.map(([nom, categorie, niveauMin, dureeMin]) =>
+      backend.set('activities', backend.newId('activities'), {nom, categorie, niveauMin, dureeMin, description: ''})));
+    toast(`${CATALOGUE_DE_BASE.length} activités ajoutées`);
+  },
+
+  exportData: () => {
+    const settings = {...DB.settings}; delete settings.adminHash;
+    const blob = new Blob([JSON.stringify({exportedAt: new Date().toISOString(), settings, people: DB.people, activities: DB.activities, sessions: DB.sessions}, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plongee-sauvegarde-${today()}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+
+  signup: () => { S.signup = true; render(); },
+  signupCancel: () => { S.signup = false; render(); },
+  logout: () => { S.me = null; localStorage.removeItem('plq_me'); render(); },
+
+  reg: async d => {
+    const me = DB.people[S.me]; const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
+    if (DB.settings.blockCertif !== false && !certif(me).ok) return toast('Certificat médical expiré : inscription impossible. Mets-le à jour auprès du club.', true);
+    await backend.txSession(d.id, cur => {
+      if (!regState(cur).open) throw new Error('Les inscriptions sont fermées');
+      const arr = [...(cur[role]||[])];
+      if (!arr.includes(me.id)) {
+        if (role === 'eleves' && cur.capaciteEleves && arr.length >= cur.capaciteEleves) throw new Error('Séance complète');
+        arr.push(me.id);
+      }
+      return {[role]: arr};
+    });
+    toast('Inscription enregistrée');
+  },
+  unreg: async d => {
+    const me = DB.people[S.me]; const role = me.role === 'moniteur' ? 'moniteurs' : 'eleves';
+    if (!confirm('Confirmer la désinscription ?')) return;
+    await backend.txSession(d.id, cur => {
+      if (!regState(cur).open) throw new Error('La désinscription en ligne est close');
+      return {[role]: (cur[role]||[]).filter(x => x !== me.id)};
+    });
+    toast('Désinscription enregistrée');
+  }
+};
+
+/* ================= FORMULAIRES ================= */
+const F = {
+  setAdmin: async f => {
+    const a = f.a.value, b = f.b.value;
+    if (a !== b) return toast('Les deux codes ne correspondent pas', true);
+    await backend.setSettings({adminHash: await hash('admin:' + a), ratio: DB.settings.ratio || 4});
+    S.adminOk = true; sessionStorage.setItem('plq_admin', '1'); render();
+  },
+  adminLogin: async f => {
+    if (await hash('admin:' + f.code.value) !== DB.settings.adminHash) return toast('Code incorrect', true);
+    S.adminOk = true; sessionStorage.setItem('plq_admin', '1'); render();
+  },
+  changeAdmin: async f => {
+    if (f.a.value !== f.b.value) return toast('Les deux codes ne correspondent pas', true);
+    await backend.setSettings({adminHash: await hash('admin:' + f.a.value)}); f.reset(); toast('Code modifié');
+  },
+  saveSettings: async f => {
+    await backend.setSettings({clubName: f.clubName.value.trim(), ratio: Number(f.ratio.value) || 4, closeH: Number(f.closeH.value) || 0, blockCertif: f.blockCertif.checked});
+    toast('Réglages enregistrés');
+  },
+  saveSession: async f => {
+    const fd = new FormData(f);
+    const mon = fd.getAll('mon'), el = fd.getAll('el');
+    const data = {
+      date: fd.get('date'), heure: fd.get('heure') || '', lieu: fd.get('lieu').trim(), type: fd.get('type'),
+      capaciteEleves: Number(fd.get('cap')) || 0, inscriptionsOuvertes: fd.get('open') === 'on',
+      notes: fd.get('notes').trim(), programme: S.draft.programme
+    };
+    if (data.capaciteEleves && el.length > data.capaciteEleves && !confirm(`${el.length} élèves cochés pour ${data.capaciteEleves} places. Enregistrer quand même ?`)) return;
+    if (!S.draft.id) {
+      await backend.set('sessions', backend.newId('sessions'), {...data, moniteurs: mon, eleves: el, createdAt: Date.now()});
+    } else {
+      // Fusion : on applique uniquement ce que l'admin a coché/décoché, pour ne pas écraser
+      // une inscription faite par un participant pendant que la fenêtre était ouverte.
+      const o = S.draft.orig;
+      const merge = (curArr, orig, now) => {
+        const rem = orig.filter(x => !now.includes(x)), add = now.filter(x => !orig.includes(x));
+        const r = (curArr||[]).filter(x => !rem.includes(x));
+        add.forEach(x => { if (!r.includes(x)) r.push(x); });
+        return r;
+      };
+      await backend.txSession(S.draft.id, cur => ({...data, moniteurs: merge(cur.moniteurs, o.moniteurs, mon), eleves: merge(cur.eleves, o.eleves, el)}));
+    }
+    closeModal(); toast('Séance enregistrée');
+  },
+  savePerson: async f => {
+    const fd = new FormData(f), id = fd.get('id');
+    const data = {
+      prenom: fd.get('prenom').trim(), nom: fd.get('nom').trim(), role: fd.get('role'), niveau: fd.get('niveau'),
+      email: fd.get('email').trim(), tel: fd.get('tel').trim(), certifFin: fd.get('certifFin'), statut: fd.get('statut'), notes: fd.get('notes').trim()
+    };
+    const pin = fd.get('pin');
+    if (pin && pin.length < 4) return toast('PIN : 4 caractères minimum', true);
+    const pid = id || backend.newId('people');
+    if (pin) data.pinHash = await hash(pid + ':' + pin);
+    if (id) await backend.update('people', id, data);
+    else await backend.set('people', pid, {...data, pinHash: data.pinHash || '', createdAt: Date.now()});
+    closeModal(); toast('Enregistré');
+  },
+  saveAct: async f => {
+    const fd = new FormData(f), id = fd.get('id');
+    const data = {nom: fd.get('nom').trim(), categorie: fd.get('categorie').trim() || 'Autre', niveauMin: fd.get('niveauMin'), dureeMin: Number(fd.get('dureeMin')) || 0, description: fd.get('description').trim()};
+    if (id) await backend.update('activities', id, data); else await backend.set('activities', backend.newId('activities'), data);
+    closeModal(); toast('Activité enregistrée');
+  },
+  login: async f => {
+    const fd = new FormData(f), p = DB.people[fd.get('id')], pin = fd.get('pin');
+    if (!p) return toast('Choisis ton nom dans la liste', true);
+    if (!p.pinHash) {
+      if (pin.length < 4) return toast('PIN : 4 caractères minimum', true);
+      if (pin !== fd.get('pin2')) return toast('Les deux PIN ne correspondent pas', true);
+      await backend.update('people', p.id, {pinHash: await hash(p.id + ':' + pin)});
+    } else if (await hash(p.id + ':' + pin) !== p.pinHash) return toast('PIN incorrect', true);
+    S.me = p.id; localStorage.setItem('plq_me', p.id); S.loginId = ''; render();
+  },
+  signup: async f => {
+    const fd = new FormData(f);
+    if (fd.get('pin') !== fd.get('pin2')) return toast('Les deux PIN ne correspondent pas', true);
+    const prenom = fd.get('prenom').trim(), nom = fd.get('nom').trim();
+    const dup = people().find(p => fullName(p).toLowerCase() === `${prenom} ${nom}`.toLowerCase());
+    if (dup) return toast('Un compte existe déjà à ce nom : connecte-toi ou contacte le club', true);
+    const id = backend.newId('people');
+    await backend.set('people', id, {
+      prenom, nom, role: fd.get('role'), niveau: fd.get('niveau'), email: fd.get('email').trim(), tel: fd.get('tel').trim(),
+      certifFin: fd.get('certifFin'), statut: 'en_attente', notes: '', pinHash: await hash(id + ':' + fd.get('pin')), createdAt: Date.now()
+    });
+    S.me = id; localStorage.setItem('plq_me', id); S.signup = false; render();
+  }
+};
+
+async function importFile(file){
+  if (!file) return;
+  const data = JSON.parse(await file.text());
+  const n = c => Object.keys(data[c] || {}).length;
+  if (!confirm(`Importer ${n('people')} personnes, ${n('activities')} activités et ${n('sessions')} séances ?`)) return;
+  for (const c of COLS) for (const [id, v] of Object.entries(data[c] || {})) await backend.set(c, id, v);
+  if (data.settings) { const s = {...data.settings}; delete s.adminHash; await backend.setSettings(s); }
+  toast('Import terminé');
+}
+
+/* ================= ÉVÉNEMENTS ================= */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]'); if (!t) return;
+  if (t.dataset.a === 'modalBg' && e.target !== t) return;
+  if (t.tagName === 'BUTTON' || t.tagName === 'A') e.preventDefault();
+  const fn = A[t.dataset.a]; if (fn) run(() => fn(t.dataset, t));
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('form[data-f]'); if (!f) return;
+  e.preventDefault(); run(() => F[f.dataset.f](f));
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { S.q = e.target.value; $('#plist').innerHTML = peopleListHtml(); }
+  if (e.target.classList.contains('pnote') && S.draft) S.draft.programme[+e.target.dataset.i].note = e.target.value;
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'importFile') { const file = e.target.files[0]; e.target.value = ''; run(() => importFile(file)); }
+  if (e.target.id === 'loginSel') {
+    S.loginId = e.target.value;
+    $('#pinLbl').textContent = pinLabel(S.loginId);
+    const p = DB.people[S.loginId];
+    $('#pin2wrap').hidden = !(p && !p.pinHash);
+  }
+});
+
+/* ================= DÉMARRAGE ================= */
+(async () => {
+  $('#app').innerHTML = '<main><div class="card muted">Chargement…</div></main>';
+  try { await initBackend(); }
+  catch (e) { $('#app').innerHTML = `<main><div class="card">Impossible de se connecter à Firebase : ${esc(e.message)}</div></main>`; return; }
+  backend.listen(requestRender);
+})();
+</script>
+</body>
+</html>
