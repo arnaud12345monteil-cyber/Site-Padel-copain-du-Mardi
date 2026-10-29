@@ -125,7 +125,7 @@ const FIREBASE_CONFIG = {
   appId: "1:14173816618:web:ce7a5abad27463b6f04053"
 };
 // Seule valeur à incrémenter à chaque mise en ligne (transmise au service worker).
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
@@ -402,6 +402,7 @@ function mainView(){
   if (S.access === null) return noAccessView();
   if (!COLS.every(c => loaded[c])) return wait;
   if (S.view === 'fiche' && S.fiche) return ficheView();
+  if (S.view === 'ficheRO' && DB.fiches[S.ficheId]) return ficheReadView(DB.fiches[S.ficheId]);
   if (S.view === 'eleve' && DB.eleves[S.eleveId]) return eleveView(S.eleveId);
   const tabs = [['fiches', isResp() ? 'Fiches de séance' : 'Mes fiches'], ['eleves', 'Élèves'], ['presence', 'Présence'], ['programme', 'Programme']];
   if (isResp()) tabs.push(['gestion', 'Gestion']);
@@ -474,8 +475,39 @@ function tabFiches(){
       ${all ? `<div class="muted">Moniteur : ${esc(monName(f.moniteurId))}</div>` : ''}
       <div class="muted">${(f.eleves || []).map(id => esc(personName(DB.eleves[id]))).join(', ') || 'Aucun élève'}</div>
       <div class="muted">${(f.competences || []).length} compétence(s) · ${nbEv} évaluation(s)</div></div><span class="sp"></span>
-      ${canEditFiche(f) ? `<button type="button" class="btn sm" data-a="editFiche" data-id="${f.id}">Modifier</button>` : '<span class="badge">Lecture seule</span>'}</div></div>`;
+      <div class="row"><button type="button" class="btn sm" data-a="viewFiche" data-id="${f.id}">Voir</button>
+      ${canEditFiche(f) ? `<button type="button" class="btn sm" data-a="editFiche" data-id="${f.id}">Modifier</button>` : '<span class="badge">Lecture seule</span>'}</div></div></div>`;
   }).join('');
+}
+
+/* Consultation complète d'une fiche, sans modification possible. */
+function ficheReadView(f){
+  const cids = (f.competences || []);
+  const theo = (prog().theorie || {})[f.seanceKey];
+  const compsHtml = cids.length ? groupedComps(cids.map(id => DB.competences[id] || {id, capacite: '(compétence supprimée)'})).map(g => `<h3>${esc(g.g)}</h3>` + g.items.map(c => {
+    const cons = consigne(c.id, f.seanceKey);
+    return `<div class="comp"><b>${esc(compName(c))}</b>${cons ? `<div class="muted pre">${esc(cons)}</div>` : ''}
+      ${c.ce ? `<details class="mt"><summary>Critères d’évaluation</summary><div class="pre mt">${esc(c.ce)}</div></details>` : ''}</div>`;
+  }).join('')).join('') : '<p class="muted">Aucune compétence.</p>';
+  const elevesHtml = (f.eleves || []).map(eid => {
+    const ev = (f.evals || {})[eid] || {}, g = (f.commentaires || {})[eid];
+    const done = cids.filter(c => (ev[c] || {}).niveau).length;
+    return `<div class="evcard"><div class="row"><b>${esc(personName(DB.eleves[eid]))}</b><span class="sp"></span><span class="muted">${done}/${cids.length} évaluée(s)</span>
+        ${DB.eleves[eid] ? `<button type="button" class="btn sm" data-a="openEleve" data-id="${eid}">Bilan</button>` : ''}</div>
+      ${cids.map(cid => { const x = ev[cid] || {};
+        return `<div class="row" style="align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)">${lvTag(x.niveau)}<div style="flex:1">${esc(compName(DB.competences[cid]))}${x.comment ? `<div class="muted pre">${esc(x.comment)}</div>` : ''}</div></div>`; }).join('')}
+      ${g ? `<div class="hist"><b>Commentaire général</b><div class="pre">${esc(g)}</div></div>` : ''}</div>`;
+  }).join('') || '<p class="muted">Aucun élève.</p>';
+  return `<div class="row mb"><button type="button" class="btn sm" data-a="closeView">← Retour</button><h2>${esc(seanceLabel(f.seanceKey))}</h2><span class="sp"></span>
+      ${canEditFiche(f) ? `<button type="button" class="btn sm p" data-a="editFiche" data-id="${f.id}">Modifier</button>` : '<span class="badge">Lecture seule</span>'}</div>
+    <div class="card"><div class="grid2" style="gap:10px 12px">
+      <div><div class="muted">Date</div><b>${fmtDate(f.date)}</b></div><div><div class="muted">Créneau</div><b>${CRENEAUX[f.creneau] || '—'}</b></div>
+      <div><div class="muted">Moniteur</div><b>${esc(monName(f.moniteurId))}</b></div><div><div class="muted">Type de séance</div><b>${f.mode === 'programme' ? 'Séance du programme' : 'Séance personnalisée'}</b></div></div>
+      ${theo ? `<p class="muted">Théorie prévue : ${esc(theo)}</p>` : ''}
+      ${f.updatedAt ? `<p class="muted">Dernière mise à jour : ${new Date(f.updatedAt).toLocaleString('fr-FR', {dateStyle: 'long', timeStyle: 'short'})}</p>` : ''}</div>
+    <div class="card"><h3>Évaluations (${(f.eleves || []).length} élève${(f.eleves || []).length > 1 ? 's' : ''})</h3>
+      <div class="legend mb">${LV_KEYS.map(k => `${lvTag(k)} ${LV[k].label}`).join(' · ')}</div>${elevesHtml}</div>
+    <div class="card"><h3>Compétences travaillées (${cids.length})</h3>${compsHtml}</div>`;
 }
 
 function nextSeanceKey(){
@@ -602,7 +634,7 @@ function eleveView(eid){
       <div class="mt">${lines || '<span class="muted">Présent, aucune évaluation saisie.</span>'}</div>
       ${g ? `<div class="hist"><b>Commentaire général</b><div class="pre">${esc(g)}</div></div>` : ''}</div>`;
   }).join('');
-  return `<div class="row mb"><button type="button" class="btn sm" data-a="closeView">← Élèves</button><h2>${esc(personName(e))}</h2></div>
+  return `<div class="row mb"><button type="button" class="btn sm" data-a="closeView">← ${S.backTo ? 'Fiche' : 'Élèves'}</button><h2>${esc(personName(e))}</h2></div>
     <div class="card"><div class="stats"><div><b>${b.presence.size}/${SE.length}</b><span class="muted">séances</span></div>
       <div><b>${ok}/${C.length}</b><span class="muted">acquises ou maîtrisées</span></div><div><b>${n('ECA')}</b><span class="muted">en cours</span></div></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -993,7 +1025,8 @@ const A = {
   gTab: d => { S.gTab = d.v; render(); },
   authMode: d => { S.authMode = d.v; render(); },
   closeModal, modalBg: closeModal,
-  closeView: () => { S.view = null; render(); },
+  closeView: () => { if (S.view === 'eleve' && S.backTo) { S.view = 'ficheRO'; S.backTo = null; } else S.view = null; render(); },
+  viewFiche: d => { S.ficheId = d.id; S.view = 'ficheRO'; render(); scrollTo(0, 0); },
   logout: async () => { S.tab = 'fiches'; S.gTab = 'eleves'; S.q = ''; S.ficheScope = 'miens'; await backend.signOut(); },
   verified: async () => { const u = await backend.refreshUser(); if (!u.verified) return toast('Adresse pas encore confirmée. Clique sur le lien de l’e-mail.', true); await onAuthChange(u); },
   resend: async () => { await backend.resendVerification(); toast('E-mail renvoyé'); },
@@ -1058,7 +1091,7 @@ const A = {
     await backend.del('fiches', S.fiche.id); dropDraft(); S.view = null; S.fiche = null; render(); toast('Fiche supprimée');
   },
 
-  openEleve: d => { S.eleveId = d.id; S.view = 'eleve'; render(); scrollTo(0, 0); },
+  openEleve: d => { S.backTo = S.view === 'ficheRO' ? S.ficheId : null; S.eleveId = d.id; S.view = 'eleve'; render(); scrollTo(0, 0); },
   exportXlsx: () => exportXlsx(),
 
   saveTheo: async d => { const theorie = {...(prog().theorie || {})}; const v = $('#progTheo').value.trim(); if (v) theorie[d.k] = v; else delete theorie[d.k]; await saveProg({theorie}); toast('Enregistré'); },
