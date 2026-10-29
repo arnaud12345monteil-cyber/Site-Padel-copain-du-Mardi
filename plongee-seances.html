@@ -125,7 +125,7 @@ const FIREBASE_CONFIG = {
   appId: "1:14173816618:web:ce7a5abad27463b6f04053"
 };
 // Seule valeur à incrémenter à chaque mise en ligne (transmise au service worker).
-const APP_VERSION = '2.0.1';
+const APP_VERSION = '2.1.0';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
@@ -169,6 +169,10 @@ const byName = (a, b) => (a.nom || '').localeCompare(b.nom || '', 'fr') || (a.pr
 const initialesDe = (prenom, nom) => ((prenom || '').split(/[\s-]+/).map(x => x[0] || '').join('') + (nom || '').split(/\s+/).map(x => x[0] || '').join('')).toUpperCase();
 
 const isResp = () => S.access && S.access.role === 'responsable';
+// Droits par moniteur, réglés par le responsable (absents = autorisé). Le responsable a toujours tous les droits.
+const canCreate = () => isResp() || (!!S.access && S.access.peutCreer !== false);
+const canEdit = () => isResp() || (!!S.access && S.access.peutModifier !== false);
+const canEditFiche = f => isResp() || (f.moniteurId === myId() && canEdit());
 const myId = () => S.access && S.access.moniteurId;
 const eleves = all => Object.values(DB.eleves).filter(e => all || e.actif !== false).sort(byName);
 const moniteurs = all => Object.values(DB.moniteurs).filter(m => all || m.actif !== false).sort(byName);
@@ -454,9 +458,11 @@ function tabFiches(){
   const all = isResp() && S.ficheScope === 'toutes';
   const list = Object.values(DB.fiches).filter(f => all || f.moniteurId === myId()).sort(ficheSort).reverse();
   const draft = readDraft();
-  let html = `<div class="row mb"><button type="button" class="btn p" data-a="newFiche">+ Nouvelle fiche de séance</button><span class="sp"></span>
+  let html = `<div class="row mb">${canCreate() ? '<button type="button" class="btn p" data-a="newFiche">+ Nouvelle fiche de séance</button>' : ''}<span class="sp"></span>
     ${isResp() ? seg('ficheScope', [['miens', 'Mes fiches'], ['toutes', 'Toutes']], S.ficheScope) : ''}</div>`;
-  if (draft) html += `<div class="card" style="border-color:#efd48b;background:#fffaf0"><div class="row"><div><b>Fiche non enregistrée</b>
+  const rights = [!canCreate() && 'créer une fiche', !canEdit() && 'modifier tes fiches'].filter(Boolean);
+  if (rights.length) html += `<div class="card muted">Le responsable de la formation ne t’a pas autorisé à ${rights.join(' ni à ')}. Contacte-le si besoin.</div>`;
+  if (draft && (draft.id ? canEdit() : canCreate())) html += `<div class="card" style="border-color:#efd48b;background:#fffaf0"><div class="row"><div><b>Fiche non enregistrée</b>
       <div class="muted">${esc(seanceLabel(draft.seanceKey))} · ${fmtDate(draft.date)} · ${(draft.eleves || []).length} élève(s)</div></div><span class="sp"></span>
       <button type="button" class="btn sm" data-a="dropDraft">Abandonner</button><button type="button" class="btn sm p" data-a="resumeDraft">Reprendre</button></div></div>`;
   if (!comps().length) html += `<div class="card muted">Le référentiel de compétences est vide. ${isResp() ? 'Importe le fichier Excel de suivi dans Gestion &gt; Données.' : 'Le responsable de la formation doit d’abord l’importer.'}</div>`;
@@ -468,7 +474,7 @@ function tabFiches(){
       ${all ? `<div class="muted">Moniteur : ${esc(monName(f.moniteurId))}</div>` : ''}
       <div class="muted">${(f.eleves || []).map(id => esc(personName(DB.eleves[id]))).join(', ') || 'Aucun élève'}</div>
       <div class="muted">${(f.competences || []).length} compétence(s) · ${nbEv} évaluation(s)</div></div><span class="sp"></span>
-      ${(isResp() || f.moniteurId === myId()) ? `<button type="button" class="btn sm" data-a="editFiche" data-id="${f.id}">Modifier</button>` : ''}</div></div>`;
+      ${canEditFiche(f) ? `<button type="button" class="btn sm" data-a="editFiche" data-id="${f.id}">Modifier</button>` : '<span class="badge">Lecture seule</span>'}</div></div>`;
   }).join('');
 }
 
@@ -666,6 +672,7 @@ function tabGestion(){
       <div class="row mb"><button type="button" class="btn p" data-a="editMoniteur">+ Ajouter un moniteur</button></div>`
       + (list.map(m => { const r = roleOf(m); return `<div class="card tight"><div class="row"><div><b>${esc(personName(m))}</b> <span class="muted">${esc(m.initiales || '')}</span>
         ${r === 'responsable' ? ' <span class="badge ok">Responsable</span>' : ''}${m.actif === false ? ' <span class="badge">Inactif</span>' : ''}
+        ${r !== 'responsable' && m.peutCreer === false ? ' <span class="badge warn">Création bloquée</span>' : ''}${r !== 'responsable' && m.peutModifier === false ? ' <span class="badge warn">Modification bloquée</span>' : ''}
         <div class="muted">${m.email ? esc(m.email) + (r ? '' : ' · accès désactivé') : '<span style="color:var(--warn)">E-mail manquant : pas d’accès à l’appli</span>'}</div></div><span class="sp"></span>
         <button type="button" class="btn sm" data-a="editMoniteur" data-id="${m.id}">Modifier</button></div></div>`; }).join('') || '<div class="card muted">Aucun moniteur.</div>');
   }
@@ -715,6 +722,10 @@ function openMoniteurModal(id){
       <div><label>Initiales</label><input name="initiales" value="${esc(m.initiales)}" placeholder="auto"></div><div><label>E-mail personnel (connexion)</label><input type="email" name="email" value="${esc(m.email)}"></div></div>
       <label class="inline mt"><input type="checkbox" name="resp" ${r === 'responsable' ? 'checked' : ''} ${self ? 'disabled' : ''}> Responsable de la formation (gestion, programme, export)</label>
       <label class="inline"><input type="checkbox" name="actif" ${m.actif !== false ? 'checked' : ''} ${self ? 'disabled' : ''}> Actif (peut se connecter)</label>
+      <h3>Droits sur les fiches de séance</h3>
+      <label class="inline"><input type="checkbox" name="peutCreer" ${m.peutCreer !== false ? 'checked' : ''}> Peut créer des fiches de séance</label>
+      <label class="inline"><input type="checkbox" name="peutModifier" ${m.peutModifier !== false ? 'checked' : ''}> Peut modifier ou supprimer ses fiches</label>
+      <p class="muted">Sans effet sur un responsable de la formation, qui garde tous les droits. Sans droit de modification, le moniteur consulte ses fiches et les bilans des élèves en lecture seule.</p>
       ${self ? '<p class="muted">Tu ne peux pas retirer ton propre rôle ni te désactiver.</p>' : ''}
       <div class="row mt"><span class="sp"></span><button type="button" class="btn" data-a="closeModal">Annuler</button><button class="btn p">Enregistrer</button></div></form>`);
 }
@@ -988,9 +999,11 @@ const A = {
   resend: async () => { await backend.resendVerification(); toast('E-mail renvoyé'); },
   recheck: async () => { S.access = undefined; render(); await checkAccess(); },
 
-  newFiche,
-  editFiche: d => { S.fiche = {evals: {}, commentaires: {}, competences: [], eleves: [], mode: 'libre', ...clone(DB.fiches[d.id])}; S.showCm = {}; S.view = 'fiche'; render(); scrollTo(0, 0); },
-  resumeDraft: () => { S.fiche = readDraft(); S.showCm = {}; S.view = 'fiche'; render(); },
+  newFiche: () => { if (!canCreate()) return toast('Tu n’es pas autorisé à créer une fiche.', true); newFiche(); },
+  editFiche: d => {
+    if (!canEditFiche(DB.fiches[d.id] || {})) return toast('Tu n’es pas autorisé à modifier cette fiche.', true);
+    S.fiche = {evals: {}, commentaires: {}, competences: [], eleves: [], mode: 'libre', ...clone(DB.fiches[d.id])}; S.showCm = {}; S.view = 'fiche'; render(); scrollTo(0, 0); },
+  resumeDraft: () => { const dr = readDraft(); if (!dr || !(dr.id ? canEdit() : canCreate())) return toast('Action non autorisée.', true); S.fiche = dr; S.showCm = {}; S.view = 'fiche'; render(); },
   dropDraft: () => { if (confirm('Abandonner cette fiche non enregistrée ?')) { dropDraft(); render(); } },
   closeFiche: () => {
     if (!S.fiche.id && (S.fiche.eleves.length || Object.keys(S.fiche.evals).length) && !confirm('Quitter sans enregistrer ? La fiche reste disponible en brouillon.')) return;
@@ -1016,6 +1029,8 @@ const A = {
   cm: d => { S.showCm[d.e + '|' + d.c] = true; render(); const i = document.getElementById(`cm-${d.e}-${d.c}`); if (i) i.focus(); },
   saveFiche: async () => {
     const f = S.fiche;
+    if (f.id ? !canEditFiche(DB.fiches[f.id] || {}) : !canCreate())
+      return toast(`Le responsable vient de retirer ton droit de ${f.id ? 'modification' : 'création'}. La fiche reste en brouillon sur cet appareil.`, true);
     if (!f.date || !f.seanceKey) return toast('Date et séance obligatoires', true);
     if (!f.eleves.length) return toast('Choisis au moins un élève', true);
     const compsSel = f.competences.filter(c => DB.competences[c]);
@@ -1038,6 +1053,7 @@ const A = {
     if (await saveSoft(p)) toast('Fiche enregistrée');
   },
   delFiche: async () => {
+    if (!canEditFiche(DB.fiches[S.fiche.id] || {})) return toast('Tu n’es pas autorisé à supprimer cette fiche.', true);
     if (!confirm('Supprimer définitivement cette fiche et ses évaluations ?')) return;
     await backend.del('fiches', S.fiche.id); dropDraft(); S.view = null; S.fiche = null; render(); toast('Fiche supprimée');
   },
@@ -1140,10 +1156,11 @@ const F = {
     const role = self ? 'responsable' : (f.resp.checked ? 'responsable' : 'moniteur');
     if (email && Object.values(DB.moniteurs).some(m => m.id !== id && (m.email || '').toLowerCase() === email)) return toast('Cet e-mail est déjà utilisé par un autre moniteur', true);
     if (self && email !== (old.email || '').toLowerCase()) return toast('Tu ne peux pas changer ton propre e-mail de connexion ici', true);
-    const ops = [{op: 'set', c: 'moniteurs', id, data: {...clean(old), prenom, nom, initiales: f.initiales.value.trim() || initialesDe(prenom, nom), email, actif}}];
+    const peutCreer = f.peutCreer.checked, peutModifier = f.peutModifier.checked;
+    const ops = [{op: 'set', c: 'moniteurs', id, data: {...clean(old), prenom, nom, initiales: f.initiales.value.trim() || initialesDe(prenom, nom), email, actif, peutCreer, peutModifier}}];
     const oldEmail = (old.email || '').toLowerCase();
     if (oldEmail && oldEmail !== email && DB.acces[oldEmail]) ops.push({op: 'del', c: 'acces', id: oldEmail});
-    if (email && actif) ops.push({op: 'set', c: 'acces', id: email, data: {moniteurId: id, role}});
+    if (email && actif) ops.push({op: 'set', c: 'acces', id: email, data: {moniteurId: id, role, peutCreer, peutModifier}});
     else if (email && DB.acces[email]) ops.push({op: 'del', c: 'acces', id: email});
     await backend.bulk(ops); closeModal(); toast('Moniteur enregistré');
   },
