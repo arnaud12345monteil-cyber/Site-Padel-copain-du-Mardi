@@ -146,6 +146,7 @@ select{min-width:0;max-width:100%}
 .altfl{display:flex;flex-wrap:wrap;gap:4px}
 .altfl i{white-space:nowrap;font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
 .altfl i.ok{border-color:var(--charge);color:var(--charge)}
+.altfl i.orig{border-color:var(--accent);color:var(--accent);font-weight:600}
 .altico{width:auto!important;height:auto!important}
 .altico .altpin{transform:translate(-50%,-50%);height:auto;padding:2px 7px;line-height:1.15;text-align:center}
 .altpin small{display:block;font:600 10px var(--f-mono);opacity:.85}
@@ -602,6 +603,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.20.2", d:"29/10/2026", c:[
+    "Borne choisie à la main : bouton « Revenir à la borne d'origine » dans la bulle de l'arrêt sur la carte",
+    "Les autres bornes restent proposées après un choix manuel, avec la borne d'origine en tête (pastille bleue « origine » sur la carte)"]},
   {v:"2.20.1", d:"29/10/2026", c:[
     "Pastilles des bornes alternatives : temps de route depuis le dernier arrêt ajouté",
     "Bulles de survol affichées en largeur (elles se réduisaient à une colonne près du bord de la carte)",
@@ -1209,6 +1213,8 @@ function simulate(R,C,p){
     // alternatives : y compris plus loin, jusqu'à 10 points sous la réserve (signalé), pour voir ce qu'on gagnerait à l'abaisser
     const softFloor=Math.max(2,p.floor-10);
     const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=150 && socAt(x)>=softFloor);
+    const c0=c;   // borne choisie automatiquement (avant un éventuel choix manuel)
+    const altOf=(x,fl,extra)=>({good:[...(extra||[]),...goodFlag(x)], id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c0.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, lat:x.lat, lon:x.lon, flags:fl});
     const alts=altsSrc.map(x=>{ const fl=[...(x.flags||[]), ...winFlag(x)]; return {x, fl, sc:score(x)+fl.length*0.5}; })
       .sort((u,v)=>u.sc-v.sc)
       // les 12 meilleures, plus les 8 meilleures sur aire et les 8 meilleures hors aire (pour le filtre local)
@@ -1272,7 +1278,9 @@ function simulate(R,C,p){
                : reason==="soc"  ? {ok: sIn<=Math.round(sEarly) && sIn>=Math.round(sHard), txt:`seuil batterie · arrivée ${sIn} %`, win:`plage ${Math.round(sEarly)}–${Math.round(sHard)} %`}
                : reason==="floor" ? {ok:true, txt:"réserve minimale"}
                : reason==="via" ? {ok:true, txt:"batterie minimale à l'étape suivante"} : {ok:true, txt:"% d'arrivée souhaité"};
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, rule, alts: forced ? [] : alts, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    // borne choisie à la main : la borne d'origine revient en tête des alternatives, la borne choisie en sort
+    const altsOut = forced ? [altOf(c0,[...(c0.flags||[]),...winFlag(c0)],["orig"]), ...alts.filter(x=>x.id!==c.id)] : alts;
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, rule, alts: altsOut, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -1307,12 +1315,13 @@ function initMap(){
   map.getContainer().addEventListener("click",e=>{
     const sa=e.target.closest("[data-showalts]");
     if(sa){ const d=document.querySelector(`#road details.alts[data-si="${sa.dataset.showalts}"]`); map.closePopup(); if(d){ if(d.open) showAlts(d); else d.open=true; } return; }
-    const b=e.target.closest("[data-force]"); if(b){ const [o,a2]=b.dataset.force.split("|"); stopForce[o]=a2; map.closePopup(); $("f").requestSubmit(); } });
+    const uf=e.target.closest("[data-unforce]"); if(uf){ delete stopForce[uf.dataset.unforce]; map.closePopup(); $("f").requestSubmit(); return; }
+    const b=e.target.closest("[data-force]"); if(b){ const [o,a2]=b.dataset.force.split("|"); if(a2===o) delete stopForce[o]; else stopForce[o]=a2; map.closePopup(); $("f").requestSubmit(); } });
 }
 const pinIcon=(cls,txt,lab)=>L.divIcon({className:"",html:`<div class="pin ${cls}">${txt}</div>${lab?`<div class="plab">${lab}</div>`:""}`,iconSize:[26,26],iconAnchor:[13,13]});
 const ALT_FL={pmin:"puissance sous le minimum",op:"opérateur exclu",price:"prix au-dessus du max",aire:"hors aire d'autoroute",sens:"aire dans l'autre sens de circulation"};
 const altFlagTxt=f=>{ const [k,v]=f.split(":"); return ALT_FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`,reserve:`batterie à ${v} %, sous ta réserve`})[k] || k; };
-const altGoodTxt=g=>{ const [k,v]=g.split(":"); return ({fenetre:`fenêtre de temps (${v} min)`, plage:`plage batterie (${v} %)`, pref:"★ opérateur préféré"})[k]||k; };
+const altGoodTxt=g=>{ const [k,v]=g.split(":"); return ({orig:"↺ borne d'origine (choix automatique)",fenetre:`fenêtre de temps (${v} min)`, plage:`plage batterie (${v} %)`, pref:"★ opérateur préféré"})[k]||k; };
 // bulle de survol / clic d'un arrêt de recharge
 function stopInfo(s,k,clk,leg){
   const c=s.c;
@@ -1321,7 +1330,8 @@ function stopInfo(s,k,clk,leg){
     + `<br>Arrêt de ${Math.round(s.dur)} min, départ ${clk(s.t+s.dur*60)}`
     + (s.cost!=null && s.kwhBilled>0.05 ? `<br>${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}` : "")
     + (leg ? `<br>Depuis l'arrêt précédent : ${fmtKm(leg.km)} · ${fmtH(leg.sec)} de route` : "")
-    + (s.rule ? `<br><i>${esc(s.rule.txt)}</i>` : "");
+    + (s.rule ? `<br><i>${esc(s.rule.txt)}</i>` : "")
+    + (s.forced ? `<br><b style="color:#1f4fd8">Borne choisie à la main</b>` : "");
 }
 function drawMap(R,C,res,a,b,showAll,dep){
   if(!map) return;
@@ -1351,7 +1361,7 @@ function drawMap(R,C,res,a,b,showAll,dep){
       const m=L.marker([s.c.lat,s.c.lon],{icon:pinIcon("c",k,`${Math.round(s.socIn)}→${Math.round(s.socOut)} %${legTxt?" · "+legTxt:""}`),zIndexOffset:1000}).addTo(layers);
       const h=stopInfo(s,k,clk,leg); tip(m,h);
       const n=(s.alts||[]).length;
-      m.bindPopup(h + (n && !viewingSheet ? `<br><button type="button" class="mini" data-showalts="${si}" style="margin-top:6px">Voir les ${n} autres bornes possibles</button>` : ""));
+      m.bindPopup(h + (!viewingSheet ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${s.forced?`<button type="button" class="mini primary" data-unforce="${esc(s.origId)}">Revenir à la borne d'origine</button>`:""}${n?`<button type="button" class="mini" data-showalts="${si}">Voir les ${n} autres bornes possibles</button>`:""}</div>` : ""));
     }
     else if(s.type==="end"){
       const m=L.marker([b.lat,b.lon],{icon:pinIcon("e","A",`${Math.round(s.soc)} %${legTxt?" · "+legTxt:""}`)}).addTo(layers);
@@ -1394,12 +1404,12 @@ function render(res,p,a,b){
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
       const cheapId=altAll.reduce((m,x)=>x.price<m.price?x:m).id, fastId=altAll.reduce((m,x)=>x.eff>m.eff?x:m).id;
       const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`,reserve:`batterie à ${v} %, sous ta réserve`})[k] || k; };
-      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
+      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main · autres bornes ("+s.alts.length+")":"Autres bornes possibles ("+s.alts.length+")"}</summary>
         ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
         ${(()=>{ const na=(s.alts||[]).filter(x=>x.onAire).length, nh=(s.alts||[]).length-na;
           return (s.alts||[]).length ? `<div class="altf" role="group" aria-label="Filtrer les bornes"><button type="button" data-altf="all">Toutes (${s.alts.length})</button><button type="button" data-altf="aire" ${na?"":"disabled"}>Sur aire (${na})</button><button type="button" data-altf="hors" ${nh?"":"disabled"}>Hors aire (${nh})</button></div>` : ""; })()}
         <ul class="altlist">${(s.alts||[]).map((x,ai)=>`<li data-aire="${x.onAire?1:0}" data-ai="${ai}" title="Voir sur la carte"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
-          <span class="altfl">${(x.good||[]).map(g=>`<i class="ok">${esc(altGoodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(altFlagTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
+          <span class="altfl">${(x.good||[]).map(g=>`<i class="ok${g==="orig"?" orig":""}">${esc(altGoodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(altFlagTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
           <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
       html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
     }
@@ -2148,20 +2158,21 @@ function showAlts(det){
   if(allLayer) layers.removeLayer(allLayer);   // on masque les autres bornes pour ne garder que la liste
   const pts=[[st.c.lat,st.c.lon]];
   const prevLeg=lastRun.res.steps[+det.dataset.si-1]?.type==="drive" ? lastRun.res.steps[+det.dataset.si-1] : null;
-  L.marker([st.c.lat,st.c.lon],{zIndexOffset:1500,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin sel" style="--c:#0d8a5f">retenue · ${st.c.kw?Math.round(st.c.kw)+" kW":""}<small>${Math.round(st.socIn)} %${prevLeg?" · "+fmtH(prevLeg.sec):""}</small></div>`})})
+  L.marker([st.c.lat,st.c.lon],{zIndexOffset:1500,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin sel" style="--c:#0d8a5f">${st.forced?"choisie":"retenue"} · ${st.c.kw?Math.round(st.c.kw)+" kW":""}<small>${Math.round(st.socIn)} %${prevLeg?" · "+fmtH(prevLeg.sec):""}</small></div>`})})
     .bindTooltip(`<b>Borne retenue</b><br>${esc(st.c.name)}<br>Arrivée avec ${Math.round(st.socIn)} %`,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
     .addTo(altLayer);
   st.alts.forEach((x,ai)=>{
     if(x.lat==null) return;
     if((altFilter==="aire" && !x.onAire) || (altFilter==="hors" && x.onAire)) { altMarkers[ai]=null; return; }
-    const col=x.flags.length?"#b4570a":"#0d8a5f";
-    const lab=`${x.kw?Math.round(x.kw)+" kW":"? kW"}<small>${x.soc} % · ${x.dkm>0?"+":""}${x.dkm} km · ${fmtH(x.drive*60)}</small>`;
+    const isOrig=(x.good||[]).includes("orig");
+    const col=isOrig?"#1f4fd8":x.flags.length?"#b4570a":"#0d8a5f";
+    const lab=`${isOrig?"origine · ":""}${x.kw?Math.round(x.kw)+" kW":"? kW"}<small>${x.soc} % · ${x.dkm>0?"+":""}${x.dkm} km · ${fmtH(x.drive*60)}</small>`;
     const info=`<b>${esc(x.name)}</b><br>${esc([x.operator,(x.kw?Math.round(x.kw)+" kW"+(x.eff&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""):"puissance inconnue"),fmtPrice(x.price)+"/kWh",x.onAire?"sur aire":""].filter(Boolean).join(" · "))}`
       + `<br>Arrivée avec <b>${x.soc} %</b> · ${x.dkm>0?"+":""}${x.dkm} km par rapport à la borne retenue<br>${fmtH(x.drive*60)} de route depuis le dernier arrêt`
       + `<br>${(x.good||[]).map(g=>`<span style="color:#0d8a5f">${esc(altGoodTxt(g))}</span>`).concat(x.flags.map(f=>`<span style="color:#b4570a">${esc(altFlagTxt(f))}</span>`)).join(" · ") || '<span style="color:#0d8a5f">respecte tes réglages</span>'}`;
     const m=L.marker([x.lat,x.lon],{zIndexOffset:1400,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin" style="--c:${col}">${lab}</div>`})})
       .bindTooltip(info,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
-      .bindPopup(info+`<br><button type="button" class="mini" data-force="${esc(st.origId)}|${esc(x.id)}" style="margin-top:6px">Choisir cette borne</button>`)
+      .bindPopup(info+`<br><button type="button" class="mini${isOrig?" primary":""}" data-force="${esc(st.origId)}|${esc(x.id)}" style="margin-top:6px">${isOrig?"Revenir à cette borne":"Choisir cette borne"}</button>`)
       .on("click",()=>{ document.querySelectorAll("#road .altlist li.hl").forEach(l=>l.classList.remove("hl")); const li=det.querySelector(`li[data-ai="${ai}"]`); if(li) li.classList.add("hl"); })
       .addTo(altLayer);
     altMarkers[ai]=m; pts.push([x.lat,x.lon]);
@@ -2204,7 +2215,7 @@ $("road").addEventListener("click",e=>{
   const li=e.target.closest(".altlist li[data-ai]");
   if(li && !e.target.closest("button")){ const m=altMarkers[+li.dataset.ai]; if(m){ map.setView(m.getLatLng(),Math.max(map.getZoom(),13)); m.openPopup(); } return; }
   const fz=e.target.closest("[data-force]");
-  if(fz){ const [o,a]=fz.dataset.force.split("|"); stopForce[o]=a; $("f").requestSubmit(); return; }
+  if(fz){ const [o,a]=fz.dataset.force.split("|"); if(a===o) delete stopForce[o]; else stopForce[o]=a; $("f").requestSubmit(); return; }
   const uf=e.target.closest("[data-unforce]");
   if(uf){ delete stopForce[uf.dataset.unforce]; $("f").requestSubmit(); return; }
   const b=e.target.closest("[data-ovreset]"); if(!b) return;
