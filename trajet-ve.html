@@ -169,6 +169,21 @@ select{min-width:0;max-width:100%}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
 .quick .ops-grid{max-height:140px;overflow:auto}
+.car{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.car-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.car-head h2{margin-right:auto}
+.car-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.car-card{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field);min-width:0}
+.car-card b{display:block;font:600 1.15rem var(--f-mono);font-variant-numeric:tabular-nums}
+.car-card span{font-size:.8rem;color:var(--muted)}
+.car-card.warn{border-color:var(--warn)} .car-card.warn b{color:var(--warn)}
+.car h3{font-size:.95rem;margin-top:4px}
+.car-tbl{overflow-x:auto}
+.car-tbl table{width:100%;border-collapse:collapse;font-size:.84rem;font-variant-numeric:tabular-nums}
+.car-tbl th,.car-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.car-tbl th:first-child,.car-tbl td:first-child{text-align:left}
+.car-tbl th{color:var(--muted);font-weight:500;font-size:.78rem}
+.car svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .mini.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .here{display:grid;gap:12px;padding:14px 16px}
@@ -337,6 +352,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <h1>Trajet VE</h1>
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+    <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
     <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
@@ -528,6 +544,16 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   </aside>
 
   <section class="main">
+    <div class="panel car" id="carPanel" hidden>
+      <div class="car-head">
+        <h2>Ma voiture</h2>
+        <span class="note" id="carAge"></span>
+        <button type="button" class="mini primary" id="carRefresh">Actualiser</button>
+        <button type="button" class="mini" id="carClose" aria-label="Fermer">×</button>
+      </div>
+      <p class="note" id="carMsg"></p>
+      <div id="carBody"><p class="empty">Appuie sur « Actualiser » pour lire l'état de la voiture (sans la réveiller).</p></div>
+    </div>
     <div id="map"></div>
     <div class="resbar" id="resbar" hidden>
       <div class="stats" id="stats"></div>
@@ -603,6 +629,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.21", d:"30/10/2026", c:[
+    "Section « Ma voiture » (bouton en haut) : batterie, autonomie, état de charge, santé de la batterie, compteur, température, batterie 12 V, dernière position",
+    "Historique de la santé de la batterie, des trajets (avec consommation réelle moyenne) et des recharges, si psa_car_controller enregistre (option -r)",
+    "Script PC : seul le compte autorisé peut lire la voiture"]},
   {v:"2.20.3", d:"29/10/2026", c:[
     "Correctif : quand une recharge est nécessaire mais que la seule borne possible (avec tes filtres) arrive alors que la batterie est encore haute, le calcul recharge au-delà de la cible (jusqu'à 100 %) au lieu de s'arrêter sur « Arrêt impossible à rendre utile »",
     "Si aucune borne ne permet de continuer, le message indique où se trouve la seule borne possible et quels filtres élargir"]},
@@ -2023,7 +2053,7 @@ $("copyBtn").addEventListener("click",async()=>{
 // de la maison, la voit, interroge psa_car_controller et écrit la réponse. Rien n'est lu en dehors de ces demandes.
 let fb=null;
 const agoTxt=ms=>{ const m=Math.round(ms/60000); return m<1?"à l'instant":m<60?`il y a ${m} min`:`il y a ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}`; };
-function readCar(wake, onStep){
+function readCar(wake, onStep, kind){
   return new Promise(async (resolve,reject)=>{
     if(!fb || !fb.auth.currentUser) return reject(new Error("Connecte-toi (bandeau en haut du panneau) pour lire la voiture."));
     const col=fb.db.collection("trajetve_car"), uid=fb.auth.currentUser.uid;
@@ -2037,10 +2067,10 @@ function readCar(wake, onStep){
     const un=ref.onSnapshot(d=>{
       const x=d.data(); if(!x || x.req!==req) return;
       if(x.status && x.status!=="ok" && x.status!=="erreur" && onStep) onStep(x.status);
-      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
+      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(kind==="full" && x.full ? JSON.parse(x.full) : x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
     }, e=>{ clearTimeout(to); reject(new Error("Lecture impossible ("+(e.code||e.message)+").")); });
     to=setTimeout(()=>{ un(); reject(new Error("Pas de réponse du PC dans le délai (2 min).")); }, 120000);
-    ref.set({req, wake:!!wake, status:"demande"}).catch(e=>{ un(); clearTimeout(to); reject(new Error("Demande refusée ("+(e.code||e.message)+").")); });
+    ref.set({req, wake:!!wake, kind:kind||"soc", status:"demande"}).catch(e=>{ un(); clearTimeout(to); reject(new Error("Demande refusée ("+(e.code||e.message)+").")); });
   });
 }
 document.addEventListener("click",async e=>{
@@ -2058,6 +2088,63 @@ document.addEventListener("click",async e=>{
     if(box.dataset.target==="hereSoc" && watchId==null) $("hereGo").click();
   }catch(err){ msg.className="carmsg err"; msg.textContent=err.message; }
   finally{ box.querySelectorAll("button").forEach(x=>x.disabled=false); }
+});
+
+// ---------- Section « Ma voiture » ----------
+const CAR_KEY="trajetve-voiture";
+const carDate=v=>{ if(v==null||v==="") return null; const t=String(v); const d=typeof v==="number"?new Date(v):new Date(/^\d{4}-\d\d-\d\d \d/.test(t)?t.replace(" ","T"):t); return isNaN(d)?null:d; };
+const fmtDT=d=>d?d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})+" "+fmtClock(d):"—";
+const n1=v=>v==null?"—":(+v).toFixed(1).replace(".",",");
+function carRender(r){
+  const card=(v,l,cls)=>`<div class="car-card ${cls||""}"><b>${v}</b><span>${l}</span></div>`;
+  const carAt=carDate(r.carAt), posAt=carDate(r.posAt);
+  $("carAge").textContent=`donnée de la voiture ${carAt?agoTxt(Date.now()-carAt):"d'heure inconnue"} · lue à ${fmtClock(new Date(r.readAt||Date.now()))}`;
+  const chTxt={Disconnected:"débranchée",InProgress:"en charge",Finished:"charge terminée",Stopped:"charge arrêtée",Failure:"erreur de charge"}[r.chargeStatus]||r.chargeStatus||"—";
+  const capUse = r.health && $("cap").value ? (+$("cap").value)*r.health/100 : null;
+  let html=`<div class="car-grid">
+    ${card(Math.round(r.soc)+" %","batterie")}
+    ${card(r.range!=null?Math.round(r.range)+" km":"—","autonomie affichée")}
+    ${card(chTxt+(r.chargeRate?` · ${r.chargeRate} km/h`:""),`recharge${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
+    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles`:""), r.health!=null&&r.health<85?"warn":"")}
+    ${card(r.km!=null?Math.round(r.km).toLocaleString("fr-FR")+" km":"—","compteur")}
+    ${card(r.temp!=null?n1(r.temp)+" °C":"—","température extérieure")}
+    ${card(r.v12!=null?r.v12:"—","batterie 12 V (indicateur)", r.v12!=null&&r.v12<60?"warn":"")}
+    ${card(r.ignition==="Start"?"contact mis":r.moving?"en mouvement":"à l'arrêt",r.precond&&r.precond!=="Disabled"?"climatisation "+r.precond.toLowerCase():"climatisation à l'arrêt")}
+  </div>`;
+  if(r.lat!=null) html+=`<p class="note">Dernière position connue ${posAt?"("+fmtDT(posAt)+")":""} · <a href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank" rel="noopener">ouvrir dans Maps</a> · <button type="button" class="swap" id="carOnMap">voir sur la carte</button></p>`;
+  // historique santé batterie
+  const soh=(r.soh||[]).map(x=>({d:carDate(x.date),v:+x.level})).filter(x=>x.d&&isFinite(x.v));
+  if(soh.length>1){
+    const W=640,H=150,ml=40,mr=12,mt=10,mb=24, t0=+soh[0].d, t1=+soh[soh.length-1].d||t0+1;
+    const lo=Math.floor(Math.min(...soh.map(x=>x.v))-1), hi=Math.ceil(Math.max(...soh.map(x=>x.v))+1);
+    const X=d=>ml+(+d-t0)/Math.max(1,t1-t0)*(W-ml-mr), Y=v=>mt+(1-(v-lo)/Math.max(1,hi-lo))*(H-mt-mb);
+    let g=""; for(const v of [lo,Math.round((lo+hi)/2),hi]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-6}" y="${Y(v)+4}" text-anchor="end">${v}%</text>`;
+    g+=`<text x="${ml}" y="${H-6}">${fmtDT(soh[0].d).slice(0,5)}</text><text x="${W-mr}" y="${H-6}" text-anchor="end">${fmtDT(soh[soh.length-1].d).slice(0,5)}</text>`;
+    g+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${soh.map(x=>X(x.d).toFixed(1)+","+Y(x.v).toFixed(1)).join(" ")}"/>`;
+    html+=`<h3>Santé de la batterie</h3><div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px">${g}</svg></div>`;
+  }
+  const noHist='<p class="note">Pas encore d\'historique : il faut lancer psa_car_controller avec l\'option -r (enregistrement). Les données s\'accumulent ensuite au fil des trajets et des recharges.</p>';
+  const trips=(r.trips||[]).slice().reverse();
+  html+=`<h3>Derniers trajets</h3>`+(trips.length?`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th><th>Dénivelé</th></tr></thead><tbody>${trips.slice(0,30).map(t=>`<tr><td>${fmtDT(carDate(t.start_at))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td><td>${t.altitude_diff!=null?Math.round(t.altitude_diff)+" m":"—"}</td></tr>`).join("")}</tbody></table></div>`
+    +(()=>{ const T=trips.filter(t=>t.distance>0 && t.consumption!=null); if(!T.length) return ""; const d=T.reduce((a,t)=>a+t.distance,0), e=T.reduce((a,t)=>a+t.consumption,0); return `<p class="note">Consommation réelle moyenne sur ${T.length} trajets : <b>${n1(e/d*100)} kWh/100 km</b> (${n1(d)} km). Compare-la à tes valeurs à 90 et 130 km/h dans Voiture.</p>`; })():noHist);
+  const ch=(r.chargings||[]).slice().reverse();
+  html+=`<h3>Dernières recharges</h3>`+(ch.length?`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${ch.slice(0,30).map(c=>`<tr><td>${fmtDT(carDate(c.start_at))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"—"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`:noHist);
+  $("carBody").innerHTML=html;
+  $("carOnMap")?.addEventListener("click",()=>{ if(!map) return; hereLayer.clearLayers();
+    L.marker([r.lat,r.lon],{zIndexOffset:2000,icon:L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],html:`<div class="herepin" style="--c:#1f4fd8"></div><div class="herelab" style="--c:#1f4fd8">voiture<small>${Math.round(r.soc)} %</small></div>`})}).addTo(hereLayer);
+    map.setView([r.lat,r.lon],13); $("map").scrollIntoView({behavior:"smooth",block:"center"}); });
+}
+$("carBtn").addEventListener("click",()=>{ const p=$("carPanel"); p.hidden=!p.hidden; $("carBtn").setAttribute("aria-expanded",!p.hidden);
+  if(!p.hidden){ try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c) carRender(c); }catch(e){} p.scrollIntoView({behavior:"smooth",block:"start"}); } });
+$("carClose").addEventListener("click",()=>{ $("carPanel").hidden=true; $("carBtn").setAttribute("aria-expanded","false"); });
+$("carRefresh").addEventListener("click",async()=>{
+  const b=$("carRefresh"), m=$("carMsg"); b.disabled=true; m.className="note"; m.textContent="Lecture en cours…";
+  try{
+    const r=await readCar(false, st=>{ m.textContent=({demande:"Demande envoyée au PC…",lecture:"Lecture en cours…"})[st]||st; }, "full");
+    try{ localStorage.setItem(CAR_KEY,JSON.stringify(r)); }catch(e){}
+    carRender(r); m.textContent="";
+  }catch(err){ m.className="note status err"; m.textContent=err.message; }
+  finally{ b.disabled=false; }
 });
 
 // ---------- Synchronisation des favoris et réglages (Firebase) ----------
