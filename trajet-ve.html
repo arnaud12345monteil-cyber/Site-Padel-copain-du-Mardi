@@ -207,6 +207,14 @@ select{min-width:0;max-width:100%}
 .here-card.bad{border-color:var(--bad)} .here-card.bad b{color:var(--bad)}
 .here-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .here b.err{color:var(--bad)}
+.hsrc{flex-basis:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center}
+.hsrc .seg{max-width:360px}
+.hsrc .seg label{font:600 .82rem var(--f-body);white-space:nowrap}
+.hlab{font-size:.85rem;font-weight:500}
+.hman{max-width:200px}
+.hman:has(input:disabled){opacity:.45}
+.psarep{flex-basis:100%;margin:0}
+.psarep .old{color:var(--warn)}
 .carread{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:.84rem}
 .carread .carmsg{color:var(--muted)}
 .carread .carmsg.err{color:var(--bad)}
@@ -618,8 +626,21 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
     <div class="here panel" id="hereBox" hidden>
       <div class="here-form">
         <h2>Je suis ici</h2>
-        <label>Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42"></label>
-        <div class="carread" data-target="hereSoc"><button type="button" class="swap" data-carread>Lire depuis la voiture</button><span class="carmsg"></span></div>
+        <div class="hsrc">
+          <span class="hlab">Position</span>
+          <div class="seg seg2" role="radiogroup" aria-label="Source de la position">
+            <input type="radio" name="herePos" id="hpPhone" value="phone" checked><label for="hpPhone">Téléphone (GPS)</label>
+            <input type="radio" name="herePos" id="hpCar" value="car"><label for="hpCar">Voiture (PSA)</label>
+          </div>
+          <span class="hlab">Batterie</span>
+          <div class="seg seg2" role="radiogroup" aria-label="Source du niveau de batterie">
+            <input type="radio" name="hereBat" id="hbPsa" value="psa" checked><label for="hbPsa">Rapport PSA</label>
+            <input type="radio" name="hereBat" id="hbMan" value="manual"><label for="hbMan">Saisie manuelle</label>
+          </div>
+          <span></span>
+          <label class="hman">Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42" disabled></label>
+        </div>
+        <p class="note psarep"><span id="psaInfo">Rapport PSA : chargement…</span> <button type="button" class="swap" id="psaReload">Relire la voiture</button></p>
         <button type="button" class="go" id="hereGo">Comparer avec ma position</button>
         <button type="button" class="mini" id="hereLive">Suivre en temps réel</button>
         <label class="hfollow"><input type="checkbox" id="hereFollow" checked> centrer la carte</label>
@@ -652,6 +673,12 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.24", d:"30/10/2026", c:[
+    "« Je suis ici » : choix de la source de position (GPS du téléphone ou dernière position envoyée par la voiture) et de la source de batterie (dernier rapport PSA ou saisie manuelle)",
+    "Rapport PSA affiché avec son âge et bouton « Relire la voiture » ; le % du rapport est rattaché à l'endroit où était la voiture quand elle l'a envoyé",
+    "Alerte si le rapport ou la position de la voiture a plus de 30 min"]},
+  {v:"2.23.1", d:"30/10/2026", c:[
+    "Ma voiture : la vitesse de charge (km d'autonomie gagnés par heure) n'est plus affichée à côté de « débranchée » ; hors charge, elle est indiquée comme vitesse de la dernière charge"]},
   {v:"2.23", d:"30/10/2026", c:[
     "Historique : tous les états de la voiture (batterie, autonomie, recharge, santé, 12 V, température, compteur, contact, clim, position) enregistrés à chaque changement et à chaque « Actualiser »",
     "Historique d'une journée : tableau des états et courbe au choix (batterie, autonomie, température, 12 V, compteur, santé)",
@@ -1924,7 +1951,37 @@ let hereFix=null;
 // Référence batterie : dernière valeur saisie, avec l'écart au plan à cet endroit. En suivi, l'écart est supposé constant.
 let hereRef=null, watchId=null, wakeLock=null, trailPts=[], lastCards=0, lastPos=null;
 const errMsg=err=>({1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.");
-$("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
+// Sources : position (téléphone ou dernier rapport PSA) et batterie (rapport PSA ou saisie manuelle)
+let psaState=null;
+const posSrc=()=>document.querySelector('input[name="herePos"]:checked').value;
+const batSrc=()=>document.querySelector('input[name="hereBat"]:checked').value;
+try{ const o=JSON.parse(localStorage.getItem("trajetve-ici")||"{}"); if(o.pos) $(o.pos==="car"?"hpCar":"hpPhone").checked=true; if(o.bat) $(o.bat==="manual"?"hbMan":"hbPsa").checked=true; }catch(e){}
+function psaInfoTxt(){
+  const el=$("psaInfo");
+  if(!psaState){ el.innerHTML="Rapport PSA : aucun (connecte-toi, ou vérifie que le script du PC tourne)."; return; }
+  const age=psaState.carAt?Date.now()-psaState.carAt:null, pAge=psaState.posAt?Date.now()-psaState.posAt:null;
+  el.innerHTML=`Rapport PSA : <b>${Math.round(psaState.soc)} %</b> <span class="${age>30*60000?"old":""}">(${age!=null?agoTxt(age):"heure inconnue"})</span>`
+    + (psaState.lat!=null?` · position <span class="${pAge>30*60000?"old":""}">${pAge!=null?agoTxt(pAge):"d'heure inconnue"}</span>`:" · pas de position");
+}
+async function loadPsa(live){
+  const el=$("psaInfo");
+  try{
+    if(live){ el.textContent="Lecture de la voiture…"; const r=await readCar(false, st=>{ el.textContent=({demande:"Demande envoyée au PC…",lecture:"Lecture en cours…"})[st]||st; }, "full"); psaState={...r, carAt:+carDate(r.carAt)||null, posAt:+carDate(r.posAt)||null}; try{ localStorage.setItem(CAR_KEY,JSON.stringify(r)); }catch(e){} }
+    else { const st=await lastStoredState(); let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
+      const best=[st,c].filter(Boolean).sort((a,b)=>(+carDate(b.carAt)||0)-(+carDate(a.carAt)||0))[0];
+      if(best) psaState={...best, carAt:+carDate(best.carAt)||null, posAt:+carDate(best.posAt)||null}; }
+  }catch(e){ el.textContent="Rapport PSA indisponible : "+e.message; return; }
+  psaInfoTxt();
+}
+function syncHereSrc(){
+  const man=batSrc()==="manual"; $("hereSoc").disabled=!man;
+  $("hereLive").disabled=posSrc()==="car"; $("hereLive").title=posSrc()==="car"?"Le suivi en temps réel utilise le GPS du téléphone":"";
+  try{ localStorage.setItem("trajetve-ici",JSON.stringify({pos:posSrc(),bat:batSrc()})); }catch(e){}
+}
+document.querySelectorAll('input[name="herePos"],input[name="hereBat"]').forEach(r=>r.addEventListener("change",()=>{ syncHereSrc(); if(batSrc()==="manual") $("hereSoc").focus(); if(lastPos) hereRender(lastPos,true); }));
+$("psaReload").addEventListener("click",async()=>{ $("psaReload").disabled=true; await loadPsa(true); $("psaReload").disabled=false; if(lastPos) hereRender(lastPos,true); });
+syncHereSrc();
+$("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ loadPsa(false); if(batSrc()==="manual") $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
 // nouvelle saisie de batterie pendant le suivi : prise en compte à la dernière position connue
 $("hereSoc").addEventListener("change",()=>{ if(lastPos) hereRender(lastPos,true); });
 function hereRender(pos, force){
@@ -1934,10 +1991,18 @@ function hereRender(pos, force){
   const {latitude:lat, longitude:lon, accuracy}=pos.coords;
   const {res,p,R}=lastRun, S=res.summary;
   const loc=locateOnRoute(lat,lon,R.line,S.km), pts=planPoints(res), plan=planAt(pts,loc.km);
-  const typed=parseFloat($("hereSoc").value);
+  // niveau de batterie : saisie manuelle ou dernier rapport PSA
+  const bsrc=batSrc(), typed= bsrc==="manual" ? parseFloat($("hereSoc").value) : (psaState?.soc ?? NaN);
+  const key=bsrc+":"+typed+":"+(bsrc==="psa"?psaState?.carAt:"");
   // nouveau plan (recalcul) : on garde la batterie estimée et on recale l'écart sur le nouveau plan
   if(hereRef && hereRef.run!==lastRun){ const est=planAt(hereRef.pts,loc.km).soc+hereRef.d; hereRef={...hereRef, d:est-plan.soc, run:lastRun, pts}; }
-  if(isFinite(typed) && (!hereRef || hereRef.val!==typed)) hereRef={val:typed, km:loc.km, d:typed-plan.soc, run:lastRun, pts};
+  if(isFinite(typed) && (!hereRef || hereRef.key!==key)){
+    // rapport PSA : le % correspond à l'endroit où était la voiture au moment du rapport (si la position date du même moment)
+    let at=loc.km;
+    if(bsrc==="psa" && psaState?.lat!=null && psaState.posAt && psaState.carAt && Math.abs(psaState.posAt-psaState.carAt)<30*60000) at=locateOnRoute(psaState.lat,psaState.lon,R.line,S.km).km;
+    hereRef={key, src:bsrc, val:typed, km:at, d:typed-planAt(pts,at).soc, run:lastRun, pts, when:bsrc==="psa"?psaState.carAt:Date.now()};
+  }
+  if(!isFinite(typed) && hereRef && hereRef.key && hereRef.key.split(":")[0]!==bsrc) hereRef=null;
   const hasSoc=!!hereRef, dSoc=hasSoc?hereRef.d:null, socNow=hasSoc?plan.soc+dSoc:null;
   const measured=hasSoc && Math.abs(loc.km-hereRef.km)<1;
   const now=new Date(), planClock=new Date(p.dep.getTime()+plan.t*1000), dMin=Math.round((now-planClock)/60000);
@@ -1968,15 +2033,23 @@ function hereRender(pos, force){
   out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
     <div class="here-grid">
       <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
-      ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${measured?Math.round(socNow)+" % réelle":"estimée ~"+Math.round(socNow)+" % (saisie "+Math.round(hereRef.val)+" % il y a "+fmtKm(Math.max(0,loc.km-hereRef.km))+")"}, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (saisis la tienne pour comparer)</span></div>`}
+      ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${measured?Math.round(socNow)+" % "+(hereRef.src==="psa"?"(rapport PSA "+agoTxt(Date.now()-hereRef.when)+")":"réelle"):"estimée ~"+Math.round(socNow)+" % ("+(hereRef.src==="psa"?"rapport PSA":"saisie")+" "+Math.round(hereRef.val)+" % il y a "+fmtKm(Math.max(0,loc.km-hereRef.km))+")"}, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (${batSrc()==="manual"?"saisis la tienne pour comparer":"pas de rapport PSA disponible"})</span></div>`}
       <div class="here-card ${Math.abs(dMin)<=10?"good":Math.abs(dMin)<=30?"warn":"bad"}"><b>${dMin>=0?"+":""}${dMin} min</b><span>${dMin>=0?"de retard":"d'avance"} sur l'horaire prévu (${fmtClock(planClock)} ici)</span></div>
     </div>
     ${nextTxt?`<p>Si l'écart se maintient, batterie ${nextTxt}.</p>`:""}
-    <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Saisis ta batterie pour recalculer.</span>'}</div>`;
+    <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Il faut un niveau de batterie (rapport PSA ou saisie) pour recalculer.</span>'}${hasSoc&&hereRef.src==="psa"&&Date.now()-hereRef.when>30*60000?'<span class="note" style="color:var(--warn)">Le rapport PSA date de plus de 30 min : en roulant, le % réel est sans doute plus bas. Relis la voiture ou passe en saisie manuelle.</span>':""}</div>`;
 }
-$("hereGo").addEventListener("click",()=>{
+$("hereGo").addEventListener("click",async()=>{
   const out=$("hereOut");
   if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  if(!psaState) await loadPsa(false);
+  if(posSrc()==="car"){
+    if(!psaState || psaState.lat==null){ out.innerHTML='<p class="status err">Pas de position dans le rapport PSA. Choisis « Téléphone (GPS) » ou relis la voiture.</p>'; return; }
+    if(watchId!=null) stopLive();
+    hereRender({coords:{latitude:psaState.lat, longitude:psaState.lon, accuracy:50}, timestamp:psaState.posAt||Date.now()}, true);
+    if(psaState.posAt && Date.now()-psaState.posAt>30*60000) out.insertAdjacentHTML("afterbegin",`<p class="status err">Position de la voiture datée de ${agoTxt(Date.now()-psaState.posAt).replace(/^il y a /,"il y a ")} : elle n'est peut-être plus là.</p>`);
+    return;
+  }
   if(!("geolocation" in navigator)){ out.innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
   if(watchId!=null && lastPos){ hereRender(lastPos,true); return; }
   out.innerHTML='<p class="note">Recherche de ta position…</p>'; $("hereGo").disabled=true;
@@ -2135,7 +2208,7 @@ function carRender(r){
   let html=`<div class="car-grid">
     ${card(Math.round(r.soc)+" %","batterie")}
     ${card(r.range!=null?Math.round(r.range)+" km":"—","autonomie affichée")}
-    ${card(chTxt+(r.chargeRate?` · ${r.chargeRate} km/h`:""),`recharge${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
+    ${card(chTxt+(r.chargeRate && r.chargeStatus==="InProgress"?` · +${r.chargeRate} km/h`:""),`recharge${r.chargeRate && r.chargeStatus==="InProgress"?" (km d'autonomie gagnés par heure)":""}${r.chargeRate && r.chargeStatus!=="InProgress"?` · vitesse de la dernière charge : ${r.chargeRate} km/h d'autonomie`:""}${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
     ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles`:""), r.health!=null&&r.health<85?"warn":"")}
     ${card(r.km!=null?Math.round(r.km).toLocaleString("fr-FR")+" km":"—","compteur")}
     ${card(r.temp!=null?n1(r.temp)+" °C":"—","température extérieure")}
@@ -2215,7 +2288,7 @@ async function loadHistDay(){
     if(pts.some(x=>x.lat!=null)) h+=`<p class="note">${pts.length} relevé${pts.length>1?"s":""} · <button type="button" class="swap" id="hOnMap">voir les positions de la journée sur la carte</button></p>`;
     if(et.length){
       const chT={Disconnected:"débranchée",InProgress:"en charge",Finished:"terminée",Stopped:"arrêtée",Failure:"erreur"};
-      h+=`<h3>États de la voiture (${et.length})</h3><div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate?" · "+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`;
+      h+=`<h3>États de la voiture (${et.length})</h3><div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate&&(e.charge||e.chargeStatus)==="InProgress"?" · +"+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`;
     }
     if(T.length) h+=`<h3>Trajets</h3>`+tripRows(T);
     if(C.length) h+=`<h3>Recharges</h3>`+chargeRows(C);
