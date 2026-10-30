@@ -652,6 +652,10 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.23", d:"30/10/2026", c:[
+    "Historique : tous les états de la voiture (batterie, autonomie, recharge, santé, 12 V, température, compteur, contact, clim, position) enregistrés à chaque changement et à chaque « Actualiser »",
+    "Historique d'une journée : tableau des états et courbe au choix (batterie, autonomie, température, 12 V, compteur, santé)",
+    "Onglet Maintenant : affiche le dernier état enregistré dès l'ouverture, même si le PC est éteint"]},
   {v:"2.22", d:"30/10/2026", c:[
     "« Ma voiture » → Historique : toutes les données de la voiture enregistrées dans Firebase, consultables par jour (courbe de batterie, km, trajets, recharges, positions sur la carte), même PC éteint",
     "Récapitulatif sur 7, 30, 90 jours ou 1 an : distance, consommation réelle, énergie rechargée et coût par jour",
@@ -2125,7 +2129,7 @@ const n1=v=>v==null?"—":(+v).toFixed(1).replace(".",",");
 function carRender(r){
   const card=(v,l,cls)=>`<div class="car-card ${cls||""}"><b>${v}</b><span>${l}</span></div>`;
   const carAt=carDate(r.carAt), posAt=carDate(r.posAt);
-  $("carAge").textContent=`donnée de la voiture ${carAt?agoTxt(Date.now()-carAt):"d'heure inconnue"} · lue à ${fmtClock(new Date(r.readAt||Date.now()))}`;
+  $("carAge").textContent=`donnée de la voiture ${carAt?agoTxt(Date.now()-carAt):"d'heure inconnue"} · ${r.stored?"dernier état enregistré":"lue à "+fmtClock(new Date(r.readAt||Date.now()))}`;
   const chTxt={Disconnected:"débranchée",InProgress:"en charge",Finished:"charge terminée",Stopped:"charge arrêtée",Failure:"erreur de charge"}[r.chargeStatus]||r.chargeStatus||"—";
   const capUse = r.health && $("cap").value ? (+$("cap").value)*r.health/100 : null;
   let html=`<div class="car-grid">
@@ -2163,17 +2167,22 @@ function carRender(r){
 }
 // ---------- Historique de la voiture (lu directement dans Firebase, PC allumé ou non) ----------
 const isoDay=d=>{ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
-let histDayData=null;
+let histDayData=null, histMetric="soc";
+try{ const m=localStorage.getItem("trajetve-courbe"); if(m) histMetric=m; }catch(e){}
 function carColl(n){ return fb.db.collection("trajetve_car").doc(fb.auth.currentUser.uid).collection(n); }
-function socChart(pts,etats){
-  const P=[...(pts||[]).map(x=>({d:carDate(x.t),v:x.soc})),...(etats||[]).map(x=>({d:carDate(x.t),v:x.soc}))].filter(x=>x.d&&x.v!=null).sort((a,b)=>a.d-b.d);
-  if(P.length<2) return "";
-  const W=640,H=160,ml=36,mr=10,mt=10,mb=24, day0=new Date(P[0].d); day0.setHours(0,0,0,0); const t0=+day0, t1=t0+86400000;
-  const X=d=>ml+(+d-t0)/(t1-t0)*(W-ml-mr), Y=v=>mt+(1-v/100)*(H-mt-mb);
-  let g=""; for(const v of [0,50,100]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-5}" y="${Y(v)+4}" text-anchor="end">${v}%</text>`;
+const METRICS={soc:["Batterie","%",0,100],range:["Autonomie","km"],temp:["Température","°C"],v12:["Batterie 12 V",""],km:["Compteur","km"],sante:["Santé batterie","%"]};
+function socChart(pts,etats,key="soc"){
+  const [,unit,fmin,fmax]=METRICS[key]||["",""];
+  const src=key==="soc"||key==="temp"||key==="km" ? [...(pts||[]),...(etats||[])] : (etats||[]);
+  const P=src.map(x=>({d:carDate(x.t),v:x[key]})).filter(x=>x.d&&x.v!=null).sort((a,b)=>a.d-b.d);
+  if(P.length<2) return `<p class="note">Pas assez de données pour tracer cette courbe ce jour-là.</p>`;
+  const W=640,H=160,ml=44,mr=10,mt=10,mb=24, day0=new Date(P[0].d); day0.setHours(0,0,0,0); const t0=+day0, t1=t0+86400000;
+  const vs=P.map(x=>+x.v); let lo=fmin??Math.floor(Math.min(...vs)), hi=fmax??Math.ceil(Math.max(...vs)); if(hi-lo<2){ lo-=1; hi+=1; }
+  const X=d=>ml+(+d-t0)/(t1-t0)*(W-ml-mr), Y=v=>mt+(1-(v-lo)/(hi-lo))*(H-mt-mb);
+  let g=""; for(const v of [lo,(lo+hi)/2,hi]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-5}" y="${Y(v)+4}" text-anchor="end">${Math.round(v)}${unit==="%"?"%":""}</text>`;
   for(const h of [0,6,12,18,24]) g+=`<text x="${X(t0+h*3600000)}" y="${H-6}" text-anchor="middle">${h}h</text>`;
   g+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" points="${P.map(x=>X(x.d).toFixed(1)+","+Y(x.v).toFixed(1)).join(" ")}"/>`;
-  g+=P.map(x=>`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="2.5" fill="var(--accent)"><title>${fmtClock(x.d)} · ${Math.round(x.v)} %</title></circle>`).join("");
+  g+=P.map(x=>`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="2.5" fill="var(--accent)"><title>${fmtClock(x.d)} · ${n1(x.v)} ${unit}</title></circle>`).join("");
   return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px">${g}</svg></div>`;
 }
 const tripRows=T=>`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th></tr></thead><tbody>${T.map(t=>`<tr><td>${fmtDT(carDate(t.t))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td></tr>`).join("")}</tbody></table></div>`;
@@ -2184,9 +2193,10 @@ async function loadHistDay(){
   msg.className="note"; msg.textContent="Chargement…";
   try{
     const [dd,tr,ch]=await Promise.all([carColl("jours").doc(day).get(), carColl("trajets").where("jour","==",day).get(), carColl("recharges").where("jour","==",day).get()]);
-    const D=dd.exists?dd.data():{}, pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1), et=(D.etats||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+    const D=dd.exists?dd.data():{}, pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+    const etMap=new Map(); (D.etats||[]).forEach(x=>etMap.set(x.t,{...(etMap.get(x.t)||{}),...x})); const et=[...etMap.values()].sort((a,b)=>a.t<b.t?-1:1);
     const T=tr.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1), C=ch.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1);
-    histDayData={day,pts};
+    histDayData={day,pts,et};
     msg.textContent="";
     if(!pts.length && !et.length && !T.length && !C.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>`; return; }
     const kms=pts.map(x=>x.km).filter(v=>v!=null), socs=[...pts,...et].map(x=>x.soc).filter(v=>v!=null), temps=[...pts,...et].map(x=>x.temp).filter(v=>v!=null);
@@ -2201,8 +2211,12 @@ async function loadHistDay(){
       ${card(temps.length?Math.round(Math.min(...temps))+" – "+Math.round(Math.max(...temps))+" °C":"—","température")}
       ${card(last.sante!=null?last.sante+" %":"—","santé batterie"+(last.v12!=null?" · 12 V : "+last.v12:""))}
     </div>`;
-    h+=socChart(pts,et);
+    h+=`<div class="hist-nav"><h3 style="margin:0">Courbe</h3><select id="hMetric" aria-label="Donnée affichée">${Object.entries(METRICS).map(([k,[l]])=>`<option value="${k}" ${k===histMetric?"selected":""}>${l}</option>`).join("")}</select></div><div id="hChart">${socChart(pts,et,histMetric)}</div>`;
     if(pts.some(x=>x.lat!=null)) h+=`<p class="note">${pts.length} relevé${pts.length>1?"s":""} · <button type="button" class="swap" id="hOnMap">voir les positions de la journée sur la carte</button></p>`;
+    if(et.length){
+      const chT={Disconnected:"débranchée",InProgress:"en charge",Finished:"terminée",Stopped:"arrêtée",Failure:"erreur"};
+      h+=`<h3>États de la voiture (${et.length})</h3><div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate?" · "+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`;
+    }
     if(T.length) h+=`<h3>Trajets</h3>`+tripRows(T);
     if(C.length) h+=`<h3>Recharges</h3>`+chargeRows(C);
     box.innerHTML=h;
@@ -2236,6 +2250,11 @@ $("hPrev").addEventListener("click",()=>shiftDay(-1)); $("hNext").addEventListen
 $("hToday").addEventListener("click",()=>{ $("hDay").value=isoDay(new Date()); loadHistDay(); });
 $("hDay").addEventListener("change",loadHistDay); $("hRange").addEventListener("change",loadHistSum);
 $("hSum").addEventListener("click",e=>{ const tr=e.target.closest("tr[data-day]"); if(tr){ $("hDay").value=tr.dataset.day; loadHistDay(); $("carHist").scrollIntoView({behavior:"smooth",block:"start"}); } });
+$("hDayBody").addEventListener("change",e=>{
+  if(e.target.id!=="hMetric" || !histDayData) return;
+  histMetric=e.target.value; try{ localStorage.setItem("trajetve-courbe",histMetric); }catch(_){}
+  $("hChart").innerHTML=socChart(histDayData.pts,histDayData.et,histMetric);
+});
 $("hDayBody").addEventListener("click",e=>{
   if(e.target.id!=="hOnMap" || !map || !histDayData) return;
   const P=histDayData.pts.filter(x=>x.lat!=null).map(x=>[x.lat,x.lon]); if(!P.length) return;
@@ -2245,8 +2264,24 @@ $("hDayBody").addEventListener("click",e=>{
   map.fitBounds(L.latLngBounds(P),{padding:[30,30],maxZoom:14}); $("map").scrollIntoView({behavior:"smooth",block:"center"});
 });
 
-$("carBtn").addEventListener("click",()=>{ const p=$("carPanel"); p.hidden=!p.hidden; $("carBtn").setAttribute("aria-expanded",!p.hidden);
-  if(!p.hidden){ try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c) carRender(c); }catch(e){} p.scrollIntoView({behavior:"smooth",block:"start"}); } });
+// Dernier état enregistré dans Firebase (affiché tant qu'on n'a pas fait « Actualiser », PC allumé ou non)
+async function lastStoredState(){
+  if(!fb || !fb.auth.currentUser) return null;
+  for(let k=0;k<7;k++){
+    const d=new Date(); d.setDate(d.getDate()-k);
+    try{ const s=await carColl("jours").doc(isoDay(d)).get(); const et=(s.exists?s.data().etats:null)||[];
+      if(et.length){ const e=et.slice().sort((a,b)=>a.t<b.t?-1:1).pop();
+        return {...e, health:e.health??e.sante, chargeStatus:e.chargeStatus??e.charge, carAt:+carDate(e.t), readAt:null, stored:true}; } }catch(e){ return null; }
+  }
+  return null;
+}
+$("carBtn").addEventListener("click",async()=>{ const p=$("carPanel"); p.hidden=!p.hidden; $("carBtn").setAttribute("aria-expanded",!p.hidden);
+  if(p.hidden) return;
+  let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
+  const st=await lastStoredState();
+  if(st && (!c || (st.carAt||0)>(c.carAt||0))) c={...(c||{}), ...st, soh:c?.soh, trips:c?.trips, chargings:c?.chargings};
+  if(c) carRender(c);
+  p.scrollIntoView({behavior:"smooth",block:"start"}); });
 $("carClose").addEventListener("click",()=>{ $("carPanel").hidden=true; $("carBtn").setAttribute("aria-expanded","false"); });
 $("carRefresh").addEventListener("click",async()=>{
   const b=$("carRefresh"), m=$("carMsg"); b.disabled=true; m.className="note"; m.textContent="Lecture en cours…";
