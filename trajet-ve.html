@@ -151,6 +151,11 @@ select{min-width:0;max-width:100%}
 .altico .altpin{transform:translate(-50%,-50%);height:auto;padding:2px 7px;line-height:1.15;text-align:center}
 .altpin small{display:block;font:600 10px var(--f-mono);opacity:.85}
 .leaflet-marker-icon:hover{z-index:100000!important}
+.viewctl{display:flex;flex-direction:column}
+.viewctl button{font:600 12px var(--f-body);padding:6px 9px;border:0;border-bottom:1px solid #ccc;background:#fff;color:#16202c;cursor:pointer;text-align:left}
+.viewctl button:last-child{border-bottom:0}
+.viewctl button:hover{background:#f0f3f8}
+.viewctl[hidden],.viewctl button[hidden]{display:none!important}
 .altctl button{font:600 13px var(--f-body);padding:7px 12px;border:0;background:#fff;color:#b3261e;cursor:pointer;border-radius:4px}
 .altctl button:hover{background:#fdecea}
 .altpin{display:grid;place-items:center;min-width:26px;height:22px;padding:0 7px;border-radius:11px;background:#fff;border:2px solid var(--c);color:var(--c);font:700 11px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap}
@@ -685,6 +690,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.25.1", d:"30/10/2026", c:[
+    "Carte : boutons « Trajet », « Voiture » et « Les deux » sous le zoom pour passer d'un cadrage à l'autre"]},
   {v:"2.25", d:"30/10/2026", c:[
     "Position de la voiture toujours affichée sur la carte, avec la date de la position et le % de batterie (détails au survol) ; mise à jour toutes les 5 min",
     "« Tout développer / Tout réduire » dans Ajuster (sous la carte) et dans Ma voiture",
@@ -1405,7 +1412,7 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
-let map, layers, carLayer=null, carMarker=null, carShown=null, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null, altCtl=null;
+let map, layers, viewCtl=null, carLayer=null, carMarker=null, carShown=null, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null, altCtl=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
   map=L.map("map",{zoomControl:true}).setView([46.6,2.4],6);
@@ -1422,6 +1429,17 @@ function initMap(){
   layers=L.layerGroup().addTo(map);
   hereLayer=L.layerGroup().addTo(map);
   carLayer=L.layerGroup().addTo(map);
+  // Boutons de cadrage : trajet / voiture / les deux
+  const ViewCtl=L.Control.extend({ onAdd(){
+      const d=L.DomUtil.create("div","leaflet-bar viewctl");
+      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
+      L.DomEvent.disableClickPropagation(d);
+      d.addEventListener("click",e=>{ const b=e.target.closest("[data-v]"); if(b) frameMap(b.dataset.v); });
+      this._d=d; return d; },
+    update(){ if(!this._d) return; const hasR=!!lastLine && map.hasLayer(lastLine), hasC=!!carMarker;
+      this._d.querySelector('[data-v="route"]').hidden=!hasR; this._d.querySelector('[data-v="car"]').hidden=!hasC; this._d.querySelector('[data-v="both"]').hidden=!(hasR&&hasC);
+      this._d.hidden=!(hasR||hasC); } });
+  viewCtl=new ViewCtl({position:"topleft"}).addTo(map); viewCtl.update();
   altLayer=L.layerGroup().addTo(map);
   // bouton sur la carte pour masquer les bornes alternatives
   const AltCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar altctl"); d.innerHTML='<button type="button">Masquer les autres bornes</button>'; d.hidden=true;
@@ -1488,6 +1506,7 @@ function drawMap(R,C,res,a,b,showAll,dep){
   }
   if(!steps.some(x=>x.type==="end")) L.marker([b.lat,b.lon],{icon:pinIcon("e","A")}).bindPopup("Arrivée").addTo(layers);
   map.fitBounds(line.getBounds(),{padding:[20,20]});
+  viewCtl?.update();
 }
 
 // ---------- Rendu ----------
@@ -2218,6 +2237,17 @@ let csecState={}; try{ csecState=JSON.parse(localStorage.getItem("trajetve-csec"
 const csec=(k,title,body)=>`<details class="csec" data-k="${k}" ${csecState[k]===false?"":"open"}><summary>${title}</summary><div class="csec-b">${body}</div></details>`;
 document.addEventListener("toggle",e=>{ const d=e.target; if(d.matches && d.matches("details.csec")){ csecState[d.dataset.k]=d.open; try{ localStorage.setItem("trajetve-csec",JSON.stringify(csecState)); }catch(_){} } },true);
 
+// ---------- Cadrage de la carte ----------
+function frameMap(v){
+  if(!map) return;
+  const hasR=!!lastLine && map.hasLayer(lastLine);
+  if(v==="car" && carMarker){ map.setView(carMarker.getLatLng(),14); carMarker.openTooltip(); return; }
+  if(v==="route" && hasR){ carMarker?.closeTooltip(); map.fitBounds(lastLine.getBounds(),{padding:[20,20]}); return; }
+  if(v==="both"){ const b=hasR?L.latLngBounds(lastLine.getBounds().getSouthWest(),lastLine.getBounds().getNorthEast()):null;
+    if(carMarker){ const ll=carMarker.getLatLng(); if(b) b.extend(ll); else return map.setView(ll,12); }
+    if(b) map.fitBounds(b,{padding:[30,30]}); }
+}
+
 // ---------- Position de la voiture, toujours affichée sur la carte ----------
 const CAR_SVG='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#fff" d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v6a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zm2.2-1h9.6l-1-3H8.2zM7.5 14a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm9 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg>';
 function setCarMarker(st){
@@ -2233,6 +2263,7 @@ function setCarMarker(st){
     .bindTooltip(`<b>Ma voiture</b><br>Position du ${posAt?fmtDT(posAt)+" ("+agoTxt(age)+")":"(date inconnue)"}${st.soc!=null?`<br>Batterie ${Math.round(st.soc)} %${socAt?" · donnée "+agoTxt(Date.now()-socAt):""}`:""}${st.range!=null?`<br>Autonomie affichée ${Math.round(st.range)} km`:""}${old?'<br><span style="color:#b4570a">Position ancienne : la voiture n\'a pas renvoyé sa position depuis</span>':""}`,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
     .addTo(carLayer);
   if(!lastLine) map.setView([st.lat,st.lon],11);   // pas de trajet affiché : on centre sur la voiture
+  viewCtl?.update();
 }
 async function refreshCarMarker(){
   let best=null;
@@ -2609,7 +2640,7 @@ function clearResults(){
   if(typeof stopLive==="function" && watchId!=null) stopLive();
   if(hereLayer) hereLayer.clearLayers();
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
-  if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
+  if(layers){ layers.clearLayers(); lastLine=null; map.setView([46.6,2.4],6); viewCtl?.update(); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();
