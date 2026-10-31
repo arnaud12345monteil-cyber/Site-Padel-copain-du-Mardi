@@ -3,7 +3,7 @@
   Trajet VE — planificateur de trajet en voiture électrique
   Application web installable, hébergée sur GitHub Pages dans le dépôt Site-Padel-copain-du-Mardi, à côté des autres sites.
   Fichiers propres à Trajet VE (tous préfixés pour ne rien écraser) : trajet-ve.html (ce fichier), trajetve.webmanifest,
-  trajetve-sw.js, trajetve-icon-192.png, trajetve-icon-512.png, trajetve-icon-maskable-512.png.
+  trajetve-sw.js, trajetve-recharges.html, trajetve-icon-192.png, trajetve-icon-512.png, trajetve-icon-maskable-512.png.
   À chaque nouvelle version : mettre à jour CHANGELOG ci-dessous ET la constante CACHE dans trajetve-sw.js.
 
   Version : voir la constante CHANGELOG dans le script (la première entrée est la version affichée sur le site).
@@ -384,6 +384,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
     <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
+    <a class="mini" href="trajetve-recharges.html" style="text-decoration:none">Mes recharges</a>
     <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
@@ -691,6 +692,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.26", d:"31/10/2026", c:[
+    "Bouton « Mes recharges » à côté de « Ma voiture » : nouvelle page trajetve-recharges.html, inventaire et historique de toutes les recharges (maison et en déplacement), import CSV wallbox / opérateurs et captures d'écran, sauvegarde JSON, synchronisée avec le compte Google"]},
   {v:"2.25.3", d:"31/10/2026", c:[
     "Historique de la voiture : quand la journée du jour est vide, l'onglet explique pourquoi (PC qui ne synchronise plus, psa_car_controller arrêté, ou aucune donnée nouvelle de la voiture depuis telle date)",
     "trajetve_voiture.py : envoie à chaque synchronisation un compte rendu (heure, psa_car_controller joignable, date de la dernière donnée voiture)"]},
