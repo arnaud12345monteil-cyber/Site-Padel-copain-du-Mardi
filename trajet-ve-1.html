@@ -3,7 +3,7 @@
   Trajet VE — planificateur de trajet en voiture électrique
   Application web installable, hébergée sur GitHub Pages dans le dépôt Site-Padel-copain-du-Mardi, à côté des autres sites.
   Fichiers propres à Trajet VE (tous préfixés pour ne rien écraser) : trajet-ve.html (ce fichier), trajetve.webmanifest,
-  trajetve-sw.js, trajetve-icon-192.png, trajetve-icon-512.png, trajetve-icon-maskable-512.png.
+  trajetve-sw.js, trajetve-recharges.html, trajetve-icon-192.png, trajetve-icon-512.png, trajetve-icon-maskable-512.png.
   À chaque nouvelle version : mettre à jour CHANGELOG ci-dessous ET la constante CACHE dans trajetve-sw.js.
 
   Version : voir la constante CHANGELOG dans le script (la première entrée est la version affichée sur le site).
@@ -146,10 +146,18 @@ select{min-width:0;max-width:100%}
 .altfl{display:flex;flex-wrap:wrap;gap:4px}
 .altfl i{white-space:nowrap;font-style:normal;font-size:.76rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn)}
 .altfl i.ok{border-color:var(--charge);color:var(--charge)}
+.altfl i.orig{border-color:var(--accent);color:var(--accent);font-weight:600}
 .altico{width:auto!important;height:auto!important}
 .altico .altpin{transform:translate(-50%,-50%);height:auto;padding:2px 7px;line-height:1.15;text-align:center}
 .altpin small{display:block;font:600 10px var(--f-mono);opacity:.85}
 .leaflet-marker-icon:hover{z-index:100000!important}
+.viewctl{display:flex;flex-direction:column}
+.viewctl button{font:600 12px var(--f-body);padding:6px 9px;border:0;border-bottom:1px solid #ccc;background:#fff;color:#16202c;cursor:pointer;text-align:left}
+.viewctl button:last-child{border-bottom:0}
+.viewctl button:hover{background:#f0f3f8}
+.viewctl[hidden],.viewctl button[hidden]{display:none!important}
+.altctl button{font:600 13px var(--f-body);padding:7px 12px;border:0;background:#fff;color:#b3261e;cursor:pointer;border-radius:4px}
+.altctl button:hover{background:#fdecea}
 .altpin{display:grid;place-items:center;min-width:26px;height:22px;padding:0 7px;border-radius:11px;background:#fff;border:2px solid var(--c);color:var(--c);font:700 11px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap}
 .altpin.sel{background:var(--c);color:#fff}
 .altlist li[data-ai]{cursor:pointer}
@@ -166,6 +174,36 @@ select{min-width:0;max-width:100%}
 .chip.eur{border-color:var(--accent);color:var(--accent)}
 .tol input{width:64px!important}
 .quick .ops-grid{max-height:140px;overflow:auto}
+.car{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.seg2{grid-template-columns:repeat(2,1fr);max-width:320px}
+.cartabs label{font:600 .88rem var(--f-body);white-space:nowrap}
+.hist-nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.hist-nav input[type=date]{width:auto;flex:0 1 170px}
+.hist-nav select{width:auto;margin-left:auto}
+.car-tbl tr[data-day]{cursor:pointer}
+.car-tbl tr[data-day]:hover td{background:var(--field)}
+.qhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.qhead h2{margin:0 auto 0 0!important}
+details.csec{border-top:1px solid var(--line)}
+details.csec>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font:600 .95rem var(--f-display)}
+details.csec>summary::-webkit-details-marker{display:none}
+details.csec>summary::after{content:"";margin-left:auto;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+details.csec[open]>summary::after{transform:rotate(-135deg)}
+.csec-b{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding-bottom:12px;min-width:0}
+.car-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.car-head h2{margin-right:auto}
+.car-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.car-card{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field);min-width:0}
+.car-card b{display:block;font:600 1.15rem var(--f-mono);font-variant-numeric:tabular-nums}
+.car-card span{font-size:.8rem;color:var(--muted)}
+.car-card.warn{border-color:var(--warn)} .car-card.warn b{color:var(--warn)}
+.car h3{font-size:.95rem;margin-top:4px}
+.car-tbl{overflow-x:auto}
+.car-tbl table{width:100%;border-collapse:collapse;font-size:.84rem;font-variant-numeric:tabular-nums}
+.car-tbl th,.car-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.car-tbl th:first-child,.car-tbl td:first-child{text-align:left}
+.car-tbl th{color:var(--muted);font-weight:500;font-size:.78rem}
+.car svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .mini.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .here{display:grid;gap:12px;padding:14px 16px}
@@ -182,6 +220,14 @@ select{min-width:0;max-width:100%}
 .here-card.bad{border-color:var(--bad)} .here-card.bad b{color:var(--bad)}
 .here-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .here b.err{color:var(--bad)}
+.hsrc{flex-basis:100%;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center}
+.hsrc .seg{max-width:360px}
+.hsrc .seg label{font:600 .82rem var(--f-body);white-space:nowrap}
+.hlab{font-size:.85rem;font-weight:500}
+.hman{max-width:200px}
+.hman:has(input:disabled){opacity:.45}
+.psarep{flex-basis:100%;margin:0}
+.psarep .old{color:var(--warn)}
 .carread{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:.84rem}
 .carread .carmsg{color:var(--muted)}
 .carread .carmsg.err{color:var(--bad)}
@@ -196,6 +242,8 @@ select{min-width:0;max-width:100%}
 .herepin.live{animation:pulse 1.6s infinite}
 @keyframes blink{50%{opacity:.2}}
 @keyframes pulse{0%{box-shadow:0 0 0 2px var(--c),0 0 0 0 var(--c)}70%{box-shadow:0 0 0 2px var(--c),0 0 0 12px transparent}100%{box-shadow:0 0 0 2px var(--c),0 0 0 0 transparent}}
+.carpin{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--c);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+.carlab{position:absolute;left:31px;top:2px;white-space:nowrap;background:#fff;color:var(--c);border:1.5px solid var(--c);border-radius:6px;padding:1px 6px;font:600 11px var(--f-mono);box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none}
 .herepin{width:22px;height:22px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 2px var(--c),0 2px 6px rgba(0,0,0,.35)}
 .herelab{position:absolute;left:28px;top:-4px;white-space:nowrap;background:#fff;color:var(--c);border:2px solid var(--c);border-radius:8px;padding:1px 7px;font:700 13px var(--f-mono);box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .herelab small{display:block;font:500 10px var(--f-body);color:#5b6878}
@@ -271,7 +319,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .leaflet-container{font:inherit}
 .pin{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font:700 12px var(--f-mono);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .plab{position:absolute;left:30px;top:3px;white-space:nowrap;background:#fff;color:#16202c;border:1px solid #c9d1dc;border-radius:6px;padding:1px 6px;font:600 11px var(--f-mono);box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none}
-.leaflet-tooltip.maptip{font:13px/1.45 var(--f-body);max-width:300px;white-space:normal;padding:8px 10px}
+.leaflet-tooltip.maptip{font:13px/1.45 var(--f-body);width:max-content;max-width:min(340px,80vw);white-space:normal;padding:8px 10px}
+.pin.pz{background:#5b6878}
 .pin.s{background:#16202c}.pin.e{background:#b3261e}.pin.c{background:#0d8a5f}.pin.v{background:#1f4fd8;font-size:10px}
 .field{display:grid;gap:4px}
 .field>label{font-size:.88rem;font-weight:500}
@@ -334,6 +383,8 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   <h1>Trajet VE</h1>
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
+    <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
+    <a class="mini" href="trajetve-recharges.html" style="text-decoration:none">Mes recharges</a>
     <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
@@ -525,11 +576,39 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   </aside>
 
   <section class="main">
+    <div class="panel car" id="carPanel" hidden>
+      <div class="car-head">
+        <h2>Ma voiture</h2>
+        <span class="note" id="carAge"></span>
+        <button type="button" class="mini primary" id="carRefresh">Actualiser</button>
+        <button type="button" class="swap" data-all="carPanel" data-open="1">Tout développer</button>
+        <button type="button" class="swap" data-all="carPanel" data-open="0">Tout réduire</button>
+        <button type="button" class="mini" id="carClose" aria-label="Fermer">×</button>
+      </div>
+      <p class="note" id="carMsg"></p>
+      <div class="seg seg2 cartabs" role="tablist">
+        <input type="radio" name="cartab" id="ctNow" value="now" checked><label for="ctNow">Maintenant</label>
+        <input type="radio" name="cartab" id="ctHist" value="hist"><label for="ctHist">Historique</label>
+      </div>
+      <div id="carBody"><p class="empty">Appuie sur « Actualiser » pour lire l'état de la voiture (sans la réveiller).</p></div>
+      <div id="carHist" hidden>
+        <div class="hist-nav">
+          <button type="button" class="mini" id="hPrev" aria-label="Jour précédent">◀</button>
+          <input type="date" id="hDay">
+          <button type="button" class="mini" id="hNext" aria-label="Jour suivant">▶</button>
+          <button type="button" class="mini" id="hToday">Aujourd'hui</button>
+          <select id="hRange" aria-label="Période du récapitulatif"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option><option value="365">1 an</option></select>
+        </div>
+        <p class="note" id="hMsg"></p>
+        <div id="hDayBody"></div>
+        <div id="hSum"></div>
+      </div>
+    </div>
     <div id="map"></div>
     <div class="resbar" id="resbar" hidden>
       <div class="stats" id="stats"></div>
       <div class="quick panel" id="quick">
-        <h2>Ajuster</h2>
+        <div class="qhead"><h2>Ajuster</h2><button type="button" class="swap" data-all="quick" data-open="1">Tout développer</button><button type="button" class="swap" data-all="quick" data-open="0">Tout réduire</button></div>
         <details class="qsec" data-q="regles" open>
           <summary><span class="sec-t">Règles d'arrêt et prix</span><span class="sec-s" id="qsum-regles"></span></summary>
           <div class="qbody">
@@ -566,8 +645,21 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
     <div class="here panel" id="hereBox" hidden>
       <div class="here-form">
         <h2>Je suis ici</h2>
-        <label>Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42"></label>
-        <div class="carread" data-target="hereSoc"><button type="button" class="swap" data-carread>Lire depuis la voiture</button><span class="carmsg"></span></div>
+        <div class="hsrc">
+          <span class="hlab">Position</span>
+          <div class="seg seg2" role="radiogroup" aria-label="Source de la position">
+            <input type="radio" name="herePos" id="hpPhone" value="phone" checked><label for="hpPhone">Téléphone (GPS)</label>
+            <input type="radio" name="herePos" id="hpCar" value="car"><label for="hpCar">Voiture (PSA)</label>
+          </div>
+          <span class="hlab">Batterie</span>
+          <div class="seg seg2" role="radiogroup" aria-label="Source du niveau de batterie">
+            <input type="radio" name="hereBat" id="hbPsa" value="psa" checked><label for="hbPsa">Rapport PSA</label>
+            <input type="radio" name="hereBat" id="hbMan" value="manual"><label for="hbMan">Saisie manuelle</label>
+          </div>
+          <span></span>
+          <label class="hman">Batterie affichée <small>%</small><input id="hereSoc" type="number" min="0" max="100" inputmode="numeric" placeholder="ex. 42" disabled></label>
+        </div>
+        <p class="note psarep"><span id="psaInfo">Rapport PSA : chargement…</span> <button type="button" class="swap" id="psaReload">Relire la voiture</button></p>
         <button type="button" class="go" id="hereGo">Comparer avec ma position</button>
         <button type="button" class="mini" id="hereLive">Suivre en temps réel</button>
         <label class="hfollow"><input type="checkbox" id="hereFollow" checked> centrer la carte</label>
@@ -600,6 +692,47 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.26", d:"31/10/2026", c:[
+    "Bouton « Mes recharges » à côté de « Ma voiture » : nouvelle page trajetve-recharges.html, inventaire et historique de toutes les recharges (maison et en déplacement), import CSV wallbox / opérateurs et captures d'écran, sauvegarde JSON, synchronisée avec le compte Google"]},
+  {v:"2.25.3", d:"31/10/2026", c:[
+    "Historique de la voiture : quand la journée du jour est vide, l'onglet explique pourquoi (PC qui ne synchronise plus, psa_car_controller arrêté, ou aucune donnée nouvelle de la voiture depuis telle date)",
+    "trajetve_voiture.py : envoie à chaque synchronisation un compte rendu (heure, psa_car_controller joignable, date de la dernière donnée voiture)"]},
+  {v:"2.25.2", d:"31/10/2026", c:[
+    "Arrêt imposé par la règle de temps sans besoin de recharger (mode « juste assez ») : affiché comme une pause (« pause · 42 % ») au lieu de « 42 → 42 % », avec une durée de pause (durée minimale d'arrêt, ou 15 min par défaut) comptée dans les pauses et non dans les recharges"]},
+  {v:"2.25.1", d:"30/10/2026", c:[
+    "Carte : boutons « Trajet », « Voiture » et « Les deux » sous le zoom pour passer d'un cadrage à l'autre"]},
+  {v:"2.25", d:"30/10/2026", c:[
+    "Position de la voiture toujours affichée sur la carte, avec la date de la position et le % de batterie (détails au survol) ; mise à jour toutes les 5 min",
+    "« Tout développer / Tout réduire » dans Ajuster (sous la carte) et dans Ma voiture",
+    "Ma voiture : chaque partie (état, santé, trajets, recharges, journée, courbe, états, récapitulatif) est repliable ; l'état est mémorisé"]},
+  {v:"2.24", d:"30/10/2026", c:[
+    "« Je suis ici » : choix de la source de position (GPS du téléphone ou dernière position envoyée par la voiture) et de la source de batterie (dernier rapport PSA ou saisie manuelle)",
+    "Rapport PSA affiché avec son âge et bouton « Relire la voiture » ; le % du rapport est rattaché à l'endroit où était la voiture quand elle l'a envoyé",
+    "Alerte si le rapport ou la position de la voiture a plus de 30 min"]},
+  {v:"2.23.1", d:"30/10/2026", c:[
+    "Ma voiture : la vitesse de charge (km d'autonomie gagnés par heure) n'est plus affichée à côté de « débranchée » ; hors charge, elle est indiquée comme vitesse de la dernière charge"]},
+  {v:"2.23", d:"30/10/2026", c:[
+    "Historique : tous les états de la voiture (batterie, autonomie, recharge, santé, 12 V, température, compteur, contact, clim, position) enregistrés à chaque changement et à chaque « Actualiser »",
+    "Historique d'une journée : tableau des états et courbe au choix (batterie, autonomie, température, 12 V, compteur, santé)",
+    "Onglet Maintenant : affiche le dernier état enregistré dès l'ouverture, même si le PC est éteint"]},
+  {v:"2.22", d:"30/10/2026", c:[
+    "« Ma voiture » → Historique : toutes les données de la voiture enregistrées dans Firebase, consultables par jour (courbe de batterie, km, trajets, recharges, positions sur la carte), même PC éteint",
+    "Récapitulatif sur 7, 30, 90 jours ou 1 an : distance, consommation réelle, énergie rechargée et coût par jour",
+    "Script PC : envoi automatique de l'historique toutes les 10 min (relevés, trajets, recharges, santé batterie, état), avec rattrapage de l'existant au premier lancement"]},
+  {v:"2.21", d:"30/10/2026", c:[
+    "Section « Ma voiture » (bouton en haut) : batterie, autonomie, état de charge, santé de la batterie, compteur, température, batterie 12 V, dernière position",
+    "Historique de la santé de la batterie, des trajets (avec consommation réelle moyenne) et des recharges, si psa_car_controller enregistre (option -r)",
+    "Script PC : seul le compte autorisé peut lire la voiture"]},
+  {v:"2.20.3", d:"29/10/2026", c:[
+    "Correctif : quand une recharge est nécessaire mais que la seule borne possible (avec tes filtres) arrive alors que la batterie est encore haute, le calcul recharge au-delà de la cible (jusqu'à 100 %) au lieu de s'arrêter sur « Arrêt impossible à rendre utile »",
+    "Si aucune borne ne permet de continuer, le message indique où se trouve la seule borne possible et quels filtres élargir"]},
+  {v:"2.20.2", d:"29/10/2026", c:[
+    "Borne choisie à la main : bouton « Revenir à la borne d'origine » dans la bulle de l'arrêt sur la carte",
+    "Les autres bornes restent proposées après un choix manuel, avec la borne d'origine en tête (pastille bleue « origine » sur la carte)"]},
+  {v:"2.20.1", d:"29/10/2026", c:[
+    "Pastilles des bornes alternatives : temps de route depuis le dernier arrêt ajouté",
+    "Bulles de survol affichées en largeur (elles se réduisaient à une colonne près du bord de la carte)",
+    "Bouton « Masquer les autres bornes » directement sur la carte"]},
   {v:"2.20", d:"29/10/2026", c:[
     "Carte : à côté de chaque arrêt et étape, le % de batterie et le temps de route depuis l'arrêt précédent",
     "Carte : survoler un point affiche tous ses détails (heure, %, durée, coût, règle) sans cliquer ; le clic garde les mêmes détails avec les boutons",
@@ -1203,6 +1336,8 @@ function simulate(R,C,p){
     // alternatives : y compris plus loin, jusqu'à 10 points sous la réserve (signalé), pour voir ce qu'on gagnerait à l'abaisser
     const softFloor=Math.max(2,p.floor-10);
     const altsSrc=(p.Call||pool).filter(x=>x.id!==c.id && x.km>R.km[i]+1 && Math.abs(x.km-c.km)<=150 && socAt(x)>=softFloor);
+    const c0=c;   // borne choisie automatiquement (avant un éventuel choix manuel)
+    const altOf=(x,fl,extra)=>({good:[...(extra||[]),...goodFlag(x)], id:x.id, name:x.name, operator:x.operator||"", kw:x.kw, eff:Math.round(effKW(x)), price:pr(x), km:x.km, dkm:Math.round(x.km-c0.km), drive:Math.round(driveFromRef(x)), soc:Math.round(socAt(x)), onAire:!!x.onAire, lat:x.lat, lon:x.lon, flags:fl});
     const alts=altsSrc.map(x=>{ const fl=[...(x.flags||[]), ...winFlag(x)]; return {x, fl, sc:score(x)+fl.length*0.5}; })
       .sort((u,v)=>u.sc-v.sc)
       // les 12 meilleures, plus les 8 meilleures sur aire et les 8 meilleures hors aire (pour le filtre local)
@@ -1240,12 +1375,15 @@ function simulate(R,C,p){
     }
     // assez pour arriver à la prochaine étape avec sa batterie minimale
     const nv=W.slice(wpi).find(w=>w.idx>c.idx && w.min!=null);
+    let viaWant=0;
     if(nv){
       const vNeed=Math.ceil(nv.min+pct(E[nv.idx]-E[c.idx]+c.det*kDet)+1);
       // impossible en une charge : on laisse un arrêt plus proche de l'étape s'en charger, sauf s'il n'y en a plus
       const another=C.some(x=>x.km>c.km+1 && x.idx<nv.idx);
+      viaWant=Math.min(100,vNeed);
       if(vNeed<=100 || !another){ const v2=Math.min(100,vNeed); if(socOut<v2) socOut=v2; }
     }
+    let overCap=false;
     const ch=chOf(c);
     // Réglage manuel de cet arrêt depuis la feuille de route : % cible et/ou durée d'arrêt
     const ov=(p.ov||{})[c.id];
@@ -1256,8 +1394,17 @@ function simulate(R,C,p){
     // temps d'arrêt plus long que la charge : on continue à charger (jusqu'au plafond, ou jusqu'à 100 % si la durée est imposée)
     const ceil2 = ov && ov.dur!=null && ov.target==null ? 100 : ceil;
     if(dur>cm && socOut<ceil2 && !(ov && ov.target!=null)) socOut=Math.max(socOut, socAfterMinutes(soc,dur,ch,p.cap,ceil2));
-    if(!lastLeg && socOut<=soc+0.5 && reason!=="time" && !ov && !forced) return {error:`Arrêt impossible à rendre utile : la batterie (${Math.round(soc)} %) est déjà au niveau de charge visé. Augmente « Recharger jusqu'à », décoche-le, ou baisse la batterie minimale demandée à l'étape.`, partial:steps};
-    soc=socOut; t+=dur*60; chargeSec+=dur*60;
+    // Arrêt nécessaire mais batterie déjà au niveau visé (aucune borne plus loin avec tes filtres) :
+    // on dépasse la cible et on charge ce qu'il faut, jusqu'à 100 %
+    if(!lastLeg && socOut<=soc+0.5 && reason!=="time" && !ov && !forced){
+      const want=Math.min(100, Math.max(Math.ceil(need), viaWant));
+      if(want>soc+0.5){ socOut=want; overCap=true; }
+      else return {error:`Aucune borne utilisable plus loin sur le trajet avec tes réglages (la seule possible est à ${fmtKm(c.km)}, batterie déjà à ${Math.round(soc)} %). Ajoute des opérateurs, baisse la puissance minimale, décoche « Rester sur l'autoroute » ou augmente la distance max de la route.`, partial:steps};
+    }
+    // Règle de temps sans besoin de recharger (mode « juste assez ») : c'est une pause, pas une recharge
+    const isPause = reason==="time" && socOut<=soc+0.5 && !ov;
+    if(isPause) dur=Math.max(dur, p.useMinStop ? p.minStop : 15);
+    soc=socOut; t+=dur*60; if(isPause) pauseSec+=dur*60; else chargeSec+=dur*60;
     curve.push([c.km,soc]);
     const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
     costTot+=cost; kwhCharged+=kwhBilled;
@@ -1266,7 +1413,9 @@ function simulate(R,C,p){
                : reason==="soc"  ? {ok: sIn<=Math.round(sEarly) && sIn>=Math.round(sHard), txt:`seuil batterie · arrivée ${sIn} %`, win:`plage ${Math.round(sEarly)}–${Math.round(sHard)} %`}
                : reason==="floor" ? {ok:true, txt:"réserve minimale"}
                : reason==="via" ? {ok:true, txt:"batterie minimale à l'étape suivante"} : {ok:true, txt:"% d'arrivée souhaité"};
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, rule, alts: forced ? [] : alts, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    // borne choisie à la main : la borne d'origine revient en tête des alternatives, la borne choisie en sort
+    const altsOut = forced ? [altOf(c0,[...(c0.flags||[]),...winFlag(c0)],["orig"]), ...alts.filter(x=>x.id!==c.id)] : alts;
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, pause:isPause, ov:!!ov, origId, forced, rule, alts: altsOut, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -1275,7 +1424,7 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
-let map, layers, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null;
+let map, layers, viewCtl=null, carLayer=null, carMarker=null, carShown=null, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null, altCtl=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
   map=L.map("map",{zoomControl:true}).setView([46.6,2.4],6);
@@ -1291,26 +1440,45 @@ function initMap(){
   useBase();
   layers=L.layerGroup().addTo(map);
   hereLayer=L.layerGroup().addTo(map);
+  carLayer=L.layerGroup().addTo(map);
+  // Boutons de cadrage : trajet / voiture / les deux
+  const ViewCtl=L.Control.extend({ onAdd(){
+      const d=L.DomUtil.create("div","leaflet-bar viewctl");
+      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
+      L.DomEvent.disableClickPropagation(d);
+      d.addEventListener("click",e=>{ const b=e.target.closest("[data-v]"); if(b) frameMap(b.dataset.v); });
+      this._d=d; return d; },
+    update(){ if(!this._d) return; const hasR=!!lastLine && map.hasLayer(lastLine), hasC=!!carMarker;
+      this._d.querySelector('[data-v="route"]').hidden=!hasR; this._d.querySelector('[data-v="car"]').hidden=!hasC; this._d.querySelector('[data-v="both"]').hidden=!(hasR&&hasC);
+      this._d.hidden=!(hasR||hasC); } });
+  viewCtl=new ViewCtl({position:"topleft"}).addTo(map); viewCtl.update();
   altLayer=L.layerGroup().addTo(map);
+  // bouton sur la carte pour masquer les bornes alternatives
+  const AltCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar altctl"); d.innerHTML='<button type="button">Masquer les autres bornes</button>'; d.hidden=true;
+      L.DomEvent.disableClickPropagation(d); d.querySelector("button").addEventListener("click",()=>{ if(altOpen) altOpen.open=false; showAlts(null); }); this._d=d; return d; },
+    show(){ if(this._d) this._d.hidden=false; }, hide(){ if(this._d) this._d.hidden=true; } });
+  altCtl=new AltCtl({position:"topright"}).addTo(map);
   // bouton « Choisir » dans les bulles des bornes alternatives
   map.getContainer().addEventListener("click",e=>{
     const sa=e.target.closest("[data-showalts]");
     if(sa){ const d=document.querySelector(`#road details.alts[data-si="${sa.dataset.showalts}"]`); map.closePopup(); if(d){ if(d.open) showAlts(d); else d.open=true; } return; }
-    const b=e.target.closest("[data-force]"); if(b){ const [o,a2]=b.dataset.force.split("|"); stopForce[o]=a2; map.closePopup(); $("f").requestSubmit(); } });
+    const uf=e.target.closest("[data-unforce]"); if(uf){ delete stopForce[uf.dataset.unforce]; map.closePopup(); $("f").requestSubmit(); return; }
+    const b=e.target.closest("[data-force]"); if(b){ const [o,a2]=b.dataset.force.split("|"); if(a2===o) delete stopForce[o]; else stopForce[o]=a2; map.closePopup(); $("f").requestSubmit(); } });
 }
 const pinIcon=(cls,txt,lab)=>L.divIcon({className:"",html:`<div class="pin ${cls}">${txt}</div>${lab?`<div class="plab">${lab}</div>`:""}`,iconSize:[26,26],iconAnchor:[13,13]});
 const ALT_FL={pmin:"puissance sous le minimum",op:"opérateur exclu",price:"prix au-dessus du max",aire:"hors aire d'autoroute",sens:"aire dans l'autre sens de circulation"};
 const altFlagTxt=f=>{ const [k,v]=f.split(":"); return ALT_FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`,reserve:`batterie à ${v} %, sous ta réserve`})[k] || k; };
-const altGoodTxt=g=>{ const [k,v]=g.split(":"); return ({fenetre:`fenêtre de temps (${v} min)`, plage:`plage batterie (${v} %)`, pref:"★ opérateur préféré"})[k]||k; };
+const altGoodTxt=g=>{ const [k,v]=g.split(":"); return ({orig:"↺ borne d'origine (choix automatique)",fenetre:`fenêtre de temps (${v} min)`, plage:`plage batterie (${v} %)`, pref:"★ opérateur préféré"})[k]||k; };
 // bulle de survol / clic d'un arrêt de recharge
 function stopInfo(s,k,clk,leg){
   const c=s.c;
   return `<b>Arrêt ${k} · ${esc(c.name)}</b><br>${esc([c.operator,c.kw?Math.round(c.kw)+" kW":"",c.onAire?"sur aire":""].filter(Boolean).join(" · "))}`
-    + `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b>, recharge jusqu'à <b>${Math.round(s.socOut)} %</b>`
-    + `<br>Arrêt de ${Math.round(s.dur)} min, départ ${clk(s.t+s.dur*60)}`
+    + (s.pause ? `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b> · <b>pause</b>, pas de recharge nécessaire` : `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b>, recharge jusqu'à <b>${Math.round(s.socOut)} %</b>`)
+    + `<br>${s.pause?"Pause":"Arrêt"} de ${Math.round(s.dur)} min, départ ${clk(s.t+s.dur*60)}`
     + (s.cost!=null && s.kwhBilled>0.05 ? `<br>${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}` : "")
     + (leg ? `<br>Depuis l'arrêt précédent : ${fmtKm(leg.km)} · ${fmtH(leg.sec)} de route` : "")
-    + (s.rule ? `<br><i>${esc(s.rule.txt)}</i>` : "");
+    + (s.rule ? `<br><i>${esc(s.rule.txt)}</i>` : "")
+    + (s.forced ? `<br><b style="color:#1f4fd8">Borne choisie à la main</b>` : "");
 }
 function drawMap(R,C,res,a,b,showAll,dep){
   if(!map) return;
@@ -1337,10 +1505,10 @@ function drawMap(R,C,res,a,b,showAll,dep){
       tip(m,h); m.bindPopup(h);
     }
     else if(s.type==="stop"){ k++;
-      const m=L.marker([s.c.lat,s.c.lon],{icon:pinIcon("c",k,`${Math.round(s.socIn)}→${Math.round(s.socOut)} %${legTxt?" · "+legTxt:""}`),zIndexOffset:1000}).addTo(layers);
+      const m=L.marker([s.c.lat,s.c.lon],{icon:pinIcon(s.pause?"c pz":"c",k,`${s.pause?"pause · "+Math.round(s.socIn)+" %":Math.round(s.socIn)+"→"+Math.round(s.socOut)+" %"}${legTxt?" · "+legTxt:""}`),zIndexOffset:1000}).addTo(layers);
       const h=stopInfo(s,k,clk,leg); tip(m,h);
       const n=(s.alts||[]).length;
-      m.bindPopup(h + (n && !viewingSheet ? `<br><button type="button" class="mini" data-showalts="${si}" style="margin-top:6px">Voir les ${n} autres bornes possibles</button>` : ""));
+      m.bindPopup(h + (!viewingSheet ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${s.forced?`<button type="button" class="mini primary" data-unforce="${esc(s.origId)}">Revenir à la borne d'origine</button>`:""}${n?`<button type="button" class="mini" data-showalts="${si}">Voir les ${n} autres bornes possibles</button>`:""}</div>` : ""));
     }
     else if(s.type==="end"){
       const m=L.marker([b.lat,b.lon],{icon:pinIcon("e","A",`${Math.round(s.soc)} %${legTxt?" · "+legTxt:""}`)}).addTo(layers);
@@ -1350,6 +1518,7 @@ function drawMap(R,C,res,a,b,showAll,dep){
   }
   if(!steps.some(x=>x.type==="end")) L.marker([b.lat,b.lon],{icon:pinIcon("e","A")}).bindPopup("Arrivée").addTo(layers);
   map.fitBounds(line.getBounds(),{padding:[20,20]});
+  viewCtl?.update();
 }
 
 // ---------- Rendu ----------
@@ -1364,7 +1533,7 @@ function render(res,p,a,b){
     else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p>${s.kwh!=null?`<p class="leg">${Math.round(s.from)} % → ${Math.round(s.to)} % · ${s.kwh.toFixed(1).replace(".",",")} kWh consommés · ${(s.kwh/Math.max(0.1,s.km)*100).toFixed(1).replace(".",",")} kWh/100 km</p>`:""}</div>`}</li>`;
     else if(s.type==="stop"){ k++;
       const c=s.c;
-      const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
+      const chips=[s.pause?`<span class="chip">pause · ${Math.round(s.socIn)} %</span>`:`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
         `<span class="chip kw">${c.kw?Math.round(c.kw)+" kW":"~"+Math.round(s.effKW)+" kW (non renseigné)"}</span>`,
         ...(s.cost!=null && s.kwhBilled>0.05 ? [`<span class="chip eur">${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}</span>`] : []),
         s.rule ? `<span class="chip ${s.rule.ok?"rok":"why"}" title="${s.rule.ok?"dans la fenêtre de la règle":"hors de la fenêtre : aucune borne retenue n'y était, ou une autre priorité l'a emporté"}">${esc(s.rule.txt)}${s.rule.ok?"":` (${esc(s.rule.win)})`}</span>`
@@ -1383,14 +1552,14 @@ function render(res,p,a,b){
       const altAll=[{id:"_", price:s.price??Infinity, eff:Math.round(s.effKW||0)}, ...(s.alts||[])];
       const cheapId=altAll.reduce((m,x)=>x.price<m.price?x:m).id, fastId=altAll.reduce((m,x)=>x.eff>m.eff?x:m).id;
       const flTxt=f=>{ const [k,v]=f.split(":"); return FL[k] || ({tot:`trop tôt (${v} min de route)`,tard:`+${v} min au-delà de la limite`,socHaut:`batterie encore à ${v} %`,socBas:`batterie à ${v} %, sous le seuil`,reserve:`batterie à ${v} %, sous ta réserve`})[k] || k; };
-      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main":"Autres bornes possibles ("+s.alts.length+")"}</summary>
+      const altHtml = lastCalcOk && !viewingSheet && (s.alts?.length || s.forced) ? `<details class="alts" data-f="${altFilter}" data-si="${si}"><summary>${s.forced?"Borne choisie à la main · autres bornes ("+s.alts.length+")":"Autres bornes possibles ("+s.alts.length+")"}</summary>
         ${s.forced?`<p class="note">Borne choisie à la main. <button type="button" class="swap" data-unforce="${esc(s.origId)}">Revenir au choix automatique</button></p>`:""}
         ${(()=>{ const na=(s.alts||[]).filter(x=>x.onAire).length, nh=(s.alts||[]).length-na;
           return (s.alts||[]).length ? `<div class="altf" role="group" aria-label="Filtrer les bornes"><button type="button" data-altf="all">Toutes (${s.alts.length})</button><button type="button" data-altf="aire" ${na?"":"disabled"}>Sur aire (${na})</button><button type="button" data-altf="hors" ${nh?"":"disabled"}>Hors aire (${nh})</button></div>` : ""; })()}
         <ul class="altlist">${(s.alts||[]).map((x,ai)=>`<li data-aire="${x.onAire?1:0}" data-ai="${ai}" title="Voir sur la carte"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
-          <span class="altfl">${(x.good||[]).map(g=>`<i class="ok">${esc(altGoodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(altFlagTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
+          <span class="altfl">${(x.good||[]).map(g=>`<i class="ok${g==="orig"?" orig":""}">${esc(altGoodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(altFlagTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
           <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
-      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.pause?`Pause de ${Math.round(s.dur)} min (règle de temps), pas de recharge nécessaire, départ à ${at(s.t+s.dur*60)}`:s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
     }
     else if(s.type==="via"){ kv++;
       const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label><label>batterie min <input type="number" min="0" max="100" data-vmin value="${s.min??""}" placeholder="—"> %</label></div>` : "";
@@ -1406,7 +1575,7 @@ function render(res,p,a,b){
   const N=need(p), tiles=[[Math.round(N.tripPct)+" %","batterie pour le trajet",1],[Math.round(N.toCharge)+" %","à recharger en route",1]];
   if(res.summary){
     const S=res.summary;
-    tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont recharges"],...(S.pauseSec?[[fmtH(S.pauseSec),"dont pauses aux étapes"]]:[]),
+    tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont recharges"],...(S.pauseSec?[[fmtH(S.pauseSec),"dont pauses"]]:[]),
       [String(S.stops),"arrêt"+(S.stops>1?"s":"")],...(S.cost!=null?[[fmtEur(S.cost),"coût des recharges",1],[fmtEur(S.cost/S.km*100),"coût /100 km"]]:[]),[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[S.avg.toFixed(1).replace(".",",")+" kWh","conso moyenne /100 km"]);
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
   } else $("chartPanel").hidden=true;
@@ -1759,6 +1928,7 @@ $("swap").addEventListener("click",()=>{ const a=$("from").value; $("from").valu
 renderFavs();
 
 // ---------- Sections repliables ----------
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-all]"); if(!b) return; $(b.dataset.all).querySelectorAll("details.csec,details.qsec").forEach(d=>d.open=b.dataset.open==="1"); });
 const SEC_KEY="trajetve-sections";
 try{ const st=JSON.parse(localStorage.getItem(SEC_KEY)||"{}"); document.querySelectorAll("details.sec").forEach(d=>{ if(st[d.dataset.sec]===false) d.open=false; }); }catch(e){}
 const storeSecs=()=>{ try{ const st={}; document.querySelectorAll("details.sec").forEach(d=>st[d.dataset.sec]=d.open); localStorage.setItem(SEC_KEY,JSON.stringify(st)); }catch(e){} };
@@ -1830,7 +2000,38 @@ let hereFix=null;
 // Référence batterie : dernière valeur saisie, avec l'écart au plan à cet endroit. En suivi, l'écart est supposé constant.
 let hereRef=null, watchId=null, wakeLock=null, trailPts=[], lastCards=0, lastPos=null;
 const errMsg=err=>({1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.");
-$("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
+// Sources : position (téléphone ou dernier rapport PSA) et batterie (rapport PSA ou saisie manuelle)
+let psaState=null;
+const posSrc=()=>document.querySelector('input[name="herePos"]:checked').value;
+const batSrc=()=>document.querySelector('input[name="hereBat"]:checked').value;
+try{ const o=JSON.parse(localStorage.getItem("trajetve-ici")||"{}"); if(o.pos) $(o.pos==="car"?"hpCar":"hpPhone").checked=true; if(o.bat) $(o.bat==="manual"?"hbMan":"hbPsa").checked=true; }catch(e){}
+function psaInfoTxt(){
+  const el=$("psaInfo");
+  if(!psaState){ el.innerHTML="Rapport PSA : aucun (connecte-toi, ou vérifie que le script du PC tourne)."; return; }
+  const age=psaState.carAt?Date.now()-psaState.carAt:null, pAge=psaState.posAt?Date.now()-psaState.posAt:null;
+  el.innerHTML=`Rapport PSA : <b>${Math.round(psaState.soc)} %</b> <span class="${age>30*60000?"old":""}">(${age!=null?agoTxt(age):"heure inconnue"})</span>`
+    + (psaState.lat!=null?` · position <span class="${pAge>30*60000?"old":""}">${pAge!=null?agoTxt(pAge):"d'heure inconnue"}</span>`:" · pas de position");
+}
+async function loadPsa(live){
+  const el=$("psaInfo");
+  try{
+    if(live){ el.textContent="Lecture de la voiture…"; const r=await readCar(false, st=>{ el.textContent=({demande:"Demande envoyée au PC…",lecture:"Lecture en cours…"})[st]||st; }, "full"); psaState={...r, carAt:+carDate(r.carAt)||null, posAt:+carDate(r.posAt)||null}; try{ localStorage.setItem(CAR_KEY,JSON.stringify(r)); }catch(e){} }
+    else { const st=await lastStoredState(); let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
+      const best=[st,c].filter(Boolean).sort((a,b)=>(+carDate(b.carAt)||0)-(+carDate(a.carAt)||0))[0];
+      if(best) psaState={...best, carAt:+carDate(best.carAt)||null, posAt:+carDate(best.posAt)||null}; }
+  }catch(e){ el.textContent="Rapport PSA indisponible : "+e.message; return; }
+  psaInfoTxt();
+  if(psaState) setCarMarker(psaState);
+}
+function syncHereSrc(){
+  const man=batSrc()==="manual"; $("hereSoc").disabled=!man;
+  $("hereLive").disabled=posSrc()==="car"; $("hereLive").title=posSrc()==="car"?"Le suivi en temps réel utilise le GPS du téléphone":"";
+  try{ localStorage.setItem("trajetve-ici",JSON.stringify({pos:posSrc(),bat:batSrc()})); }catch(e){}
+}
+document.querySelectorAll('input[name="herePos"],input[name="hereBat"]').forEach(r=>r.addEventListener("change",()=>{ syncHereSrc(); if(batSrc()==="manual") $("hereSoc").focus(); if(lastPos) hereRender(lastPos,true); }));
+$("psaReload").addEventListener("click",async()=>{ $("psaReload").disabled=true; await loadPsa(true); $("psaReload").disabled=false; if(lastPos) hereRender(lastPos,true); });
+syncHereSrc();
+$("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hidden; if(!b.hidden){ loadPsa(false); if(batSrc()==="manual") $("hereSoc").focus(); b.scrollIntoView({behavior:"smooth",block:"nearest"}); } });
 // nouvelle saisie de batterie pendant le suivi : prise en compte à la dernière position connue
 $("hereSoc").addEventListener("change",()=>{ if(lastPos) hereRender(lastPos,true); });
 function hereRender(pos, force){
@@ -1840,10 +2041,18 @@ function hereRender(pos, force){
   const {latitude:lat, longitude:lon, accuracy}=pos.coords;
   const {res,p,R}=lastRun, S=res.summary;
   const loc=locateOnRoute(lat,lon,R.line,S.km), pts=planPoints(res), plan=planAt(pts,loc.km);
-  const typed=parseFloat($("hereSoc").value);
+  // niveau de batterie : saisie manuelle ou dernier rapport PSA
+  const bsrc=batSrc(), typed= bsrc==="manual" ? parseFloat($("hereSoc").value) : (psaState?.soc ?? NaN);
+  const key=bsrc+":"+typed+":"+(bsrc==="psa"?psaState?.carAt:"");
   // nouveau plan (recalcul) : on garde la batterie estimée et on recale l'écart sur le nouveau plan
   if(hereRef && hereRef.run!==lastRun){ const est=planAt(hereRef.pts,loc.km).soc+hereRef.d; hereRef={...hereRef, d:est-plan.soc, run:lastRun, pts}; }
-  if(isFinite(typed) && (!hereRef || hereRef.val!==typed)) hereRef={val:typed, km:loc.km, d:typed-plan.soc, run:lastRun, pts};
+  if(isFinite(typed) && (!hereRef || hereRef.key!==key)){
+    // rapport PSA : le % correspond à l'endroit où était la voiture au moment du rapport (si la position date du même moment)
+    let at=loc.km;
+    if(bsrc==="psa" && psaState?.lat!=null && psaState.posAt && psaState.carAt && Math.abs(psaState.posAt-psaState.carAt)<30*60000) at=locateOnRoute(psaState.lat,psaState.lon,R.line,S.km).km;
+    hereRef={key, src:bsrc, val:typed, km:at, d:typed-planAt(pts,at).soc, run:lastRun, pts, when:bsrc==="psa"?psaState.carAt:Date.now()};
+  }
+  if(!isFinite(typed) && hereRef && hereRef.key && hereRef.key.split(":")[0]!==bsrc) hereRef=null;
   const hasSoc=!!hereRef, dSoc=hasSoc?hereRef.d:null, socNow=hasSoc?plan.soc+dSoc:null;
   const measured=hasSoc && Math.abs(loc.km-hereRef.km)<1;
   const now=new Date(), planClock=new Date(p.dep.getTime()+plan.t*1000), dMin=Math.round((now-planClock)/60000);
@@ -1874,15 +2083,23 @@ function hereRender(pos, force){
   out.innerHTML=`${loc.off>3?`<p class="status err">Tu sembles à ${fmtKm(loc.off)} du trajet prévu : la comparaison est approximative.</p>`:""}
     <div class="here-grid">
       <div class="here-card"><b>${fmtKm(loc.km)}</b><span>parcourus sur ${fmtKm(S.km)} · à ${loc.off<1?Math.round(loc.off*1000)+" m":fmtKm(loc.off)} du tracé (GPS ±${Math.round(accuracy)} m)</span></div>
-      ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${measured?Math.round(socNow)+" % réelle":"estimée ~"+Math.round(socNow)+" % (saisie "+Math.round(hereRef.val)+" % il y a "+fmtKm(Math.max(0,loc.km-hereRef.km))+")"}, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (saisis la tienne pour comparer)</span></div>`}
+      ${hasSoc?`<div class="here-card ${cls(dSoc)}"><b>${dSoc>=0?"+":""}${Math.round(dSoc)} pts</b><span>batterie ${measured?Math.round(socNow)+" % "+(hereRef.src==="psa"?"(rapport PSA "+agoTxt(Date.now()-hereRef.when)+")":"réelle"):"estimée ~"+Math.round(socNow)+" % ("+(hereRef.src==="psa"?"rapport PSA":"saisie")+" "+Math.round(hereRef.val)+" % il y a "+fmtKm(Math.max(0,loc.km-hereRef.km))+")"}, ${Math.round(plan.soc)} % prévue ici</span></div>`:`<div class="here-card"><b>${Math.round(plan.soc)} %</b><span>batterie prévue ici (${batSrc()==="manual"?"saisis la tienne pour comparer":"pas de rapport PSA disponible"})</span></div>`}
       <div class="here-card ${Math.abs(dMin)<=10?"good":Math.abs(dMin)<=30?"warn":"bad"}"><b>${dMin>=0?"+":""}${dMin} min</b><span>${dMin>=0?"de retard":"d'avance"} sur l'horaire prévu (${fmtClock(planClock)} ici)</span></div>
     </div>
     ${nextTxt?`<p>Si l'écart se maintient, batterie ${nextTxt}.</p>`:""}
-    <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Saisis ta batterie pour recalculer.</span>'}</div>`;
+    <div class="here-acts"><button type="button" class="mini primary" id="hereRecalc" ${hasSoc?"":"disabled"}>Recalculer le trajet depuis ici</button>${hasSoc?"":'<span class="note">Il faut un niveau de batterie (rapport PSA ou saisie) pour recalculer.</span>'}${hasSoc&&hereRef.src==="psa"&&Date.now()-hereRef.when>30*60000?'<span class="note" style="color:var(--warn)">Le rapport PSA date de plus de 30 min : en roulant, le % réel est sans doute plus bas. Relis la voiture ou passe en saisie manuelle.</span>':""}</div>`;
 }
-$("hereGo").addEventListener("click",()=>{
+$("hereGo").addEventListener("click",async()=>{
   const out=$("hereOut");
   if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  if(!psaState) await loadPsa(false);
+  if(posSrc()==="car"){
+    if(!psaState || psaState.lat==null){ out.innerHTML='<p class="status err">Pas de position dans le rapport PSA. Choisis « Téléphone (GPS) » ou relis la voiture.</p>'; return; }
+    if(watchId!=null) stopLive();
+    hereRender({coords:{latitude:psaState.lat, longitude:psaState.lon, accuracy:50}, timestamp:psaState.posAt||Date.now()}, true);
+    if(psaState.posAt && Date.now()-psaState.posAt>30*60000) out.insertAdjacentHTML("afterbegin",`<p class="status err">Position de la voiture datée de ${agoTxt(Date.now()-psaState.posAt).replace(/^il y a /,"il y a ")} : elle n'est peut-être plus là.</p>`);
+    return;
+  }
   if(!("geolocation" in navigator)){ out.innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
   if(watchId!=null && lastPos){ hereRender(lastPos,true); return; }
   out.innerHTML='<p class="note">Recherche de ta position…</p>'; $("hereGo").disabled=true;
@@ -1989,8 +2206,8 @@ $("copyBtn").addEventListener("click",async()=>{
 // Le site dépose une demande dans Firestore (trajetve_car/<compte>) ; le script trajetve_voiture.py, sur le PC
 // de la maison, la voit, interroge psa_car_controller et écrit la réponse. Rien n'est lu en dehors de ces demandes.
 let fb=null;
-const agoTxt=ms=>{ const m=Math.round(ms/60000); return m<1?"à l'instant":m<60?`il y a ${m} min`:`il y a ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}`; };
-function readCar(wake, onStep){
+const agoTxt=ms=>{ const m=Math.round(ms/60000); return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}`:`il y a ${Math.floor(m/1440)} j${Math.floor(m%1440/60)?" "+Math.floor(m%1440/60)+" h":""}`; };
+function readCar(wake, onStep, kind){
   return new Promise(async (resolve,reject)=>{
     if(!fb || !fb.auth.currentUser) return reject(new Error("Connecte-toi (bandeau en haut du panneau) pour lire la voiture."));
     const col=fb.db.collection("trajetve_car"), uid=fb.auth.currentUser.uid;
@@ -2004,10 +2221,10 @@ function readCar(wake, onStep){
     const un=ref.onSnapshot(d=>{
       const x=d.data(); if(!x || x.req!==req) return;
       if(x.status && x.status!=="ok" && x.status!=="erreur" && onStep) onStep(x.status);
-      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
+      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(kind==="full" && x.full ? JSON.parse(x.full) : x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
     }, e=>{ clearTimeout(to); reject(new Error("Lecture impossible ("+(e.code||e.message)+").")); });
     to=setTimeout(()=>{ un(); reject(new Error("Pas de réponse du PC dans le délai (2 min).")); }, 120000);
-    ref.set({req, wake:!!wake, status:"demande"}).catch(e=>{ un(); clearTimeout(to); reject(new Error("Demande refusée ("+(e.code||e.message)+").")); });
+    ref.set({req, wake:!!wake, kind:kind||"soc", status:"demande"}).catch(e=>{ un(); clearTimeout(to); reject(new Error("Demande refusée ("+(e.code||e.message)+").")); });
   });
 }
 document.addEventListener("click",async e=>{
@@ -2025,6 +2242,244 @@ document.addEventListener("click",async e=>{
     if(box.dataset.target==="hereSoc" && watchId==null) $("hereGo").click();
   }catch(err){ msg.className="carmsg err"; msg.textContent=err.message; }
   finally{ box.querySelectorAll("button").forEach(x=>x.disabled=false); }
+});
+
+// ---------- Sections repliables (Ma voiture, réglages sous la carte) ----------
+let csecState={}; try{ csecState=JSON.parse(localStorage.getItem("trajetve-csec")||"{}"); }catch(e){}
+const csec=(k,title,body)=>`<details class="csec" data-k="${k}" ${csecState[k]===false?"":"open"}><summary>${title}</summary><div class="csec-b">${body}</div></details>`;
+document.addEventListener("toggle",e=>{ const d=e.target; if(d.matches && d.matches("details.csec")){ csecState[d.dataset.k]=d.open; try{ localStorage.setItem("trajetve-csec",JSON.stringify(csecState)); }catch(_){} } },true);
+
+// ---------- Cadrage de la carte ----------
+function frameMap(v){
+  if(!map) return;
+  const hasR=!!lastLine && map.hasLayer(lastLine);
+  if(v==="car" && carMarker){ map.setView(carMarker.getLatLng(),14); carMarker.openTooltip(); return; }
+  if(v==="route" && hasR){ carMarker?.closeTooltip(); map.fitBounds(lastLine.getBounds(),{padding:[20,20]}); return; }
+  if(v==="both"){ const b=hasR?L.latLngBounds(lastLine.getBounds().getSouthWest(),lastLine.getBounds().getNorthEast()):null;
+    if(carMarker){ const ll=carMarker.getLatLng(); if(b) b.extend(ll); else return map.setView(ll,12); }
+    if(b) map.fitBounds(b,{padding:[30,30]}); }
+}
+
+// ---------- Position de la voiture, toujours affichée sur la carte ----------
+const CAR_SVG='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#fff" d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v6a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zm2.2-1h9.6l-1-3H8.2zM7.5 14a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm9 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg>';
+function setCarMarker(st){
+  if(!map || !carLayer || !st || st.lat==null) return;
+  const posAt=carDate(st.posAt), socAt=carDate(st.carAt);
+  if(carShown && carShown.lat===st.lat && carShown.lon===st.lon && carShown.soc===st.soc && +carDate(carShown.posAt)===+posAt) return;
+  carShown=st;
+  const age=posAt?Date.now()-posAt:null, old=age!=null && age>6*3600000;
+  const col=old?"#8a6d3b":"#455a75";
+  carLayer.clearLayers();
+  carMarker=L.marker([st.lat,st.lon],{zIndexOffset:1800,icon:L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+    html:`<div class="carpin" style="--c:${col}">${CAR_SVG}</div><div class="carlab" style="--c:${col}">${st.soc!=null?Math.round(st.soc)+" % · ":""}${posAt?"pos. "+fmtDT(posAt):"date inconnue"}</div>`})})
+    .bindTooltip(`<b>Ma voiture</b><br>Position du ${posAt?fmtDT(posAt)+" ("+agoTxt(age)+")":"(date inconnue)"}${st.soc!=null?`<br>Batterie ${Math.round(st.soc)} %${socAt?" · donnée "+agoTxt(Date.now()-socAt):""}`:""}${st.range!=null?`<br>Autonomie affichée ${Math.round(st.range)} km`:""}${old?'<br><span style="color:#b4570a">Position ancienne : la voiture n\'a pas renvoyé sa position depuis</span>':""}`,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
+    .addTo(carLayer);
+  if(!lastLine) map.setView([st.lat,st.lon],11);   // pas de trajet affiché : on centre sur la voiture
+  viewCtl?.update();
+}
+async function refreshCarMarker(){
+  let best=null;
+  try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c) best=c; }catch(e){}
+  try{ const st=await lastStoredState(); if(st && (!best || (+carDate(st.carAt)||0)>(+carDate(best.carAt)||0))) best={...best,...st}; }catch(e){}
+  // la position vient de l'état le plus récent qui en contient une
+  if(best) setCarMarker(best);
+}
+setInterval(()=>{ if(fb && fb.auth.currentUser && document.visibilityState==="visible") refreshCarMarker(); }, 5*60000);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && fb && fb.auth.currentUser) refreshCarMarker(); });
+
+// ---------- Section « Ma voiture » ----------
+const CAR_KEY="trajetve-voiture";
+const carDate=v=>{ if(v==null||v==="") return null; const t=String(v); const d=typeof v==="number"?new Date(v):new Date(/^\d{4}-\d\d-\d\d \d/.test(t)?t.replace(" ","T"):t); return isNaN(d)?null:d; };
+const fmtDT=d=>d?d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})+" "+fmtClock(d):"—";
+const n1=v=>v==null?"—":(+v).toFixed(1).replace(".",",");
+function carRender(r){
+  const card=(v,l,cls)=>`<div class="car-card ${cls||""}"><b>${v}</b><span>${l}</span></div>`;
+  const carAt=carDate(r.carAt), posAt=carDate(r.posAt);
+  $("carAge").textContent=`donnée de la voiture ${carAt?agoTxt(Date.now()-carAt):"d'heure inconnue"} · ${r.stored?"dernier état enregistré":"lue à "+fmtClock(new Date(r.readAt||Date.now()))}`;
+  const chTxt={Disconnected:"débranchée",InProgress:"en charge",Finished:"charge terminée",Stopped:"charge arrêtée",Failure:"erreur de charge"}[r.chargeStatus]||r.chargeStatus||"—";
+  const capUse = r.health && $("cap").value ? (+$("cap").value)*r.health/100 : null;
+  let etat=`<div class="car-grid">
+    ${card(Math.round(r.soc)+" %","batterie")}
+    ${card(r.range!=null?Math.round(r.range)+" km":"—","autonomie affichée")}
+    ${card(chTxt+(r.chargeRate && r.chargeStatus==="InProgress"?` · +${r.chargeRate} km/h`:""),`recharge${r.chargeRate && r.chargeStatus==="InProgress"?" (km d'autonomie gagnés par heure)":""}${r.chargeRate && r.chargeStatus!=="InProgress"?` · vitesse de la dernière charge : ${r.chargeRate} km/h d'autonomie`:""}${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
+    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles`:""), r.health!=null&&r.health<85?"warn":"")}
+    ${card(r.km!=null?Math.round(r.km).toLocaleString("fr-FR")+" km":"—","compteur")}
+    ${card(r.temp!=null?n1(r.temp)+" °C":"—","température extérieure")}
+    ${card(r.v12!=null?r.v12:"—","batterie 12 V (indicateur)", r.v12!=null&&r.v12<60?"warn":"")}
+    ${card(r.ignition==="Start"?"contact mis":r.moving?"en mouvement":"à l'arrêt",r.precond&&r.precond!=="Disabled"?"climatisation "+r.precond.toLowerCase():"climatisation à l'arrêt")}
+  </div>`;
+  if(r.lat!=null) etat+=`<p class="note">Dernière position connue ${posAt?"("+fmtDT(posAt)+")":""} · <a href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank" rel="noopener">ouvrir dans Maps</a> · <button type="button" class="swap" id="carOnMap">voir sur la carte</button></p>`;
+  let html=csec("etat","État actuel",etat);
+  // historique santé batterie
+  const soh=(r.soh||[]).map(x=>({d:carDate(x.date),v:+x.level})).filter(x=>x.d&&isFinite(x.v));
+  if(soh.length>1){
+    const W=640,H=150,ml=40,mr=12,mt=10,mb=24, t0=+soh[0].d, t1=+soh[soh.length-1].d||t0+1;
+    const lo=Math.floor(Math.min(...soh.map(x=>x.v))-1), hi=Math.ceil(Math.max(...soh.map(x=>x.v))+1);
+    const X=d=>ml+(+d-t0)/Math.max(1,t1-t0)*(W-ml-mr), Y=v=>mt+(1-(v-lo)/Math.max(1,hi-lo))*(H-mt-mb);
+    let g=""; for(const v of [lo,Math.round((lo+hi)/2),hi]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-6}" y="${Y(v)+4}" text-anchor="end">${v}%</text>`;
+    g+=`<text x="${ml}" y="${H-6}">${fmtDT(soh[0].d).slice(0,5)}</text><text x="${W-mr}" y="${H-6}" text-anchor="end">${fmtDT(soh[soh.length-1].d).slice(0,5)}</text>`;
+    g+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${soh.map(x=>X(x.d).toFixed(1)+","+Y(x.v).toFixed(1)).join(" ")}"/>`;
+    html+=csec("sante","Santé de la batterie",`<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px">${g}</svg></div>`);
+  }
+  const noHist='<p class="note">Pas encore d\'historique : il faut lancer psa_car_controller avec l\'option -r (enregistrement). Les données s\'accumulent ensuite au fil des trajets et des recharges.</p>';
+  const trips=(r.trips||[]).slice().reverse();
+  html+=csec("trajets","Derniers trajets",(trips.length?`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th><th>Dénivelé</th></tr></thead><tbody>${trips.slice(0,30).map(t=>`<tr><td>${fmtDT(carDate(t.start_at))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td><td>${t.altitude_diff!=null?Math.round(t.altitude_diff)+" m":"—"}</td></tr>`).join("")}</tbody></table></div>`
+    +(()=>{ const T=trips.filter(t=>t.distance>0 && t.consumption!=null); if(!T.length) return ""; const d=T.reduce((a,t)=>a+t.distance,0), e=T.reduce((a,t)=>a+t.consumption,0); return `<p class="note">Consommation réelle moyenne sur ${T.length} trajets : <b>${n1(e/d*100)} kWh/100 km</b> (${n1(d)} km). Compare-la à tes valeurs à 90 et 130 km/h dans Voiture.</p>`; })():noHist));
+  const ch=(r.chargings||[]).slice().reverse();
+  html+=csec("recharges","Dernières recharges",(ch.length?`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${ch.slice(0,30).map(c=>`<tr><td>${fmtDT(carDate(c.start_at))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"—"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`:noHist));
+  $("carBody").innerHTML=html;
+  $("carOnMap")?.addEventListener("click",()=>{ if(!map) return; setCarMarker(r); map.setView([r.lat,r.lon],14); carMarker?.openTooltip(); $("map").scrollIntoView({behavior:"smooth",block:"center"}); });
+}
+// ---------- Historique de la voiture (lu directement dans Firebase, PC allumé ou non) ----------
+const isoDay=d=>{ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
+let histDayData=null, histMetric="soc";
+try{ const m=localStorage.getItem("trajetve-courbe"); if(m) histMetric=m; }catch(e){}
+function carColl(n){ return fb.db.collection("trajetve_car").doc(fb.auth.currentUser.uid).collection(n); }
+const METRICS={soc:["Batterie","%",0,100],range:["Autonomie","km"],temp:["Température","°C"],v12:["Batterie 12 V",""],km:["Compteur","km"],sante:["Santé batterie","%"]};
+function socChart(pts,etats,key="soc"){
+  const [,unit,fmin,fmax]=METRICS[key]||["",""];
+  const src=key==="soc"||key==="temp"||key==="km" ? [...(pts||[]),...(etats||[])] : (etats||[]);
+  const P=src.map(x=>({d:carDate(x.t),v:x[key]})).filter(x=>x.d&&x.v!=null).sort((a,b)=>a.d-b.d);
+  if(P.length<2) return `<p class="note">Pas assez de données pour tracer cette courbe ce jour-là.</p>`;
+  const W=640,H=160,ml=44,mr=10,mt=10,mb=24, day0=new Date(P[0].d); day0.setHours(0,0,0,0); const t0=+day0, t1=t0+86400000;
+  const vs=P.map(x=>+x.v); let lo=fmin??Math.floor(Math.min(...vs)), hi=fmax??Math.ceil(Math.max(...vs)); if(hi-lo<2){ lo-=1; hi+=1; }
+  const X=d=>ml+(+d-t0)/(t1-t0)*(W-ml-mr), Y=v=>mt+(1-(v-lo)/(hi-lo))*(H-mt-mb);
+  let g=""; for(const v of [lo,(lo+hi)/2,hi]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-5}" y="${Y(v)+4}" text-anchor="end">${Math.round(v)}${unit==="%"?"%":""}</text>`;
+  for(const h of [0,6,12,18,24]) g+=`<text x="${X(t0+h*3600000)}" y="${H-6}" text-anchor="middle">${h}h</text>`;
+  g+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" points="${P.map(x=>X(x.d).toFixed(1)+","+Y(x.v).toFixed(1)).join(" ")}"/>`;
+  g+=P.map(x=>`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="2.5" fill="var(--accent)"><title>${fmtClock(x.d)} · ${n1(x.v)} ${unit}</title></circle>`).join("");
+  return `<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px">${g}</svg></div>`;
+}
+const tripRows=T=>`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th></tr></thead><tbody>${T.map(t=>`<tr><td>${fmtDT(carDate(t.t))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td></tr>`).join("")}</tbody></table></div>`;
+const chargeRows=C=>`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${C.map(c=>`<tr><td>${fmtDT(carDate(c.t))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"en cours"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`;
+// Jour vide : explique pourquoi (PC arrêté, psa_car_controller arrêté, ou voiture garée qui n'envoie rien)
+async function histWhyEmpty(day){
+  if(day!==isoDay(new Date())) return "";
+  let H=null;
+  try{ const s=await fb.db.collection("trajetve_car").doc(fb.auth.currentUser.uid).get(); H=s.exists?s.data().histSync:null; }catch(e){ return ""; }
+  const when=ms=>new Date(ms).toLocaleString("fr-FR",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"});
+  if(!H) return `<p class="note">Le PC n'a encore envoyé aucun compte rendu de synchronisation (version de trajetve_voiture.py antérieure à la 2.25.3, ou service arrêté).</p>`;
+  const L=[], age=Date.now()-H.at;
+  if(age>30*60000) L.push(`<b>Le PC n'a pas synchronisé depuis ${when(H.at)}</b> (${agoTxt(age)}). Vérifie que trajetve_voiture.py tourne : tant qu'il est arrêté, rien n'est historisé.`);
+  else L.push(`Dernière synchronisation du PC : ${agoTxt(age)}.`);
+  if(!H.psacc) L.push(`<b>psa_car_controller ne répondait pas</b> lors de cette synchronisation : il doit tourner en même temps que trajetve_voiture.py, c'est lui qui interroge Stellantis et enregistre les positions.`);
+  if(H.carAt && H.psacc && age<=30*60000){ const d=new Date(H.carAt); if(isoDay(d)!==day) L.push(`Dernière donnée envoyée par la voiture : <b>${when(H.carAt)}</b>. Rien de nouveau depuis : une voiture garée et endormie ne remonte pas d'information, la journée se remplira au prochain trajet ou à la prochaine recharge.`); }
+  return `<p class="note">${L.join("<br>")}</p>`;
+}
+async function loadHistDay(){
+  const day=$("hDay").value, box=$("hDayBody"), msg=$("hMsg");
+  if(!fb || !fb.auth.currentUser){ msg.className="note status err"; msg.textContent="Connecte-toi (bandeau en haut du panneau) pour voir l'historique."; return; }
+  msg.className="note"; msg.textContent="Chargement…";
+  try{
+    const [dd,tr,ch]=await Promise.all([carColl("jours").doc(day).get(), carColl("trajets").where("jour","==",day).get(), carColl("recharges").where("jour","==",day).get()]);
+    const D=dd.exists?dd.data():{}, pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+    const etMap=new Map(); (D.etats||[]).forEach(x=>etMap.set(x.t,{...(etMap.get(x.t)||{}),...x})); const et=[...etMap.values()].sort((a,b)=>a.t<b.t?-1:1);
+    const T=tr.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1), C=ch.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1);
+    histDayData={day,pts,et};
+    msg.textContent="";
+    if(!pts.length && !et.length && !T.length && !C.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>${await histWhyEmpty(day)}`; return; }
+    const kms=pts.map(x=>x.km).filter(v=>v!=null), socs=[...pts,...et].map(x=>x.soc).filter(v=>v!=null), temps=[...pts,...et].map(x=>x.temp).filter(v=>v!=null);
+    const last=et[et.length-1]||{};
+    const card=(v,l)=>`<div class="car-card"><b>${v}</b><span>${l}</span></div>`;
+    const kmDay=kms.length>1?Math.max(...kms)-Math.min(...kms):T.reduce((a,t)=>a+(t.distance||0),0);
+    let h=csec("hjour","Résumé du jour",`<div class="car-grid">
+      ${card(n1(kmDay)+" km","parcourus")}
+      ${card(socs.length?Math.round(Math.min(...socs))+" – "+Math.round(Math.max(...socs))+" %":"—","batterie mini – maxi")}
+      ${card(T.length?n1(T.reduce((a,t)=>a+(t.consumption||0),0))+" kWh":"—",`consommés (${T.length} trajet${T.length>1?"s":""})`)}
+      ${card(C.length?n1(C.reduce((a,c)=>a+(c.kw||0),0))+" kWh":"—",`rechargés${C.length?" · "+fmtEur(C.reduce((a,c)=>a+(+c.price||0),0)):""}`)}
+      ${card(temps.length?Math.round(Math.min(...temps))+" – "+Math.round(Math.max(...temps))+" °C":"—","température")}
+      ${card(last.sante!=null?last.sante+" %":"—","santé batterie"+(last.v12!=null?" · 12 V : "+last.v12:""))}
+    </div>`);
+    h+=csec("hcourbe","Courbe",`<div class="hist-nav"><span class="note">Donnée affichée</span><select id="hMetric" aria-label="Donnée affichée">${Object.entries(METRICS).map(([k,[l]])=>`<option value="${k}" ${k===histMetric?"selected":""}>${l}</option>`).join("")}</select></div><div id="hChart">${socChart(pts,et,histMetric)}</div>`);
+    if(pts.some(x=>x.lat!=null)) h+=`<p class="note">${pts.length} relevé${pts.length>1?"s":""} · <button type="button" class="swap" id="hOnMap">voir les positions de la journée sur la carte</button></p>`;
+    if(et.length){
+      const chT={Disconnected:"débranchée",InProgress:"en charge",Finished:"terminée",Stopped:"arrêtée",Failure:"erreur"};
+      h+=csec("hetats",`États de la voiture (${et.length})`,`<div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate&&(e.charge||e.chargeStatus)==="InProgress"?" · +"+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`);
+    }
+    if(T.length) h+=csec("htrajets",`Trajets (${T.length})`,tripRows(T));
+    if(C.length) h+=csec("hrecharges",`Recharges (${C.length})`,chargeRows(C));
+    box.innerHTML=h;
+  }catch(e){ msg.className="note status err"; msg.textContent=e.code==="permission-denied"?"Accès refusé : ajoute la règle Firestore de l'historique (voir le script PC).":"Chargement impossible ("+(e.code||e.message)+")."; }
+}
+async function loadHistSum(){
+  const box=$("hSum"); if(!fb || !fb.auth.currentUser) return;
+  const n=+$("hRange").value, from=new Date(Date.now()-n*86400000); from.setHours(0,0,0,0);
+  try{
+    const since=isoDay(from);
+    const [tr,ch,sa]=await Promise.all([carColl("trajets").where("jour",">=",since).get(), carColl("recharges").where("jour",">=",since).get(), carColl("sante").get()]);
+    const days={};
+    tr.docs.forEach(x=>{ const t=x.data(), d=days[t.jour]||={km:0,kwh:0,n:0,rkwh:0,eur:0}; d.km+=t.distance||0; d.kwh+=t.consumption||0; d.n++; });
+    ch.docs.forEach(x=>{ const c=x.data(), d=days[c.jour]||={km:0,kwh:0,n:0,rkwh:0,eur:0}; d.rkwh+=c.kw||0; d.eur+=+c.price||0; });
+    const keys=Object.keys(days).sort().reverse();
+    const tot=keys.reduce((a,k)=>({km:a.km+days[k].km,kwh:a.kwh+days[k].kwh,rkwh:a.rkwh+days[k].rkwh,eur:a.eur+days[k].eur}),{km:0,kwh:0,rkwh:0,eur:0});
+    let h="";
+    if(!keys.length) h+='<p class="note">Rien sur cette période. L\'historique se remplit dès que psa_car_controller tourne avec -r et que le script PC est lancé.</p>';
+    else h+=`<p class="note">${n1(tot.km)} km · ${n1(tot.kwh)} kWh consommés${tot.km>0?` · <b>${n1(tot.kwh/tot.km*100)} kWh/100 km</b>`:""} · ${n1(tot.rkwh)} kWh rechargés · ${fmtEur(tot.eur)}</p>
+      <div class="car-tbl"><table><thead><tr><th>Jour</th><th>Trajets</th><th>Distance</th><th>Consommé</th><th>Conso</th><th>Rechargé</th><th>Coût</th></tr></thead><tbody>${keys.map(k=>{ const d=days[k]; return `<tr data-day="${k}"><td>${new Date(k+"T12:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</td><td>${d.n||"—"}</td><td>${d.km?n1(d.km)+" km":"—"}</td><td>${d.kwh?n1(d.kwh)+" kWh":"—"}</td><td>${d.km>0&&d.kwh?n1(d.kwh/d.km*100):"—"}</td><td>${d.rkwh?n1(d.rkwh)+" kWh":"—"}</td><td>${d.eur?fmtEur(d.eur):"—"}</td></tr>`; }).join("")}</tbody></table></div>`;
+    const S=sa.docs.map(x=>x.data()).filter(x=>x.niveau!=null).sort((a,b)=>a.t<b.t?-1:1);
+    if(S.length>1) h+=`<p class="note">Santé de la batterie : ${S[0].niveau} % le ${fmtDT(carDate(S[0].t)).slice(0,5)} → ${S[S.length-1].niveau} % le ${fmtDT(carDate(S[S.length-1].t)).slice(0,5)}.</p>`;
+    box.innerHTML=csec("hrecap",`Récapitulatif sur ${n} jours`,h);
+  }catch(e){ box.innerHTML=`<p class="note status err">Récapitulatif impossible (${e.code||e.message}).</p>`; }
+}
+function showHist(){ if(!$("hDay").value) $("hDay").value=isoDay(new Date()); loadHistDay(); loadHistSum(); }
+document.querySelectorAll('input[name="cartab"]').forEach(r=>r.addEventListener("change",()=>{
+  const h=$("ctHist").checked; $("carHist").hidden=!h; $("carBody").hidden=h; $("carRefresh").hidden=h; $("carAge").hidden=h; if(h) showHist(); }));
+const shiftDay=k=>{ const d=new Date(($("hDay").value||isoDay(new Date()))+"T12:00"); d.setDate(d.getDate()+k); $("hDay").value=isoDay(d); loadHistDay(); };
+$("hPrev").addEventListener("click",()=>shiftDay(-1)); $("hNext").addEventListener("click",()=>shiftDay(1));
+$("hToday").addEventListener("click",()=>{ $("hDay").value=isoDay(new Date()); loadHistDay(); });
+$("hDay").addEventListener("change",loadHistDay); $("hRange").addEventListener("change",loadHistSum);
+$("hSum").addEventListener("click",e=>{ const tr=e.target.closest("tr[data-day]"); if(tr){ $("hDay").value=tr.dataset.day; loadHistDay(); $("carHist").scrollIntoView({behavior:"smooth",block:"start"}); } });
+$("hDayBody").addEventListener("change",e=>{
+  if(e.target.id!=="hMetric" || !histDayData) return;
+  histMetric=e.target.value; try{ localStorage.setItem("trajetve-courbe",histMetric); }catch(_){}
+  $("hChart").innerHTML=socChart(histDayData.pts,histDayData.et,histMetric);
+});
+$("hDayBody").addEventListener("click",e=>{
+  if(e.target.id!=="hOnMap" || !map || !histDayData) return;
+  const P=histDayData.pts.filter(x=>x.lat!=null).map(x=>[x.lat,x.lon]); if(!P.length) return;
+  hereLayer.clearLayers();
+  L.polyline(P,{color:"#1f4fd8",weight:3,opacity:.8,dashArray:"4 6"}).addTo(hereLayer);
+  histDayData.pts.filter(x=>x.lat!=null).forEach(x=>L.circleMarker([x.lat,x.lon],{radius:4,color:"#1f4fd8",fillOpacity:.8}).bindTooltip(`${fmtClock(carDate(x.t))} · ${x.soc!=null?Math.round(x.soc)+" %":""}${x.km!=null?" · "+Math.round(x.km)+" km":""}`).addTo(hereLayer));
+  map.fitBounds(L.latLngBounds(P),{padding:[30,30],maxZoom:14}); $("map").scrollIntoView({behavior:"smooth",block:"center"});
+});
+
+// Dernier état enregistré dans Firebase (affiché tant qu'on n'a pas fait « Actualiser », PC allumé ou non)
+async function lastStoredState(){
+  if(!fb || !fb.auth.currentUser) return null;
+  let res=null, pos=null;
+  for(let k=0;k<7 && !(res && pos);k++){
+    const d=new Date(); d.setDate(d.getDate()-k);
+    let D;
+    try{ const s=await carColl("jours").doc(isoDay(d)).get(); D=s.exists?s.data():{}; }catch(e){ break; }
+    const et=(D.etats||[]).slice().sort((a,b)=>a.t<b.t?-1:1), pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+    if(!res && et.length){ const e=et[et.length-1]; res={...e, health:e.health??e.sante, chargeStatus:e.chargeStatus??e.charge, carAt:+carDate(e.t), readAt:null, stored:true}; }
+    // position : la plus récente trouvée dans les états ou les relevés
+    if(!pos){
+      const cand=[...et.filter(x=>x.lat!=null).map(x=>({lat:x.lat,lon:x.lon,at:+carDate(x.posAt)||+carDate(x.t)})), ...pts.filter(x=>x.lat!=null).map(x=>({lat:x.lat,lon:x.lon,at:+carDate(x.t)}))].sort((a,b)=>a.at-b.at);
+      if(cand.length) pos=cand[cand.length-1];
+    }
+  }
+  if(!res && !pos) return null;
+  res=res||{stored:true};
+  if(pos && (res.lat==null || (+carDate(res.posAt)||0)<pos.at)){ res.lat=pos.lat; res.lon=pos.lon; res.posAt=pos.at; }
+  return res;
+}
+$("carBtn").addEventListener("click",async()=>{ const p=$("carPanel"); p.hidden=!p.hidden; $("carBtn").setAttribute("aria-expanded",!p.hidden);
+  if(p.hidden) return;
+  let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
+  const st=await lastStoredState();
+  if(st && (!c || (st.carAt||0)>(c.carAt||0))) c={...(c||{}), ...st, soh:c?.soh, trips:c?.trips, chargings:c?.chargings};
+  if(c){ carRender(c); setCarMarker(c); }
+  p.scrollIntoView({behavior:"smooth",block:"start"}); });
+$("carClose").addEventListener("click",()=>{ $("carPanel").hidden=true; $("carBtn").setAttribute("aria-expanded","false"); });
+$("carRefresh").addEventListener("click",async()=>{
+  const b=$("carRefresh"), m=$("carMsg"); b.disabled=true; m.className="note"; m.textContent="Lecture en cours…";
+  try{
+    const r=await readCar(false, st=>{ m.textContent=({demande:"Demande envoyée au PC…",lecture:"Lecture en cours…"})[st]||st; }, "full");
+    try{ localStorage.setItem(CAR_KEY,JSON.stringify(r)); }catch(e){}
+    carRender(r); setCarMarker(r); m.textContent="";
+  }catch(err){ m.className="note status err"; m.textContent=err.message; }
+  finally{ b.disabled=false; }
 });
 
 // ---------- Synchronisation des favoris et réglages (Firebase) ----------
@@ -2088,6 +2543,7 @@ async function initSync(){
     unsub?.(); unsub=null; syncPush=()=>{};
     if(!user){ bar.classList.remove("on"); txt.textContent="Favoris enregistrés sur cet appareil"; btn.textContent="Se connecter"; return; }
     btn.textContent="Déconnexion"; txt.textContent="Synchronisation…";
+    setTimeout(()=>refreshCarMarker(),1500);
     const ref=db.collection("trajetve").doc(user.uid);
     // Firestore refuse les tableaux imbriqués (tracés, courbes) : tout l'état est stocké en une chaîne JSON
     const push=()=>ref.set({data:JSON.stringify(localState()), format:2, device:DEVICE_ID, updatedAt:Date.now(), email:user.email||""})
@@ -2130,25 +2586,28 @@ let stopOv={}, stopForce={}, ovTrip="", viewingSheet=false;
 function showAlts(det){
   if(!map || !altLayer) return;
   altLayer.clearLayers(); altMarkers=[];
-  if(!det){ altOpen=null; if(allLayer && !layers.hasLayer(allLayer)) layers.addLayer(allLayer); return; }
+  if(!det){ altOpen=null; altCtl?.hide(); if(allLayer && !layers.hasLayer(allLayer)) layers.addLayer(allLayer); return; }
   const st=lastRun?.res?.steps?.[+det.dataset.si]; if(!st || !st.alts) return;
   altOpen=det;
+  altCtl?.show();
   if(allLayer) layers.removeLayer(allLayer);   // on masque les autres bornes pour ne garder que la liste
   const pts=[[st.c.lat,st.c.lon]];
-  L.marker([st.c.lat,st.c.lon],{zIndexOffset:1500,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin sel" style="--c:#0d8a5f">retenue · ${st.c.kw?Math.round(st.c.kw)+" kW · ":""}${Math.round(st.socIn)} %</div>`})})
+  const prevLeg=lastRun.res.steps[+det.dataset.si-1]?.type==="drive" ? lastRun.res.steps[+det.dataset.si-1] : null;
+  L.marker([st.c.lat,st.c.lon],{zIndexOffset:1500,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin sel" style="--c:#0d8a5f">${st.forced?"choisie":"retenue"} · ${st.c.kw?Math.round(st.c.kw)+" kW":""}<small>${Math.round(st.socIn)} %${prevLeg?" · "+fmtH(prevLeg.sec):""}</small></div>`})})
     .bindTooltip(`<b>Borne retenue</b><br>${esc(st.c.name)}<br>Arrivée avec ${Math.round(st.socIn)} %`,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
     .addTo(altLayer);
   st.alts.forEach((x,ai)=>{
     if(x.lat==null) return;
     if((altFilter==="aire" && !x.onAire) || (altFilter==="hors" && x.onAire)) { altMarkers[ai]=null; return; }
-    const col=x.flags.length?"#b4570a":"#0d8a5f";
-    const lab=`${x.kw?Math.round(x.kw)+" kW":"? kW"}<small>${x.soc} % · ${x.dkm>0?"+":""}${x.dkm} km</small>`;
+    const isOrig=(x.good||[]).includes("orig");
+    const col=isOrig?"#1f4fd8":x.flags.length?"#b4570a":"#0d8a5f";
+    const lab=`${isOrig?"origine · ":""}${x.kw?Math.round(x.kw)+" kW":"? kW"}<small>${x.soc} % · ${x.dkm>0?"+":""}${x.dkm} km · ${fmtH(x.drive*60)}</small>`;
     const info=`<b>${esc(x.name)}</b><br>${esc([x.operator,(x.kw?Math.round(x.kw)+" kW"+(x.eff&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""):"puissance inconnue"),fmtPrice(x.price)+"/kWh",x.onAire?"sur aire":""].filter(Boolean).join(" · "))}`
-      + `<br>Arrivée avec <b>${x.soc} %</b> · ${x.dkm>0?"+":""}${x.dkm} km par rapport à la borne retenue · ${x.drive} min de route`
+      + `<br>Arrivée avec <b>${x.soc} %</b> · ${x.dkm>0?"+":""}${x.dkm} km par rapport à la borne retenue<br>${fmtH(x.drive*60)} de route depuis le dernier arrêt`
       + `<br>${(x.good||[]).map(g=>`<span style="color:#0d8a5f">${esc(altGoodTxt(g))}</span>`).concat(x.flags.map(f=>`<span style="color:#b4570a">${esc(altFlagTxt(f))}</span>`)).join(" · ") || '<span style="color:#0d8a5f">respecte tes réglages</span>'}`;
     const m=L.marker([x.lat,x.lon],{zIndexOffset:1400,icon:L.divIcon({className:"altico",iconSize:null,iconAnchor:[0,0],html:`<div class="altpin" style="--c:${col}">${lab}</div>`})})
       .bindTooltip(info,{direction:"top",offset:[0,-14],opacity:.97,className:"maptip"})
-      .bindPopup(info+`<br><button type="button" class="mini" data-force="${esc(st.origId)}|${esc(x.id)}" style="margin-top:6px">Choisir cette borne</button>`)
+      .bindPopup(info+`<br><button type="button" class="mini${isOrig?" primary":""}" data-force="${esc(st.origId)}|${esc(x.id)}" style="margin-top:6px">${isOrig?"Revenir à cette borne":"Choisir cette borne"}</button>`)
       .on("click",()=>{ document.querySelectorAll("#road .altlist li.hl").forEach(l=>l.classList.remove("hl")); const li=det.querySelector(`li[data-ai="${ai}"]`); if(li) li.classList.add("hl"); })
       .addTo(altLayer);
     altMarkers[ai]=m; pts.push([x.lat,x.lon]);
@@ -2191,7 +2650,7 @@ $("road").addEventListener("click",e=>{
   const li=e.target.closest(".altlist li[data-ai]");
   if(li && !e.target.closest("button")){ const m=altMarkers[+li.dataset.ai]; if(m){ map.setView(m.getLatLng(),Math.max(map.getZoom(),13)); m.openPopup(); } return; }
   const fz=e.target.closest("[data-force]");
-  if(fz){ const [o,a]=fz.dataset.force.split("|"); stopForce[o]=a; $("f").requestSubmit(); return; }
+  if(fz){ const [o,a]=fz.dataset.force.split("|"); if(a===o) delete stopForce[o]; else stopForce[o]=a; $("f").requestSubmit(); return; }
   const uf=e.target.closest("[data-unforce]");
   if(uf){ delete stopForce[uf.dataset.unforce]; $("f").requestSubmit(); return; }
   const b=e.target.closest("[data-ovreset]"); if(!b) return;
@@ -2207,7 +2666,7 @@ function clearResults(){
   if(typeof stopLive==="function" && watchId!=null) stopLive();
   if(hereLayer) hereLayer.clearLayers();
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
-  if(layers){ layers.clearLayers(); map.setView([46.6,2.4],6); }
+  if(layers){ layers.clearLayers(); lastLine=null; map.setView([46.6,2.4],6); viewCtl?.update(); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();

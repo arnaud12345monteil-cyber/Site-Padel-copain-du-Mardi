@@ -1,0 +1,717 @@
+<!doctype html>
+<!--
+  Trajet VE — Mes recharges : inventaire et historique de toutes les recharges (maison et en déplacement).
+  Page compagnon de trajet-ve.html, même dépôt, même projet Firebase (trajet-ve), même compte Google.
+  Import : export CSV de la wallbox, CSV de n'importe quel opérateur (choix des colonnes), captures d'écran
+  des applis (lecture du texte dans le navigateur avec Tesseract), sauvegarde JSON.
+  Données : trajetve_recharges/{uid} (réglages) et trajetve_recharges/{uid}/sessions/{id} (une recharge par document).
+  Règles Firestore à ajouter :
+    match /trajetve_recharges/{uid} { allow read, write: if request.auth != null && request.auth.uid == uid; }
+    match /trajetve_recharges/{uid}/sessions/{id} { allow read, write: if request.auth != null && request.auth.uid == uid; }
+  À chaque modification : nouvelle entrée en tête de CHANGELOG.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mes recharges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<meta name="theme-color" content="#1f4fd8">
+<link rel="icon" href="trajetve-icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="trajetve-icon-192.png">
+<style>
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --ink:#16202c; --muted:#5b6878; --line:#d5dbe3;
+  --accent:#1f4fd8; --accent-ink:#ffffff; --charge:#0d8a5f; --warn:#b4570a; --bad:#b3261e;
+  --field:#f6f8fb; --home:#0d8a5f; --away:#1f4fd8;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3443;
+  --accent:#6b93ff; --accent-ink:#0b1020; --charge:#3cc78f; --warn:#f0a050; --bad:#ff7a70; --field:#1d2531;
+  --home:#3cc78f; --away:#6b93ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3443;
+  --accent:#6b93ff; --accent-ink:#0b1020; --charge:#3cc78f; --warn:#f0a050; --bad:#ff7a70; --field:#1d2531;
+  --home:#3cc78f; --away:#6b93ff; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);overflow-x:clip;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h1{font-size:1.7rem;font-weight:700}
+h2{font-size:1.15rem;font-weight:600}
+h3{font-size:.98rem;font-weight:600}
+a{color:var(--accent)}
+.wrap{max-width:1200px;margin:0 auto;display:grid;gap:16px}
+.wrap>*{min-width:0}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1200px;margin:0 auto 14px}
+header.top p{margin:0;color:var(--muted)}
+.top-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ver{font:600 .78rem var(--f-mono);padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0;overflow-wrap:anywhere;display:grid;gap:12px}
+.panel>header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.syncbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field);font-size:.84rem}
+.syncbar.on{border-color:var(--charge)}
+.syncbar.on #syncTxt::before{content:"● ";color:var(--charge)}
+label{display:grid;gap:4px;font-size:.88rem;font-weight:500;min-width:0}
+label small{color:var(--muted);font-weight:400}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+input[type=number]{font-family:var(--f-mono);font-size:.9rem}
+input[type=checkbox]{width:auto}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mini{font:500 .85rem var(--f-body);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-block}
+.mini:disabled{opacity:.45;cursor:default}
+.mini.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.mini.danger{color:var(--bad);border-color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.row>label{flex:1 1 160px}
+.row>label.mini{flex:0 0 auto;display:inline-block}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+.note.err{color:var(--bad)}
+.note.ok{color:var(--charge)}
+.empty{color:var(--muted);padding:20px 8px;text-align:center;margin:0}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px 14px;text-align:center;background:var(--field);cursor:pointer;display:grid;gap:6px;justify-items:center}
+.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--field))}
+.drop b{font-family:var(--f-display);font-size:1.05rem}
+.drop input{display:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.tile{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field);min-width:0}
+.tile b{display:block;font:600 1.2rem var(--f-mono);font-variant-numeric:tabular-nums}
+.tile span{font-size:.8rem;color:var(--muted)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th{color:var(--muted);font-weight:500;font-size:.78rem;background:var(--field);position:sticky;top:0;white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+td.d{white-space:nowrap}
+td.lieu{min-width:180px}
+.est{color:var(--muted)}
+.chip{font:500 .74rem var(--f-mono);padding:1px 7px;border-radius:999px;border:1px solid var(--line);background:var(--field);white-space:nowrap;display:inline-block}
+.chip.home{border-color:var(--home);color:var(--home)}
+.chip.away{border-color:var(--away);color:var(--away)}
+.chip.new{border-color:var(--charge);color:var(--charge)}
+.chip.dup{border-color:var(--warn);color:var(--warn)}
+.chip.chk{border-color:var(--bad);color:var(--bad)}
+#review td input,#review td select{padding:4px 6px;font-size:.84rem}
+#review td input[type=number]{width:86px}
+#review td input.t{width:84px}
+#review td input.dt{width:132px}
+#review tr.off td{opacity:.55}
+.bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--field);min-width:80px}
+.bar i{display:block;height:100%}
+.bar i.h{background:var(--home)} .bar i.a{background:var(--away)}
+.legend{display:flex;gap:14px;font-size:.8rem;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend .h::before{background:var(--home)} .legend .a::before{background:var(--away)}
+.cols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+details>summary{cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:1.05rem}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:16px;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgb(0 0 0/.4)}
+dialog form{display:grid;gap:10px}
+dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.map-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.prog{height:6px;border-radius:3px;background:var(--field);overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.act{white-space:nowrap}
+.act button{padding:3px 7px;font-size:.78rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Mes recharges</h1>
+  <div class="top-right">
+    <a class="mini" href="trajet-ve.html">← Trajet VE</a>
+    <span class="ver" id="ver">v…</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="syncbar" id="syncbar">
+    <span id="syncTxt">Recharges enregistrées sur cet appareil</span>
+    <button type="button" class="mini" id="syncBtn">Se connecter</button>
+  </div>
+
+  <!-- Import -->
+  <section class="panel" id="importPanel">
+    <header><h2>Importer</h2><p class="note">CSV de la wallbox ou d'un opérateur, captures d'écran d'une appli, sauvegarde JSON</p></header>
+    <label class="drop" id="drop">
+      <b>Déposer des fichiers ici ou toucher pour choisir</b>
+      <span class="note">Plusieurs fichiers à la fois possibles · .csv, .txt, .json, images (PNG, JPG)</span>
+      <input type="file" id="files" multiple accept=".csv,.txt,.json,image/*">
+    </label>
+    <div class="row">
+      <label>Opérateur si non reconnu <small>(captures et CSV sans colonne opérateur)</small>
+        <input id="defOp" list="opList" placeholder="ex. Ionity"></label>
+      <label>Les captures concernent <small>(type de recharge)</small>
+        <select id="defType"><option value="exterieur">Recharges en déplacement</option><option value="maison">Recharges à la maison</option></select></label>
+    </div>
+    <div id="ocrBox" hidden><p class="note" id="ocrTxt"></p><div class="prog"><i id="ocrBar"></i></div></div>
+    <p class="note" id="impMsg" role="status"></p>
+    <div id="mapBox" hidden></div>
+    <div id="reviewBox" hidden>
+      <h3>À vérifier avant d'ajouter</h3>
+      <p class="note">Corrige si besoin (la lecture des captures peut se tromper sur un chiffre). Les lignes décochées ne seront pas ajoutées.</p>
+      <div class="tbl"><table id="review"></table></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="mini primary" id="revOk">Ajouter</button>
+        <button type="button" class="mini" id="revAll">Tout cocher</button>
+        <button type="button" class="mini" id="revCancel">Annuler</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Inventaire -->
+  <section class="panel" id="invPanel">
+    <header><h2>Inventaire</h2>
+      <div class="row"><button type="button" class="mini" id="addBtn">+ Ajouter à la main</button></div></header>
+    <div class="row">
+      <label>Période<select id="fPer"></select></label>
+      <label>Type<select id="fType"><option value="">Toutes</option><option value="maison">Maison</option><option value="exterieur">En déplacement</option></select></label>
+      <label>Opérateur<select id="fOp"><option value="">Tous</option></select></label>
+      <label>Recherche<input id="fQ" type="search" placeholder="lieu, note…"></label>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="cols">
+      <div><h3>Par mois</h3><div class="legend"><span class="h">Maison</span><span class="a">En déplacement</span></div><div class="tbl" style="margin-top:6px"><table id="byMonth"></table></div></div>
+      <div><h3>Par opérateur</h3><div class="tbl" style="margin-top:6px"><table id="byOp"></table></div></div>
+    </div>
+    <h3>Toutes les recharges</h3>
+    <div class="tbl"><table id="list"></table></div>
+  </section>
+
+  <!-- Réglages et sauvegarde -->
+  <section class="panel">
+    <header><h2>Réglages et sauvegarde</h2></header>
+    <div class="row">
+      <label>Prix du kWh à la maison (€) <small>pour estimer le coût des recharges sans prix</small>
+        <input id="homePrice" type="number" step="0.0001" min="0"></label>
+      <label>Nom du lieu « maison »<input id="homeName" placeholder="Maison"></label>
+    </div>
+    <div class="row">
+      <button type="button" class="mini" id="expBtn">Exporter une sauvegarde (.json)</button>
+      <button type="button" class="mini" id="expCsv">Exporter en CSV</button>
+      <label class="mini" style="display:inline-block;cursor:pointer">Restaurer une sauvegarde…<input type="file" id="resFile" accept=".json,application/json" hidden></label>
+    </div>
+    <div id="resBox" hidden class="row">
+      <span class="note" id="resTxt"></span>
+      <button type="button" class="mini primary" id="resMerge">Ajouter aux recharges existantes</button>
+      <button type="button" class="mini danger" id="resReplace">Tout remplacer</button>
+      <button type="button" class="mini" id="resCancel">Annuler</button>
+    </div>
+    <p class="note" id="setMsg" role="status"></p>
+  </section>
+</div>
+
+<datalist id="opList"></datalist>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h2 id="dlgTitle">Recharge</h2>
+    <div class="grid2">
+      <label>Début<input type="datetime-local" id="eStart" required></label>
+      <label>Fin <small>(facultatif)</small><input type="datetime-local" id="eEnd"></label>
+      <label>Énergie (kWh)<input type="number" step="0.001" min="0" id="eKwh" required></label>
+      <label>Coût (€) <small>vide = estimé</small><input type="number" step="0.01" min="0" id="eCost"></label>
+      <label>Type<select id="eType"><option value="exterieur">En déplacement</option><option value="maison">Maison</option></select></label>
+      <label>Opérateur<input id="eOp" list="opList"></label>
+    </div>
+    <label>Lieu<input id="eLieu"></label>
+    <label>Note<input id="eNote"></label>
+    <div class="row">
+      <button class="mini primary" value="ok" id="dlgOk">Enregistrer</button>
+      <button class="mini" value="cancel" formnovalidate>Annuler</button>
+      <button type="button" class="mini danger" id="dlgDel" style="margin-left:auto">Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+const CHANGELOG=[
+  {v:"1.0", d:"31/10/2026", c:[
+    "Inventaire de toutes les recharges (maison et en déplacement) : totaux, coût, prix moyen au kWh, répartition par mois et par opérateur",
+    "Import : CSV de la wallbox (heures UTC converties en heure de Paris), CSV de n'importe quel opérateur avec choix des colonnes, captures d'écran d'applis (texte lu dans le navigateur)",
+    "Vérification avant ajout : recharges déjà présentes et doublons probables décochés d'office",
+    "Synchronisation Firebase avec le compte Google de Trajet VE, sauvegarde et restauration JSON, export CSV"]}
+];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtN=(v,d=1)=>v==null||isNaN(v)?"—":v.toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtE=v=>v==null||isNaN(v)?"—":v.toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const pad=n=>String(n).padStart(2,"0");
+const MONTHS=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+$("ver").textContent="v"+CHANGELOG[0].v;
+
+// ---------- Données ----------
+// Une recharge : {id, start:"AAAA-MM-JJTHH:MM" (heure locale), noTime, end, kwh, cost (null = estimé), op, lieu, type:"maison"|"exterieur", src, note, added}
+const LKEY="trajetve-recharges-v1";
+let S={sessions:[], settings:{homePrice:0.2, homeName:"Maison"}, dirty:[], deleted:[], known:[]};
+try{ const o=JSON.parse(localStorage.getItem(LKEY)||"null"); if(o) S={...S,...o, settings:{...S.settings,...(o.settings||{})}}; }catch(e){}
+const saveLocal=()=>{ try{ localStorage.setItem(LKEY,JSON.stringify(S)); }catch(e){} };
+const byId=()=>new Map(S.sessions.map(s=>[s.id,s]));
+const costOf=s=>s.cost!=null ? s.cost : s.type==="maison" ? s.kwh*(+S.settings.homePrice||0) : null;
+const dayOf=s=>s.start.slice(0,10);
+function makeId(s){ return `${s.start.slice(0,10)}${s.noTime?"":"-"+s.start.slice(11,16).replace(":","")}-${Math.round(s.kwh*100)}`; }
+
+// ---------- Firebase ----------
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyBfgDleVkrC2Wskz0e0CdcNgbpA4j4T13U",
+  authDomain:"trajet-ve.firebaseapp.com",
+  projectId:"trajet-ve",
+  storageBucket:"trajet-ve.firebasestorage.app",
+  messagingSenderId:"524164609254",
+  appId:"1:524164609254:web:c64eb461f8a8e1c1b9f727"
+};
+let fb=null, user=null;
+function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
+const userRef=()=>fb.db.collection("trajetve_recharges").doc(user.uid);
+const RULES_HINT="ajoute la règle Firestore « trajetve_recharges » (voir l'en-tête du fichier)";
+function syncState(msg,ok){ $("syncTxt").textContent=msg; $("syncbar").classList.toggle("on",!!ok); }
+async function pushChanges(){
+  if(!user){ saveLocal(); return; }
+  const col=userRef().collection("sessions"), m=byId();
+  const ops=[...S.dirty.filter(id=>m.has(id)).map(id=>["set",id]), ...S.deleted.map(id=>["del",id])];
+  try{
+    for(let k=0;k<ops.length;k+=400){
+      const b=fb.db.batch();
+      for(const [op,id] of ops.slice(k,k+400)){ const r=col.doc(id); if(op==="set"){ const {...d}=m.get(id); b.set(r,d); } else b.delete(r); }
+      await b.commit();
+    }
+    const kn=new Set(S.known||[]); ops.forEach(([op,id])=>op==="set"?kn.add(id):kn.delete(id)); S.known=[...kn];
+    S.dirty=[]; S.deleted=[]; saveLocal();
+    syncState(`Synchronisé à ${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})} · ${user.email||"compte Google"}`,true);
+  }catch(e){
+    console.error(e); saveLocal();
+    syncState(e.code==="permission-denied" ? `Accès refusé : ${RULES_HINT}` : `Échec de l'enregistrement en ligne (${e.code||e.message}) — gardé sur cet appareil`,false);
+  }
+}
+async function pushSettings(){ saveLocal(); if(user) try{ await userRef().set({settings:S.settings, updatedAt:Date.now(), email:user.email||""},{merge:true}); }catch(e){ console.error(e); } }
+async function pullAll(){
+  syncState("Synchronisation…",false);
+  try{
+    const [doc,snap]=await Promise.all([userRef().get(), userRef().collection("sessions").get()]);
+    if(doc.exists && doc.data().settings) S.settings={...S.settings,...doc.data().settings}; else await pushSettings();
+    const remote=new Map(snap.docs.map(d=>[d.id,d.data()]));
+    // ce qui n'existe que sur cet appareil est envoyé, sauf ce qui a déjà été en ligne puis supprimé depuis un autre appareil
+    const del=new Set(S.deleted), known=new Set(S.known||[]);
+    for(const s of S.sessions) if(!remote.has(s.id) && !del.has(s.id) && !S.dirty.includes(s.id) && !known.has(s.id)) S.dirty.push(s.id);
+    S.known=[...remote.keys()];
+    const local=byId();
+    const merged=new Map([...remote].filter(([id])=>!del.has(id)));
+    for(const id of S.dirty) if(local.has(id)) merged.set(id,local.get(id));
+    S.sessions=[...merged.values()];
+    saveLocal(); renderSettings(); render();
+    await pushChanges();
+  }catch(e){
+    console.error(e);
+    syncState(e.code==="permission-denied" ? `Accès refusé : ${RULES_HINT}` : `Lecture du compte impossible (${e.code||e.message})`,false);
+  }
+}
+async function initSync(){
+  try{
+    const V="10.12.2", base=`https://www.gstatic.com/firebasejs/${V}/`;
+    await loadScript(base+"firebase-app-compat.js");
+    await Promise.all([loadScript(base+"firebase-auth-compat.js"),loadScript(base+"firebase-firestore-compat.js")]);
+  }catch(e){ syncState("Synchronisation indisponible : Firebase n'a pas pu être chargé",false); $("syncBtn").hidden=true; return; }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fb={auth:firebase.auth(), db:firebase.firestore()};
+  $("syncBtn").addEventListener("click",async()=>{
+    if(fb.auth.currentUser){ await fb.auth.signOut(); return; }
+    const prov=new firebase.auth.GoogleAuthProvider();
+    try{ await fb.auth.signInWithPopup(prov); }
+    catch(e){ if(["auth/popup-blocked","auth/operation-not-supported-in-this-environment"].includes(e.code)){ try{ await fb.auth.signInWithRedirect(prov); return; }catch(e2){} } syncState(`Connexion impossible (${e.code||e.message})`,false); }
+  });
+  fb.auth.getRedirectResult().catch(()=>{});
+  fb.auth.onAuthStateChanged(u=>{
+    user=u;
+    if(!u){ $("syncBtn").textContent="Se connecter"; syncState("Recharges enregistrées sur cet appareil",false); return; }
+    $("syncBtn").textContent="Déconnexion"; pullAll();
+  });
+}
+
+// ---------- Lecture des fichiers ----------
+function parseCSV(text){
+  text=text.replace(/^﻿/,"");
+  const first=text.split(/\r?\n/).find(l=>l.split(/[,;\t]/).length>3)||text.split(/\r?\n/)[0]||"";
+  const cnt=c=>first.split(c).length;
+  const sep=[";","\t",","].reduce((a,c)=>cnt(c)>cnt(a)?c:a,",");
+  const rows=[]; let row=[], cur="", q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=ch; continue; }
+    if(ch==='"') q=true;
+    else if(ch===sep){ row.push(cur); cur=""; }
+    else if(ch==="\n"||ch==="\r"){ if(ch==="\r"&&text[i+1]==="\n") i++; row.push(cur); rows.push(row); row=[]; cur=""; }
+    else cur+=ch;
+  }
+  if(cur!==""||row.length){ row.push(cur); rows.push(row); }
+  return rows.map(r=>r.map(c=>c.trim()));
+}
+function num(v){
+  if(v==null) return null; let s=String(v).replace(/[€\s ]|eur|kwh/gi,"");
+  if(!s) return null;
+  if(/,\d+$/.test(s) && !/\.\d+,/.test(s)) s=s.replace(/\./g,"").replace(",",".");   // 1.234,56 ou 13,26
+  else s=s.replace(/,/g,"");
+  const n=parseFloat(s); return isNaN(n)?null:n;
+}
+// Date « 24/10/2026 09:47 », « 2026-10-24T09:47 », « 24.10.26 »… → {y,mo,d,h,mi,noTime}
+function parseDate(v){
+  if(!v) return null; const s=String(v).trim(); let m;
+  if((m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2}))?/))) return {y:+m[1],mo:+m[2],d:+m[3],h:+(m[4]||0),mi:+(m[5]||0),noTime:m[4]==null};
+  if((m=s.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\D+(\d{1,2})[:hH](\d{2}))?/))){ let y=+m[3]; if(y<100) y+=2000; return {y,mo:+m[2],d:+m[1],h:+(m[4]||0),mi:+(m[5]||0),noTime:m[4]==null}; }
+  return null;
+}
+function toLocal(p,utc){
+  if(!p) return null;
+  if(utc && !p.noTime){ const d=new Date(Date.UTC(p.y,p.mo-1,p.d,p.h,p.mi)); return {s:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,noTime:false}; }
+  return {s:`${p.y}-${pad(p.mo)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}`,noTime:p.noTime};
+}
+const OPS=[[/stations?-?e\b/i,"Stations-e"],[/electra/i,"Electra"],[/ionity/i,"Ionity"],[/supercharger|tesla/i,"Tesla"],[/fastned/i,"Fastned"],
+  [/totalenergies|total energies/i,"TotalEnergies"],[/atlante/i,"Atlante"],[/izivia/i,"Izivia"],[/freshmile/i,"Freshmile"],[/power ?dot/i,"Powerdot"],
+  [/allego/i,"Allego"],[/engie|vianeo/i,"Engie Vianeo"],[/lidl/i,"Lidl"],[/leclerc/i,"E.Leclerc"],[/carrefour/i,"Carrefour"],[/zunder/i,"Zunder"],
+  [/r[ée]v[ée]o/i,"Révéo"],[/eborn/i,"eborn"],[/chargemap/i,"Chargemap"],[/bump/i,"Bump"]];
+const guessOp=t=>{ for(const [rx,n] of OPS) if(rx.test(t||"")) return n; return ""; };
+
+// Colonnes reconnues automatiquement dans un CSV
+const FIELDS=[["start","Début (date et heure)",/d[ée]but|start|date/i],["end","Fin",/fin\b|end|stop/i],["kwh","Énergie (kWh)",/kwh|[ée]nergie|energy|consomm/i],
+  ["cost","Coût (€)",/co[uû]t|prix|montant|price|cost|total|€/i],["lieu","Lieu",/lieu|adresse|address|station|location|site|borne/i],["op","Opérateur",/op[ée]rateur|operator|r[ée]seau|network|cpo/i]];
+function guessMap(head){
+  const map={}, used=new Set();
+  for(const [k,,rx] of FIELDS){ const i=head.findIndex((h,j)=>!used.has(j)&&rx.test(h)); if(i>=0){ map[k]=i; used.add(i); } }
+  return map;
+}
+function headerRow(rows){ return rows.findIndex(r=>r.filter(Boolean).length>=3 && r.some(c=>/kwh|[ée]nergie|energy/i.test(c))); }
+
+function rowsFromCsv(rows, map, opts){
+  const out=[], hi=opts.hi;
+  for(const r of rows.slice(hi+1)){
+    if(!r.some(Boolean)) continue;
+    const st=toLocal(parseDate(r[map.start]),opts.utc); if(!st) continue;
+    const kwh=num(r[map.kwh]); if(kwh==null) continue;
+    const en=map.end!=null ? toLocal(parseDate(r[map.end]),opts.utc) : null;
+    const cost=map.cost!=null ? num(r[map.cost]) : null;
+    const lieuRaw=map.lieu!=null ? r[map.lieu] : "";
+    const op=(map.op!=null && r[map.op]) || guessOp(lieuRaw) || opts.op || "";
+    out.push({start:st.s, noTime:st.noTime, end:en?.s||null, kwh, cost:cost==null?null:cost,
+      op: opts.type==="maison" && !op ? "" : op, lieu: opts.type==="maison" ? (S.settings.homeName||"Maison") : lieuRaw, type:opts.type, src:opts.src, note:""});
+  }
+  return out;
+}
+
+// Texte lu sur une capture d'écran → recharges. Chaque date ouvre un bloc ; on y cherche heure, kWh, prix et lieu.
+function parseOcr(text, defOp, type){
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const DATE=/(\d{2})[\/.](\d{2})[\/.](\d{4})/;
+  const blocks=[]; let cur=null;
+  for(const l of lines){
+    const m=l.match(DATE);
+    if(m){ if(cur) blocks.push(cur); cur={m, lines:[l.replace(m[0]," ")]}; }
+    else if(cur) cur.lines.push(l);
+  }
+  if(cur) blocks.push(cur);
+  const out=[];
+  for(const b of blocks){
+    let txt=b.lines.join("\n"), check=[];
+    let h=null, mi=null, m;
+    if((m=txt.match(/(?:^|\s)à\s*(\d{1,2})\s*[:hH.]\s*(\d{2})\b/)) || (m=b.lines[0].match(/^\s*(\d{1,2}):(\d{2})\b/))){ h=+m[1]; mi=+m[2]; txt=txt.replace(m[0]," "); }
+    let kwh=null;
+    if((m=txt.match(/(\d+(?:[.,]\d+)?)\s*kwh/i))){ kwh=num(m[1]); txt=txt.replace(m[0]," "); }
+    let cost=null;
+    if((m=txt.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|eur\b)/i))){
+      cost=num(m[1]); txt=txt.replace(m[0]," ");
+      if(!/[.,]/.test(m[1]) && m[1].length>=3){ cost=cost/100; check.push("prix"); }   // « 351 € » lu sans la virgule
+    }
+    if(kwh==null) continue;
+    const op=guessOp(txt)||defOp||"";
+    const lieu=txt.split("\n").filter(l=>!/^badge\b/i.test(l))
+      .map(l=>l.replace(/[>»›]/g," ").replace(/\s+\S{1,2}$/,m=>/^\s+(-|[ANDM]\d+)$/.test(m)?m:"").trim())
+      .filter(l=>l.length>2).join(" ")
+      .replace(/\bborne\s+stations?-?e\s*-\s*/i,"").replace(/\s+/g," ").replace(/\s*-\s*$/,"").replace(/^\s*-\s*/,"").trim();
+    const d={y:+b.m[3],mo:+b.m[2],d:+b.m[1],h:h??0,mi:mi??0,noTime:h==null};
+    const st=toLocal(d,false);
+    out.push({start:st.s, noTime:st.noTime, end:null, kwh, cost, op, lieu, type, src:"capture", note:"", check});
+  }
+  return out;
+}
+
+// ---------- OCR (Tesseract, chargé seulement au premier import d'image) ----------
+let ocrWorker=null;
+async function ocr(file, onProg){
+  if(!window.Tesseract) await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+  if(!ocrWorker) ocrWorker=await Tesseract.createWorker("fra",1,{langPath:"https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra/4.0.0_best_int",
+    logger:m=>{ if(m.status==="recognizing text") onProg(m.progress); }});
+  const r=await ocrWorker.recognize(file);
+  return r.data.text;
+}
+
+// ---------- Import ----------
+let pending=[];   // lignes en attente de vérification
+function impMsg(t,cls){ $("impMsg").textContent=t; $("impMsg").className="note"+(cls?" "+cls:""); }
+async function handleFiles(list){
+  const files=[...list]; if(!files.length) return;
+  const defOp=$("defOp").value.trim(), defType=$("defType").value;
+  const found=[]; const msgs=[];
+  let imgN=0, imgDone=0; const imgs=files.filter(f=>f.type.startsWith("image/")); imgN=imgs.length;
+  for(const f of files){
+    try{
+      if(f.type.startsWith("image/")){
+        $("ocrBox").hidden=false; $("ocrTxt").textContent=`Lecture de la capture ${imgDone+1}/${imgN} (${f.name})… la première fois, le module de lecture se télécharge (quelques Mo).`;
+        const text=await ocr(f,p=>{ $("ocrBar").style.width=Math.round((imgDone+p)/imgN*100)+"%"; });
+        imgDone++; $("ocrBar").style.width=Math.round(imgDone/imgN*100)+"%";
+        const r=parseOcr(text,defOp,defType); found.push(...r);
+        msgs.push(`${f.name} : ${r.length} recharge${r.length>1?"s":""} lue${r.length>1?"s":""}`);
+        continue;
+      }
+      const text=await f.text();
+      if(/\.json$/i.test(f.name)||/^\s*[\[{]/.test(text)){ startRestore(text,f.name); continue; }
+      const rows=parseCSV(text), hi=headerRow(rows);
+      if(hi<0){ msgs.push(`${f.name} : aucune colonne d'énergie (kWh) trouvée`); continue; }
+      const head=rows[hi], utc=/time ?zone utc|utc/i.test(rows.slice(0,hi+1).flat().join(" "));
+      // export de la wallbox : « Horaire de début, Horaire de fin, Durée, Energie (kwh), Numéro de chargeur… »
+      if(head.some(h=>/horaire de d[ée]but/i.test(h)) && head.some(h=>/num[ée]ro de chargeur/i.test(h))){
+        const map=guessMap(head); map.start=head.findIndex(h=>/horaire de d[ée]but/i.test(h)); map.end=head.findIndex(h=>/horaire de fin/i.test(h)); map.lieu=head.findIndex(h=>/^lieu$/i.test(h)); delete map.op;
+        const r=rowsFromCsv(rows,map,{hi,utc:true,type:"maison",src:"wallbox",op:""});
+        found.push(...r); msgs.push(`${f.name} : export de la wallbox, ${r.length} recharges (heures UTC converties)`);
+        continue;
+      }
+      // autre CSV : choix des colonnes
+      await askMapping(f.name,rows,hi,utc,defOp).then(r=>{ if(r){ found.push(...r); msgs.push(`${f.name} : ${r.length} recharges`); } else msgs.push(`${f.name} : import annulé`); });
+    }catch(e){ console.error(e); msgs.push(`${f.name} : lecture impossible (${e.message||e})`); }
+  }
+  $("ocrBox").hidden=true; $("ocrBar").style.width="0";
+  impMsg(msgs.join(" · "));
+  if(found.length) showReview(found);
+}
+// Choix des colonnes pour un CSV inconnu
+function askMapping(name,rows,hi,utc,defOp){
+  return new Promise(res=>{
+    const head=rows[hi], map=guessMap(head), box=$("mapBox");
+    const opt=k=>`<option value="">—</option>`+head.map((h,i)=>`<option value="${i}"${map[k]===i?" selected":""}>${esc(h||"colonne "+(i+1))}</option>`).join("");
+    const ex=rows.slice(hi+1,hi+4).filter(r=>r.some(Boolean));
+    box.innerHTML=`<h3>${esc(name)} : quelle colonne contient quoi ?</h3>
+      <div class="map-grid">${FIELDS.map(([k,l])=>`<label>${l}<select data-k="${k}">${opt(k)}</select></label>`).join("")}
+      <label>Type de recharge<select id="mType"><option value="exterieur">En déplacement</option><option value="maison">Maison</option></select></label>
+      <label>Heures du fichier<select id="mUtc"><option value="0">Heure locale</option><option value="1"${utc?" selected":""}>UTC (à convertir)</option></select></label></div>
+      <div class="tbl"><table><tr>${head.map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${ex.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>
+      <div class="row"><button type="button" class="mini primary" id="mOk">Lire le fichier</button><button type="button" class="mini" id="mNo">Ignorer ce fichier</button></div>`;
+    box.hidden=false; box.scrollIntoView({behavior:"smooth",block:"nearest"});
+    $("mNo").onclick=()=>{ box.hidden=true; res(null); };
+    $("mOk").onclick=()=>{
+      const m={}; box.querySelectorAll("select[data-k]").forEach(s=>{ if(s.value!=="") m[s.dataset.k]=+s.value; });
+      if(m.start==null||m.kwh==null){ impMsg("Il faut au moins la colonne du début et celle de l'énergie.","err"); return; }
+      box.hidden=true; res(rowsFromCsv(rows,m,{hi,utc:$("mUtc").value==="1",type:$("mType").value,src:"csv",op:defOp}));
+    };
+  });
+}
+function statusOf(r, seen){
+  const id=makeId(r), m=byId();
+  if(m.has(id)) return ["dup","déjà présente",false];
+  if(seen.has(id)) return ["dup","en double dans l'import",false];
+  const near=S.sessions.find(s=>dayOf(s)===dayOf(r) && Math.abs(s.kwh-r.kwh)<=Math.max(0.5,r.kwh*0.03));
+  if(near) return ["dup",`doublon probable (${near.op||near.lieu||"déjà là"})`,false];
+  if(!(r.kwh>0)) return ["chk","0 kWh",false];
+  if(r.check?.length) return ["chk","à vérifier : "+r.check.join(", "),true];
+  return ["new","nouvelle",true];
+}
+function showReview(list){
+  const seen=new Set();
+  pending=list.sort((a,b)=>a.start<b.start?1:-1).map(r=>{ const [cls,txt,on]=statusOf(r,seen); seen.add(makeId(r)); return {...r,cls,txt,on}; });
+  const t=$("review");
+  t.innerHTML=`<tr><th></th><th>Statut</th><th>Date</th><th>Heure</th><th class="n">kWh</th><th class="n">€</th><th>Type</th><th>Opérateur</th><th>Lieu</th></tr>`+
+    pending.map((r,i)=>`<tr data-i="${i}" class="${r.on?"":"off"}">
+      <td><input type="checkbox" data-f="on"${r.on?" checked":""} aria-label="Ajouter"></td>
+      <td><span class="chip ${r.cls}">${esc(r.txt)}</span></td>
+      <td><input class="dt" type="date" data-f="day" value="${r.start.slice(0,10)}"></td>
+      <td><input class="t" type="time" data-f="time" value="${r.noTime?"":r.start.slice(11,16)}"></td>
+      <td class="n"><input type="number" step="0.001" data-f="kwh" value="${r.kwh}"></td>
+      <td class="n"><input type="number" step="0.01" data-f="cost" value="${r.cost??""}" placeholder="${r.type==="maison"?"estimé":""}"></td>
+      <td><select data-f="type"><option value="exterieur"${r.type!=="maison"?" selected":""}>Déplacement</option><option value="maison"${r.type==="maison"?" selected":""}>Maison</option></select></td>
+      <td><input data-f="op" list="opList" value="${esc(r.op)}" style="width:120px"></td>
+      <td class="lieu"><input data-f="lieu" value="${esc(r.lieu)}"></td></tr>`).join("");
+  $("reviewBox").hidden=false; updRevBtn();
+  $("reviewBox").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function updRevBtn(){ const n=pending.filter(r=>r.on).length; $("revOk").textContent=`Ajouter ${n} recharge${n>1?"s":""}`; $("revOk").disabled=!n; }
+$("review").addEventListener("input",e=>{
+  const tr=e.target.closest("tr[data-i]"); if(!tr) return; const r=pending[+tr.dataset.i], f=e.target.dataset.f, v=e.target.value;
+  if(f==="on"){ r.on=e.target.checked; tr.classList.toggle("off",!r.on); updRevBtn(); return; }
+  if(f==="day"&&v) r.start=v+r.start.slice(10);
+  if(f==="time"){ r.noTime=!v; r.start=r.start.slice(0,11)+(v||"00:00"); }
+  if(f==="kwh") r.kwh=num(v)??0;
+  if(f==="cost") r.cost=v===""?null:num(v);
+  if(f==="type"||f==="op"||f==="lieu") r[f]=v;
+});
+$("revAll").onclick=()=>{ pending.forEach(r=>r.on=true); $("review").querySelectorAll("input[data-f=on]").forEach(c=>c.checked=true); $("review").querySelectorAll("tr.off").forEach(t=>t.classList.remove("off")); updRevBtn(); };
+$("revCancel").onclick=()=>{ pending=[]; $("reviewBox").hidden=true; impMsg(""); };
+$("revOk").onclick=async()=>{
+  const add=pending.filter(r=>r.on && r.kwh>0), m=byId(); let n=0;
+  for(const r of add){
+    const s={start:r.start, noTime:!!r.noTime, end:r.end||null, kwh:Math.round(r.kwh*1000)/1000, cost:r.cost==null?null:Math.round(r.cost*100)/100,
+      op:r.op||"", lieu:r.lieu||"", type:r.type, src:r.src, note:r.note||"", added:Date.now()};
+    s.id=makeId(s); if(m.has(s.id)) continue;
+    m.set(s.id,s); S.sessions.push(s); S.dirty.push(s.id); n++;
+  }
+  pending=[]; $("reviewBox").hidden=true;
+  impMsg(`${n} recharge${n>1?"s":""} ajoutée${n>1?"s":""}.`,"ok");
+  render(); await pushChanges();
+};
+const drop=$("drop");
+$("files").addEventListener("change",e=>{ handleFiles(e.target.files); e.target.value=""; });
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop",e=>handleFiles(e.dataTransfer.files));
+// coller une capture (Ctrl+V)
+document.addEventListener("paste",e=>{ const fs=[...(e.clipboardData?.files||[])]; if(fs.length) handleFiles(fs); });
+
+// ---------- Inventaire ----------
+function filtered(){
+  const per=$("fPer").value, ty=$("fType").value, op=$("fOp").value, q=$("fQ").value.trim().toLowerCase();
+  let from="", to="9999";
+  if(/^\d{4}$/.test(per)){ from=per; to=per+"-12-31T99"; }
+  else if(/^last(\d+)$/.test(per)){ const d=new Date(); d.setMonth(d.getMonth()-(+per.slice(4))); from=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+  return S.sessions.filter(s=>s.start>=from && s.start<=to && (!ty||s.type===ty) && (!op||(s.op||"—")===op)
+    && (!q||[s.lieu,s.op,s.note].join(" ").toLowerCase().includes(q))).sort((a,b)=>a.start<b.start?1:-1);
+}
+function renderFilters(){
+  const years=[...new Set(S.sessions.map(s=>s.start.slice(0,4)))].sort().reverse();
+  const per=$("fPer"), pv=per.value;
+  per.innerHTML=`<option value="">Tout</option><option value="last6">6 derniers mois</option><option value="last12">12 derniers mois</option>`+years.map(y=>`<option value="${y}">${y}</option>`).join("");
+  per.value=[...per.options].some(o=>o.value===pv)?pv:"";
+  const ops=[...new Set(S.sessions.map(s=>s.op||"—"))].sort((a,b)=>a.localeCompare(b,"fr"));
+  const fo=$("fOp"), ov=fo.value;
+  fo.innerHTML=`<option value="">Tous</option>`+ops.map(o=>`<option>${esc(o)}</option>`).join("");
+  fo.value=ops.includes(ov)?ov:"";
+  $("opList").innerHTML=[...new Set([...OPS.map(o=>o[1]),...S.sessions.map(s=>s.op).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"fr")).map(o=>`<option value="${esc(o)}">`).join("");
+}
+function render(){
+  renderFilters();
+  const L=filtered();
+  const kwh=L.reduce((a,s)=>a+s.kwh,0), costs=L.map(costOf), cost=costs.reduce((a,c)=>a+(c||0),0);
+  const priced=L.filter(s=>costOf(s)!=null), pkwh=priced.reduce((a,s)=>a+s.kwh,0);
+  const home=L.filter(s=>s.type==="maison"), away=L.filter(s=>s.type!=="maison");
+  const hk=home.reduce((a,s)=>a+s.kwh,0), ak=away.reduce((a,s)=>a+s.kwh,0);
+  const ac=away.reduce((a,s)=>a+(costOf(s)||0),0), akp=away.filter(s=>costOf(s)!=null).reduce((a,s)=>a+s.kwh,0);
+  const hc=home.reduce((a,s)=>a+(costOf(s)||0),0);
+  const estHome=home.some(s=>s.cost==null);
+  $("tiles").innerHTML=[
+    [L.length,"recharges"],[fmtN(kwh,0)+" kWh","énergie"],[(estHome?"≈ ":"")+fmtE(cost),"coût total"],
+    [pkwh?fmtN(cost/pkwh,3)+" €":"—","prix moyen au kWh"],
+    [hk+ak?Math.round(hk/(hk+ak)*100)+" %":"—",`à la maison (${fmtN(hk,0)} kWh · ${estHome?"≈ ":""}${fmtE(hc)})`],
+    [akp?fmtN(ac/akp,3)+" €":"—",`en déplacement, au kWh (${fmtN(ak,0)} kWh · ${fmtE(ac)})`]
+  ].map(([b,s])=>`<div class="tile"><b>${b}</b><span>${s}</span></div>`).join("");
+  // par mois
+  const M=new Map();
+  for(const s of L){ const k=s.start.slice(0,7); const o=M.get(k)||{h:0,a:0,c:0,n:0}; s.type==="maison"?o.h+=s.kwh:o.a+=s.kwh; o.c+=costOf(s)||0; o.n++; M.set(k,o); }
+  const maxM=Math.max(1,...[...M.values()].map(o=>o.h+o.a));
+  $("byMonth").innerHTML=M.size?`<tr><th>Mois</th><th class="n">Nb</th><th class="n">kWh</th><th></th><th class="n">€</th></tr>`+[...M].sort((a,b)=>a[0]<b[0]?1:-1).map(([k,o])=>
+    `<tr><td class="d">${MONTHS[+k.slice(5)-1]} ${k.slice(0,4)}</td><td class="n">${o.n}</td><td class="n">${fmtN(o.h+o.a,0)}</td>
+     <td style="width:40%"><div class="bar" title="Maison ${fmtN(o.h,0)} kWh · déplacement ${fmtN(o.a,0)} kWh"><i class="h" style="width:${o.h/maxM*100}%"></i><i class="a" style="width:${o.a/maxM*100}%"></i></div></td>
+     <td class="n">${fmtE(o.c)}</td></tr>`).join(""):`<tr><td class="empty">Rien sur cette période</td></tr>`;
+  // par opérateur
+  const O=new Map();
+  for(const s of L){ const k=s.type==="maison"?(S.settings.homeName||"Maison"):(s.op||"—"); const o=O.get(k)||{n:0,k:0,c:0,ck:0}; o.n++; o.k+=s.kwh; const c=costOf(s); if(c!=null){ o.c+=c; o.ck+=s.kwh; } O.set(k,o); }
+  $("byOp").innerHTML=O.size?`<tr><th>Opérateur</th><th class="n">Nb</th><th class="n">kWh</th><th class="n">€</th><th class="n">€/kWh</th></tr>`+[...O].sort((a,b)=>b[1].k-a[1].k).map(([k,o])=>
+    `<tr><td>${esc(k)}</td><td class="n">${o.n}</td><td class="n">${fmtN(o.k,0)}</td><td class="n">${fmtE(o.c)}</td><td class="n">${o.ck?fmtN(o.c/o.ck,3):"—"}</td></tr>`).join(""):`<tr><td class="empty">—</td></tr>`;
+  // liste
+  $("list").innerHTML=L.length?`<tr><th>Date</th><th>Type</th><th>Opérateur</th><th>Lieu</th><th class="n">kWh</th><th class="n">€</th><th class="n">€/kWh</th><th class="n">Durée</th><th></th></tr>`+L.map(s=>{
+    const c=costOf(s), d=new Date(s.start), dur=s.end?Math.round((new Date(s.end)-d)/60000):null;
+    return `<tr><td class="d">${d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})}${s.noTime?"":" "+s.start.slice(11,16)}</td>
+      <td><span class="chip ${s.type==="maison"?"home":"away"}">${s.type==="maison"?"maison":"déplacement"}</span></td>
+      <td>${esc(s.op||"—")}</td><td class="lieu">${esc(s.lieu)}${s.note?`<br><span class="note">${esc(s.note)}</span>`:""}</td>
+      <td class="n">${fmtN(s.kwh,2)}</td><td class="n${s.cost==null?" est":""}">${c==null?"—":(s.cost==null?"≈ ":"")+fmtE(c)}</td>
+      <td class="n">${c!=null&&s.kwh?fmtN(c/s.kwh,3):"—"}</td><td class="n">${dur!=null&&dur>=0?(dur>=60?Math.floor(dur/60)+" h "+pad(dur%60):dur+" min"):"—"}</td>
+      <td class="act"><button type="button" class="mini" data-ed="${esc(s.id)}">Modifier</button></td></tr>`; }).join("")
+    : `<tr><td class="empty">${S.sessions.length?"Aucune recharge ne correspond aux filtres.":"Aucune recharge pour l'instant : importe un fichier ou une capture ci-dessus."}</td></tr>`;
+}
+["fPer","fType","fOp"].forEach(id=>$(id).addEventListener("change",render));
+$("fQ").addEventListener("input",render);
+
+// ---------- Ajout / modification à la main ----------
+let editing=null;
+function openEdit(s){
+  editing=s||null;
+  $("dlgTitle").textContent=s?"Modifier la recharge":"Ajouter une recharge";
+  $("eStart").value=s?s.start:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
+  $("eEnd").value=s?.end||""; $("eKwh").value=s?.kwh??""; $("eCost").value=s?.cost??"";
+  $("eType").value=s?.type||"exterieur"; $("eOp").value=s?.op||""; $("eLieu").value=s?.lieu||""; $("eNote").value=s?.note||"";
+  $("dlgDel").hidden=!s; $("dlg").showModal();
+}
+$("addBtn").onclick=()=>openEdit(null);
+$("list").addEventListener("click",e=>{ const b=e.target.closest("[data-ed]"); if(b) openEdit(S.sessions.find(s=>s.id===b.dataset.ed)); });
+$("dlg").addEventListener("close",async()=>{
+  if($("dlg").returnValue!=="ok") return;
+  const s={start:$("eStart").value, noTime:editing?.noTime&&$("eStart").value.slice(11)===editing.start.slice(11)?true:false, end:$("eEnd").value||null,
+    kwh:num($("eKwh").value)||0, cost:$("eCost").value===""?null:num($("eCost").value), type:$("eType").value, op:$("eOp").value.trim(),
+    lieu:$("eLieu").value.trim(), note:$("eNote").value.trim(), src:editing?.src||"manuel", added:editing?.added||Date.now()};
+  if(!s.start||!(s.kwh>0)) return;
+  s.id=makeId(s);
+  if(editing){ S.sessions=S.sessions.filter(x=>x!==editing); if(editing.id!==s.id){ S.deleted.push(editing.id); S.dirty=S.dirty.filter(x=>x!==editing.id); } }
+  S.sessions=S.sessions.filter(x=>x.id!==s.id); S.sessions.push(s); S.dirty.push(s.id);
+  render(); await pushChanges();
+});
+$("dlgDel").onclick=async()=>{
+  if(!editing) return;
+  S.sessions=S.sessions.filter(x=>x!==editing); S.dirty=S.dirty.filter(x=>x!==editing.id); S.deleted.push(editing.id);
+  $("dlg").close("del"); render(); await pushChanges();
+};
+
+// ---------- Réglages, sauvegarde, restauration ----------
+function renderSettings(){ $("homePrice").value=S.settings.homePrice??""; $("homeName").value=S.settings.homeName||""; }
+$("homePrice").addEventListener("change",()=>{ S.settings.homePrice=num($("homePrice").value)||0; render(); pushSettings(); });
+$("homeName").addEventListener("change",()=>{ S.settings.homeName=$("homeName").value.trim()||"Maison"; render(); pushSettings(); });
+function download(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
+const stamp=()=>{ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+$("expBtn").onclick=()=>{
+  download(`trajetve-recharges-${stamp()}.json`,JSON.stringify({app:"trajetve-recharges", version:CHANGELOG[0].v, exportedAt:new Date().toISOString(), settings:S.settings, sessions:S.sessions.slice().sort((a,b)=>a.start<b.start?-1:1)},null,1),"application/json");
+  setMsg(`Sauvegarde de ${S.sessions.length} recharges téléchargée.`,"ok");
+};
+$("expCsv").onclick=()=>{
+  const q=v=>{ const s=String(v??""); return /[;"\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; };
+  const L=filtered().slice().reverse();
+  const lines=[["Début","Fin","Type","Opérateur","Lieu","kWh","Coût (€)","Coût estimé","Note"].join(";"),
+    ...L.map(s=>[s.noTime?s.start.slice(0,10):s.start.replace("T"," "),(s.end||"").replace("T"," "),s.type==="maison"?"Maison":"Déplacement",s.op,s.lieu,
+      String(s.kwh).replace(".",","),costOf(s)==null?"":costOf(s).toFixed(2).replace(".",","),s.cost==null&&costOf(s)!=null?"oui":"",s.note].map(q).join(";"))];
+  download(`trajetve-recharges-${stamp()}.csv`,"﻿"+lines.join("\r\n"),"text/csv");
+  setMsg(`${L.length} recharges exportées (filtres appliqués).`,"ok");
+};
+function setMsg(t,cls){ $("setMsg").textContent=t; $("setMsg").className="note"+(cls?" "+cls:""); }
+let restoreData=null;
+function startRestore(text,name){
+  let o; try{ o=JSON.parse(text); }catch(e){ setMsg(`${name} : fichier JSON illisible.`,"err"); return; }
+  const list=Array.isArray(o)?o:o.sessions;
+  if(!Array.isArray(list)){ setMsg(`${name} : ce n'est pas une sauvegarde de Mes recharges.`,"err"); return; }
+  const ok=list.filter(s=>s&&typeof s.start==="string"&&s.kwh>0).map(s=>({start:s.start, noTime:!!s.noTime, end:s.end||null, kwh:+s.kwh, cost:s.cost==null?null:+s.cost,
+    op:s.op||"", lieu:s.lieu||"", type:s.type==="maison"?"maison":"exterieur", src:s.src||"json", note:s.note||"", added:s.added||Date.now()})).map(s=>({...s,id:makeId(s)}));
+  restoreData={sessions:ok, settings:o.settings||null};
+  const m=byId(), nNew=ok.filter(s=>!m.has(s.id)).length;
+  $("resTxt").textContent=`${name} : ${ok.length} recharges, dont ${nNew} absentes d'ici.`;
+  $("resBox").hidden=false; $("resBox").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+$("resFile").addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(f) startRestore(await f.text(),f.name); });
+$("resCancel").onclick=()=>{ restoreData=null; $("resBox").hidden=true; };
+$("resMerge").onclick=async()=>{
+  if(!restoreData) return; const m=byId(); let n=0;
+  for(const s of restoreData.sessions) if(!m.has(s.id)){ S.sessions.push(s); S.dirty.push(s.id); m.set(s.id,s); n++; }
+  restoreData=null; $("resBox").hidden=true; setMsg(`${n} recharges ajoutées depuis la sauvegarde.`,"ok"); render(); await pushChanges();
+};
+$("resReplace").onclick=async()=>{
+  if(!restoreData) return;
+  S.deleted.push(...S.sessions.map(s=>s.id).filter(id=>!restoreData.sessions.some(x=>x.id===id)));
+  S.sessions=restoreData.sessions; S.dirty=S.sessions.map(s=>s.id);
+  if(restoreData.settings) S.settings={...S.settings,...restoreData.settings};
+  const n=S.sessions.length; restoreData=null; $("resBox").hidden=true; setMsg(`Recharges remplacées par la sauvegarde (${n}).`,"ok");
+  renderSettings(); render(); await pushChanges(); await pushSettings();
+};
+
+renderSettings(); render(); initSync();
+</script>
+</body>
+</html>
