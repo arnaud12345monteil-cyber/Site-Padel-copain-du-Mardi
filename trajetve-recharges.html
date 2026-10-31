@@ -236,6 +236,9 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.1", d:"31/10/2026", c:[
+    "Captures : appli Ionity (date « 30 mai 2026 », nom de la station au-dessus) et historiques mensuels où la date n'a pas d'année (« 31/01 11:40 - 12:38 », année lue dans « Janvier 2026 »)",
+    "Captures : heure de fin lue quand elle est affichée, « IONITY » reconnu même mal lu (JONITY…), « kWh » mal lu toléré"]},
   {v:"1.0", d:"31/10/2026", c:[
     "Inventaire de toutes les recharges (maison et en déplacement) : totaux, coût, prix moyen au kWh, répartition par mois et par opérateur",
     "Import : CSV de la wallbox (heures UTC converties en heure de Paris), CSV de n'importe quel opérateur avec choix des colonnes, captures d'écran d'applis (texte lu dans le navigateur)",
@@ -374,7 +377,7 @@ function toLocal(p,utc){
   if(utc && !p.noTime){ const d=new Date(Date.UTC(p.y,p.mo-1,p.d,p.h,p.mi)); return {s:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,noTime:false}; }
   return {s:`${p.y}-${pad(p.mo)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}`,noTime:p.noTime};
 }
-const OPS=[[/stations?-?e\b/i,"Stations-e"],[/electra/i,"Electra"],[/ionity/i,"Ionity"],[/supercharger|tesla/i,"Tesla"],[/fastned/i,"Fastned"],
+const OPS=[[/stations?-?e\b/i,"Stations-e"],[/electra/i,"Electra"],[/[ijl1]onity/i,"Ionity"],[/supercharger|tesla/i,"Tesla"],[/fastned/i,"Fastned"],
   [/totalenergies|total energies/i,"TotalEnergies"],[/atlante/i,"Atlante"],[/izivia/i,"Izivia"],[/freshmile/i,"Freshmile"],[/power ?dot/i,"Powerdot"],
   [/allego/i,"Allego"],[/engie|vianeo/i,"Engie Vianeo"],[/lidl/i,"Lidl"],[/leclerc/i,"E.Leclerc"],[/carrefour/i,"Carrefour"],[/zunder/i,"Zunder"],
   [/r[ée]v[ée]o/i,"Révéo"],[/eborn/i,"eborn"],[/chargemap/i,"Chargemap"],[/bump/i,"Bump"]];
@@ -407,23 +410,49 @@ function rowsFromCsv(rows, map, opts){
 }
 
 // Texte lu sur une capture d'écran → recharges. Chaque date ouvre un bloc ; on y cherche heure, kWh, prix et lieu.
+const MOIS={janv:1,janvier:1,"févr":2,fevr:2,"février":2,fevrier:2,mars:3,avr:4,avril:4,mai:5,juin:6,juil:7,juillet:7,"août":8,aout:8,sept:9,septembre:9,oct:10,octobre:10,nov:11,novembre:11,"déc":12,dec:12,"décembre":12,decembre:12};
+const MOIS_RX="janv(?:ier)?|f[ée]vr(?:ier)?|mars|avr(?:il)?|mai|juin|juil(?:let)?|ao[uû]t|sept(?:embre)?|oct(?:obre)?|nov(?:embre)?|d[ée]c(?:embre)?";
+// Repère une date de recharge dans une ligne lue sur une capture :
+// « 24/10/2026 », « 30 mai 2026 », ou « 31/01 11:40 » (année prise dans l'en-tête « Janvier 2026 », sinon l'année en cours)
+function ocrDate(l, yearHint){
+  let m;
+  if((m=l.match(/(\d{2})[\/.](\d{2})[\/.](\d{4})/))) return {d:+m[1],mo:+m[2],y:+m[3],raw:m[0]};
+  if((m=l.match(new RegExp(`(\\d{1,2})\\s+(${MOIS_RX})\\.?\\s+(20\\d{2})`,"i")))){ const k=m[2].toLowerCase().replace(/\.$/,""); const mo=MOIS[k]||MOIS[k.slice(0,4)]||MOIS[k.slice(0,3)]; if(mo) return {d:+m[1],mo,y:+m[3],raw:m[0],named:true}; }
+  if((m=l.match(/(?:^|\s)(\d{2})\/(\d{2})(?=\s+\d{1,2}:\d{2})/))){
+    let y=yearHint; const now=new Date();
+    if(!y){ y=now.getFullYear(); if(new Date(y,+m[2]-1,+m[1])>now) y--; }
+    return {d:+m[1],mo:+m[2],y,raw:m[0].trim()};
+  }
+  return null;
+}
+const OCR_JUNK=/plus de sessions|^montant|^charg[ée]|carte\s+profil|^historique|^mes recharges|^recharges$|co[uû]ts? totaux|volume total/i;
+// Texte lu sur une capture d'écran → recharges. Chaque date ouvre un bloc ; on y cherche heures, kWh, prix et lieu.
 function parseOcr(text, defOp, type){
   const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  const DATE=/(\d{2})[\/.](\d{2})[\/.](\d{4})/;
-  const blocks=[]; let cur=null;
+  const hy=text.match(new RegExp(`(?:${MOIS_RX})\\.?\\s+(20\\d{2})`,"i")), yearHint=hy?+hy[1]:null;
+  const blocks=[]; let cur=null, prev=null;
   for(const l of lines){
-    const m=l.match(DATE);
-    if(m){ if(cur) blocks.push(cur); cur={m, lines:[l.replace(m[0]," ")]}; }
+    const dt=ocrDate(l,yearHint);
+    if(dt){
+      if(cur) blocks.push(cur);
+      cur={dt, lines:[l.replace(dt.raw," ")], pre:[]};
+      // appli Ionity : le nom de la station est sur la ligne au-dessus de la date
+      if(dt.named && prev && !/\d/.test(prev) && !OCR_JUNK.test(prev)){
+        cur.pre.push(prev); const pb=blocks[blocks.length-1]; if(pb && pb.lines[pb.lines.length-1]===prev) pb.lines.pop();
+      }
+    }
     else if(cur) cur.lines.push(l);
+    prev=l;
   }
   if(cur) blocks.push(cur);
   const out=[];
   for(const b of blocks){
-    let txt=b.lines.join("\n"), check=[];
-    let h=null, mi=null, m;
-    if((m=txt.match(/(?:^|\s)à\s*(\d{1,2})\s*[:hH.]\s*(\d{2})\b/)) || (m=b.lines[0].match(/^\s*(\d{1,2}):(\d{2})\b/))){ h=+m[1]; mi=+m[2]; txt=txt.replace(m[0]," "); }
+    let txt=[...b.pre,...b.lines].join("\n"), check=[], m;
+    let h=null, mi=null, eh=null, emi=null;
+    if((m=b.lines[0].match(/(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*[-–à]\s*(\d{1,2}):(\d{2}))?/))){ h=+m[1]; mi=+m[2]; if(m[3]!=null){ eh=+m[3]; emi=+m[4]; } txt=txt.replace(m[0]," "); }
+    else if((m=txt.match(/(?:^|\s)à\s*(\d{1,2})\s*[:hH.]\s*(\d{2})\b/))){ h=+m[1]; mi=+m[2]; txt=txt.replace(m[0]," "); }
     let kwh=null;
-    if((m=txt.match(/(\d+(?:[.,]\d+)?)\s*kwh/i))){ kwh=num(m[1]); txt=txt.replace(m[0]," "); }
+    if((m=txt.match(/(\d+(?:[.,]\d+)?)\s*k\s*w+\s*h/i))){ kwh=num(m[1]); txt=txt.replace(m[0]," "); }
     let cost=null;
     if((m=txt.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:€|eur\b)/i))){
       cost=num(m[1]); txt=txt.replace(m[0]," ");
@@ -431,13 +460,15 @@ function parseOcr(text, defOp, type){
     }
     if(kwh==null) continue;
     const op=guessOp(txt)||defOp||"";
-    const lieu=txt.split("\n").filter(l=>!/^badge\b/i.test(l))
-      .map(l=>l.replace(/[>»›]/g," ").replace(/\s+\S{1,2}$/,m=>/^\s+(-|[ANDM]\d+)$/.test(m)?m:"").trim())
-      .filter(l=>l.length>2).join(" ")
-      .replace(/\bborne\s+stations?-?e\s*-\s*/i,"").replace(/\s+/g," ").replace(/\s*-\s*$/,"").replace(/^\s*-\s*/,"").trim();
-    const d={y:+b.m[3],mo:+b.m[2],d:+b.m[1],h:h??0,mi:mi??0,noTime:h==null};
-    const st=toLocal(d,false);
-    out.push({start:st.s, noTime:st.noTime, end:null, kwh, cost, op, lieu, type, src:"capture", note:"", check});
+    const lieu=txt.split("\n").filter(l=>!/^badge\b/i.test(l) && !OCR_JUNK.test(l))
+      .map(l=>l.replace(/[>»›©®"]/g," ").replace(/\s+\S{1,2}$/,m=>/^\s+(-|[ANDM]\d+)$/.test(m)?m:"").trim())
+      .filter(l=>l.length>2 && /[a-zà-ÿ]{3}/i.test(l)).join(" ")
+      .replace(/\bborne\s+stations?-?e\s*-\s*/i,"").replace(/^[ijl1]onity\s*/i,"").replace(/\s+/g," ").replace(/\s*[-,]\s*$/,"").replace(/^\s*-\s*/,"").trim();
+    const st=toLocal({y:b.dt.y,mo:b.dt.mo,d:b.dt.d,h:h??0,mi:mi??0,noTime:h==null},false);
+    let end=null;
+    if(eh!=null){ const e=new Date(`${st.s.slice(0,10)}T${pad(eh)}:${pad(emi)}`); if(e<new Date(st.s)) e.setDate(e.getDate()+1);
+      end=`${e.getFullYear()}-${pad(e.getMonth()+1)}-${pad(e.getDate())}T${pad(e.getHours())}:${pad(e.getMinutes())}`; }
+    out.push({start:st.s, noTime:st.noTime, end, kwh, cost, op, lieu, type, src:"capture", note:"", check});
   }
   return out;
 }
