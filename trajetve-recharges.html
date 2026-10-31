@@ -223,6 +223,22 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     <p class="note">Les recharges comptées sont celles faites entre le jour du premier relevé (inclus) et le jour du second (exclu). Les km sont répartis entre maison et déplacement au prorata des kWh rechargés. Sur une période courte, l'écart de batterie entre le début et la fin fausse le résultat : plus la période est longue, plus le chiffre est fiable.</p>
   </section>
 
+  <!-- Abonnements -->
+  <section class="panel" id="subPanel">
+    <header><h2>Abonnements</h2><p class="note">Ajoutés au coût des recharges en déplacement, au prorata des jours</p></header>
+    <div class="row">
+      <label>Opérateur<input id="sOp" list="opList" placeholder="ex. Ionity"></label>
+      <label>Nom <small>(facultatif)</small><input id="sName" placeholder="ex. Passport"></label>
+      <label>Montant (€)<input id="sAmt" type="number" min="0" step="0.01"></label>
+      <label>Par<select id="sPer"><option value="mois">mois</option><option value="an">an</option></select></label>
+      <label>Début<input id="sFrom" type="date"></label>
+      <label>Fin <small>(vide = en cours)</small><input id="sTo" type="date"></label>
+      <button type="button" class="mini primary" id="sAdd">Ajouter</button>
+    </div>
+    <p class="note" id="subMsg" role="status"></p>
+    <div class="tbl"><table id="subTbl"></table></div>
+  </section>
+
   <!-- Réglages et sauvegarde -->
   <section class="panel">
     <header><h2>Réglages et sauvegarde</h2></header>
@@ -272,6 +288,9 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.5", d:"31/10/2026", c:[
+    "Abonnements par opérateur (montant par mois ou par an, début, fin facultative) : coût réparti au jour et ajouté aux totaux de l'inventaire, au tableau par opérateur (€/kWh tout compris) et au coût au kilomètre",
+    "Pour chaque abonnement : montant payé à ce jour, recharges faites chez l'opérateur pendant l'abonnement et prix au kWh avec et sans l'abonnement"]},
   {v:"1.4", d:"31/10/2026", c:[
     "Relevés du compteur : bouton « Compteur de la voiture à cette date », qui reprend le kilométrage enregistré dans l'historique de la voiture (début de journée, ou dernier connu avant). La saisie à la main reste possible"]},
   {v:"1.3", d:"31/10/2026", c:[
@@ -301,7 +320,7 @@ $("ver").textContent="v"+CHANGELOG[0].v;
 // ---------- Données ----------
 // Une recharge : {id, start:"AAAA-MM-JJTHH:MM" (heure locale), noTime, end, kwh, cost (null = estimé), op, lieu, type:"maison"|"exterieur", src, note, added}
 const LKEY="trajetve-recharges-v1";
-let S={sessions:[], settings:{homePrice:0.2, homeName:"Maison", odo:[], fuelPrice:1.8, fuelCons:6.5}, dirty:[], deleted:[], known:[]};
+let S={sessions:[], settings:{homePrice:0.2, homeName:"Maison", odo:[], fuelPrice:1.8, fuelCons:6.5, subs:[]}, dirty:[], deleted:[], known:[]};
 try{ const o=JSON.parse(localStorage.getItem(LKEY)||"null"); if(o) S={...S,...o, settings:{...S.settings,...(o.settings||{})}}; }catch(e){}
 const saveLocal=()=>{ try{ localStorage.setItem(LKEY,JSON.stringify(S)); }catch(e){} };
 const byId=()=>new Map(S.sessions.map(s=>[s.id,s]));
@@ -709,6 +728,55 @@ drop.addEventListener("drop",e=>handleFiles(e.dataTransfer.files));
 document.addEventListener("paste",e=>{ const fs=[...(e.clipboardData?.files||[])]; if(fs.length) handleFiles(fs); });
 
 // ---------- Inventaire ----------
+// ---------- Abonnements ----------
+// {op, name, amt, per:"mois"|"an", from:"AAAA-MM-JJ", to:"AAAA-MM-JJ"|null} ; coût réparti au jour (montant mensuel × 12 / 365)
+const dU=d=>{ const [y,m,j]=d.split("-").map(Number); return Date.UTC(y,m-1,j); };
+const isoU=t=>new Date(t).toISOString().slice(0,10);
+const todayIso=()=>{ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const tomorrowIso=()=>isoU(dU(todayIso())+86400000);
+const subsList=()=>(S.settings.subs||[]).filter(x=>x&&x.from&&x.amt>=0);
+const subDaily=x=>x.per==="an" ? x.amt/365 : x.amt*12/365;
+// coût d'un abonnement entre from (inclus) et toEx (exclu)
+function subFee(x,from,toEx){
+  const a=Math.max(dU(x.from),dU(from)), b=Math.min(x.to?dU(x.to)+86400000:dU(tomorrowIso()), dU(toEx));
+  return b>a ? (b-a)/86400000*subDaily(x) : 0;
+}
+// abonnements d'une période, par opérateur (filtre opérateur facultatif)
+function subsOn(from,toEx,op){
+  const m=new Map();
+  for(const x of subsList()){ if(op && (x.op||"—")!==op) continue; const f=subFee(x,from,toEx); if(f>0) m.set(x.op||"—",(m.get(x.op||"—")||0)+f); }
+  return m;
+}
+// bornes de la période choisie dans l'inventaire
+function periodBounds(){
+  const per=$("fPer").value, tm=tomorrowIso();
+  if(/^\d{4}$/.test(per)) return [per+"-01-01", (+per+1)+"-01-01"<tm ? (+per+1)+"-01-01" : tm];
+  if(/^last(\d+)$/.test(per)){ const d=new Date(); d.setMonth(d.getMonth()-(+per.slice(4))); return [`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, tm]; }
+  const starts=[...S.sessions.map(s=>s.start.slice(0,10)), ...subsList().map(x=>x.from)].sort();
+  return [starts[0]||todayIso(), tm];
+}
+function renderSubs(){
+  const L=subsList().slice().sort((a,b)=>a.from<b.from?1:-1);
+  $("subTbl").innerHTML=L.length?`<tr><th>Opérateur</th><th>Formule</th><th class="n">Montant</th><th>Période</th><th class="n">Payé à ce jour</th><th class="n">Recharges</th><th class="n">€/kWh sans abo</th><th class="n">€/kWh avec abo</th><th></th></tr>`+L.map(x=>{
+    const toEx=x.to?isoU(dU(x.to)+86400000):tomorrowIso(), paid=subFee(x,x.from,toEx);
+    const R=S.sessions.filter(s=>s.type!=="maison" && (s.op||"—")===(x.op||"—") && s.start.slice(0,10)>=x.from && s.start.slice(0,10)<toEx && costOf(s)!=null);
+    const k=R.reduce((a,s)=>a+s.kwh,0), c=R.reduce((a,s)=>a+costOf(s),0);
+    return `<tr><td>${esc(x.op||"—")}</td><td>${esc(x.name||"")}</td><td class="n">${fmtE(x.amt)} / ${x.per}</td>
+      <td class="d">${fmtDay(x.from)} → ${x.to?fmtDay(x.to):"en cours"}</td><td class="n">${fmtE(paid)}</td>
+      <td class="n">${R.length} · ${fmtN(k,0)} kWh</td><td class="n">${k?fmtN(c/k,3):"—"}</td><td class="n">${k?fmtN((c+paid)/k,3):"—"}</td>
+      <td class="act"><button type="button" class="mini" data-sdel="${esc(x.id)}">Supprimer</button></td></tr>`; }).join("")
+    : `<tr><td class="empty">Aucun abonnement. Exemple : Ionity Passport, 11,99 € par mois depuis le 01/05/2026.</td></tr>`;
+}
+$("sFrom").value=todayIso();
+$("sAdd").onclick=()=>{
+  const x={id:"a"+Date.now().toString(36), op:$("sOp").value.trim(), name:$("sName").value.trim(), amt:num($("sAmt").value), per:$("sPer").value, from:$("sFrom").value, to:$("sTo").value||null};
+  if(!x.op||x.amt==null||!x.from){ $("subMsg").textContent="Indique au moins l'opérateur, le montant et la date de début."; return; }
+  if(x.to && x.to<x.from){ $("subMsg").textContent="La fin est avant le début."; return; }
+  S.settings.subs=[...subsList(),x]; $("subMsg").textContent=""; ["sOp","sName","sAmt","sTo"].forEach(id=>$(id).value="");
+  render(); pushSettings();
+};
+$("subTbl").addEventListener("click",e=>{ const b=e.target.closest("[data-sdel]"); if(!b) return; S.settings.subs=subsList().filter(x=>x.id!==b.dataset.sdel); render(); pushSettings(); });
+
 function filtered(){
   const per=$("fPer").value, ty=$("fType").value, op=$("fOp").value, q=$("fQ").value.trim().toLowerCase();
   let from="", to="9999";
@@ -729,7 +797,7 @@ function renderFilters(){
   $("opList").innerHTML=[...new Set([...OPS.map(o=>o[1]),...S.sessions.map(s=>s.op).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"fr")).map(o=>`<option value="${esc(o)}">`).join("");
 }
 function render(){
-  renderFilters(); renderKm();
+  renderFilters(); renderKm(); renderSubs();
   const L=filtered();
   const kwh=L.reduce((a,s)=>a+s.kwh,0), costs=L.map(costOf), cost=costs.reduce((a,c)=>a+(c||0),0);
   const priced=L.filter(s=>costOf(s)!=null), pkwh=priced.reduce((a,s)=>a+s.kwh,0);
@@ -738,11 +806,14 @@ function render(){
   const ac=away.reduce((a,s)=>a+(costOf(s)||0),0), akp=away.filter(s=>costOf(s)!=null).reduce((a,s)=>a+s.kwh,0);
   const hc=home.reduce((a,s)=>a+(costOf(s)||0),0);
   const estHome=home.some(s=>s.cost==null);
+  // abonnements sur la période (pas pour le filtre « Maison », ni avec une recherche texte)
+  const [pf,pt]=periodBounds(), SUB=$("fType").value==="maison"||$("fQ").value.trim() ? new Map() : subsOn(pf,pt,$("fOp").value);
+  const abo=[...SUB.values()].reduce((a,v)=>a+v,0);
   $("tiles").innerHTML=[
-    [L.length,"recharges"],[fmtN(kwh,0)+" kWh","énergie"],[(estHome?"≈ ":"")+fmtE(cost),"coût total"],
-    [pkwh?fmtN(cost/pkwh,3)+" €":"—","prix moyen au kWh"],
+    [L.length,"recharges"],[fmtN(kwh,0)+" kWh","énergie"],[(estHome?"≈ ":"")+fmtE(cost+abo),abo?`coût total, dont ${fmtE(abo)} d'abonnements`:"coût total"],
+    [pkwh?fmtN((cost+abo)/pkwh,3)+" €":"—",abo?"prix moyen au kWh, abonnements compris":"prix moyen au kWh"],
     [hk+ak?Math.round(hk/(hk+ak)*100)+" %":"—",`à la maison (${fmtN(hk,0)} kWh · ${estHome?"≈ ":""}${fmtE(hc)})`],
-    [akp?fmtN(ac/akp,3)+" €":"—",`en déplacement, au kWh (${fmtN(ak,0)} kWh · ${fmtE(ac)})`]
+    [akp?fmtN((ac+abo)/akp,3)+" €":"—",`en déplacement, au kWh${abo?" abonnements compris":""} (${fmtN(ak,0)} kWh · ${fmtE(ac+abo)})`]
   ].map(([b,s])=>`<div class="tile"><b>${b}</b><span>${s}</span></div>`).join("");
   // par mois
   const M=new Map();
@@ -754,9 +825,10 @@ function render(){
      <td class="n">${fmtE(o.c)}</td></tr>`).join(""):`<tr><td class="empty">Rien sur cette période</td></tr>`;
   // par opérateur
   const O=new Map();
-  for(const s of L){ const k=s.type==="maison"?(S.settings.homeName||"Maison"):(s.op||"—"); const o=O.get(k)||{n:0,k:0,c:0,ck:0}; o.n++; o.k+=s.kwh; const c=costOf(s); if(c!=null){ o.c+=c; o.ck+=s.kwh; } O.set(k,o); }
-  $("byOp").innerHTML=O.size?`<tr><th>Opérateur</th><th class="n">Nb</th><th class="n">kWh</th><th class="n">€</th><th class="n">€/kWh</th></tr>`+[...O].sort((a,b)=>b[1].k-a[1].k).map(([k,o])=>
-    `<tr><td>${esc(k)}</td><td class="n">${o.n}</td><td class="n">${fmtN(o.k,0)}</td><td class="n">${fmtE(o.c)}</td><td class="n">${o.ck?fmtN(o.c/o.ck,3):"—"}</td></tr>`).join(""):`<tr><td class="empty">—</td></tr>`;
+  for(const s of L){ const k=s.type==="maison"?(S.settings.homeName||"Maison"):(s.op||"—"); const o=O.get(k)||{n:0,k:0,c:0,ck:0,a:0}; o.n++; o.k+=s.kwh; const c=costOf(s); if(c!=null){ o.c+=c; o.ck+=s.kwh; } O.set(k,o); }
+  for(const [k,v] of SUB){ const o=O.get(k)||{n:0,k:0,c:0,ck:0,a:0}; o.a+=v; O.set(k,o); }   // un abonnement sans recharge reste visible
+  $("byOp").innerHTML=O.size?`<tr><th>Opérateur</th><th class="n">Nb</th><th class="n">kWh</th><th class="n">€ recharges</th>${abo?`<th class="n">€ abo.</th>`:""}<th class="n">€/kWh${abo?" tout compris":""}</th></tr>`+[...O].sort((a,b)=>b[1].k-a[1].k||b[1].a-a[1].a).map(([k,o])=>
+    `<tr><td>${esc(k)}</td><td class="n">${o.n}</td><td class="n">${fmtN(o.k,0)}</td><td class="n">${fmtE(o.c)}</td>${abo?`<td class="n">${o.a?fmtE(o.a):"—"}</td>`:""}<td class="n">${o.ck?fmtN((o.c+o.a)/o.ck,3):"—"}</td></tr>`).join(""):`<tr><td class="empty">—</td></tr>`;
   // liste
   $("list").innerHTML=L.length?`<tr><th>Date</th><th>Type</th><th>Opérateur</th><th>Lieu</th><th class="n">kWh</th><th class="n">€</th><th class="n">€/kWh</th><th class="n">Durée</th><th></th></tr>`+L.map(s=>{
     const c=costOf(s), d=new Date(s.start), dur=s.end?Math.round((new Date(s.end)-d)/60000):null;
@@ -818,10 +890,11 @@ function kmStats(a,b){
   const allA=S.sessions.filter(s=>s.type!=="maison" && costOf(s)!=null), avgAll=allA.reduce((x,s)=>x+s.kwh,0) ? allA.reduce((x,s)=>x+costOf(s),0)/allA.reduce((x,s)=>x+s.kwh,0) : null;
   const avgA=akp>0 ? ac/akp : avgAll;
   const acFull=ac + (ak-akp)*(avgA??0);
+  const subs=[...subsOn(a.d,b.d).values()].reduce((x,v)=>x+v,0);
   const kmH=tk?km*hk/tk:0, kmA=tk?km*ak/tk:0;
   const fuel=(+S.settings.fuelPrice||0)*(+S.settings.fuelCons||0)/100;   // €/km thermique
   return {km,n:L.length,hk,ak,tk,hc,ac:acFull,acKnown:ac,noPrice:noPrice.length,est:H.some(s=>s.cost==null)||noPrice.length>0,
-    cost:hc+acFull, kmH, kmA, perKm:km>0?(hc+acFull)/km:null, perKmH:kmH>0?hc/kmH:null, perKmA:kmA>0&&avgA!=null?acFull/kmA:null, unknownA:ak>akp&&avgA==null,
+    subs, cost:hc+acFull+subs, kmH, kmA, perKm:km>0?(hc+acFull+subs)/km:null, perKmH:kmH>0?hc/kmH:null, perKmA:kmA>0&&avgA!=null?(acFull+subs)/kmA:null, unknownA:ak>akp&&avgA==null,
     cons:km>0?tk/km*100:null, fuel, fuelCost:fuel*km};
 }
 function renderKm(){
@@ -839,10 +912,10 @@ function renderKm(){
   $("kmTiles").innerHTML=[
     [T.km.toLocaleString("fr-FR")+" km","parcourus"],[fmtN(T.tk,0)+" kWh",`rechargés (${T.n} recharges)`],
     [T.cons!=null?fmtN(T.cons,1):"—","kWh rechargés / 100 km (pertes de charge comprises)"],
-    [(T.est?"≈ ":"")+fmtE(T.cost),"coût de l'électricité"],
+    [(T.est?"≈ ":"")+fmtE(T.cost),T.subs?`coût de l'électricité, dont ${fmtE(T.subs)} d'abonnements`:"coût de l'électricité"],
     [(T.est?"≈ ":"")+e(T.perKm),"par km, tout compris"],
     [e(T.perKmH),`par km à la maison (${fmtN(T.kmH,0)} km)`],
-    [e(T.perKmA),`par km en déplacement (${fmtN(T.kmA,0)} km)`],
+    [e(T.perKmA),`par km en déplacement${T.subs?", abonnements compris":""} (${fmtN(T.kmA,0)} km)`],
     [e(T.fuel),`par km en thermique (${fmtN(+S.settings.fuelCons||0,1)} L à ${fmtN(+S.settings.fuelPrice||0,2)} €)`],
     [fmtE(save),save>=0?`économisés vs thermique (${T.fuelCost?Math.round(save/T.fuelCost*100):0} %)`:"de plus qu'en thermique"]
   ].map(([b,t])=>`<div class="tile"><b>${b}</b><span>${t}</span></div>`).join("");
@@ -853,12 +926,12 @@ function renderKm(){
   $("kmWarn").textContent=W.join(" ");
   // détail entre relevés successifs
   const rowsK=[]; for(let k=i;k<j;k++) rowsK.push([O[k],O[k+1],kmStats(O[k],O[k+1])]);
-  $("kmTbl").innerHTML=`<tr><th>Période</th><th class="n">km</th><th class="n">kWh</th><th class="n">kWh/100</th><th class="n">€ maison</th><th class="n">€ dépl.</th><th class="n">€/km</th><th class="n">€ thermique</th><th class="n">Écart</th></tr>`+
+  $("kmTbl").innerHTML=`<tr><th>Période</th><th class="n">km</th><th class="n">kWh</th><th class="n">kWh/100</th><th class="n">€ maison</th><th class="n">€ dépl.</th><th class="n">€ abo.</th><th class="n">€/km</th><th class="n">€ thermique</th><th class="n">Écart</th></tr>`+
     rowsK.map(([a,b,t])=>`<tr><td class="d">${fmtDay(a.d)} → ${fmtDay(b.d)}</td><td class="n">${t.km.toLocaleString("fr-FR")}</td><td class="n">${fmtN(t.tk,0)}</td>
-      <td class="n">${t.cons!=null?fmtN(t.cons,1):"—"}</td><td class="n">${fmtE(t.hc)}</td><td class="n">${t.unknownA?"?":(t.noPrice?"≈ ":"")+fmtE(t.ac)}</td><td class="n">${t.perKm!=null?fmtN(t.perKm,3):"—"}</td>
+      <td class="n">${t.cons!=null?fmtN(t.cons,1):"—"}</td><td class="n">${fmtE(t.hc)}</td><td class="n">${t.unknownA?"?":(t.noPrice?"≈ ":"")+fmtE(t.ac)}</td><td class="n">${t.subs?fmtE(t.subs):"—"}</td><td class="n">${t.perKm!=null?fmtN(t.perKm,3):"—"}</td>
       <td class="n">${fmtE(t.fuelCost)}</td><td class="n">${fmtE(t.fuelCost-t.cost)}</td></tr>`).join("")+
     (rowsK.length>1?`<tr><td><b>Total</b></td><td class="n"><b>${T.km.toLocaleString("fr-FR")}</b></td><td class="n"><b>${fmtN(T.tk,0)}</b></td><td class="n"><b>${T.cons!=null?fmtN(T.cons,1):"—"}</b></td>
-      <td class="n"><b>${fmtE(T.hc)}</b></td><td class="n"><b>${fmtE(T.ac)}</b></td><td class="n"><b>${T.perKm!=null?fmtN(T.perKm,3):"—"}</b></td><td class="n"><b>${fmtE(T.fuelCost)}</b></td><td class="n"><b>${fmtE(save)}</b></td></tr>`:"");
+      <td class="n"><b>${fmtE(T.hc)}</b></td><td class="n"><b>${fmtE(T.ac)}</b></td><td class="n"><b>${T.subs?fmtE(T.subs):"—"}</b></td><td class="n"><b>${T.perKm!=null?fmtN(T.perKm,3):"—"}</b></td><td class="n"><b>${fmtE(T.fuelCost)}</b></td><td class="n"><b>${fmtE(save)}</b></td></tr>`:"");
 }
 $("oDate").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
 $("oAdd").onclick=()=>{
