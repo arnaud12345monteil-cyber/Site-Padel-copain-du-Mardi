@@ -320,6 +320,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .pin{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font:700 12px var(--f-mono);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .plab{position:absolute;left:30px;top:3px;white-space:nowrap;background:#fff;color:#16202c;border:1px solid #c9d1dc;border-radius:6px;padding:1px 6px;font:600 11px var(--f-mono);box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none}
 .leaflet-tooltip.maptip{font:13px/1.45 var(--f-body);width:max-content;max-width:min(340px,80vw);white-space:normal;padding:8px 10px}
+.pin.pz{background:#5b6878}
 .pin.s{background:#16202c}.pin.e{background:#b3261e}.pin.c{background:#0d8a5f}.pin.v{background:#1f4fd8;font-size:10px}
 .field{display:grid;gap:4px}
 .field>label{font-size:.88rem;font-weight:500}
@@ -690,6 +691,11 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.25.3", d:"31/10/2026", c:[
+    "Historique de la voiture : quand la journée du jour est vide, l'onglet explique pourquoi (PC qui ne synchronise plus, psa_car_controller arrêté, ou aucune donnée nouvelle de la voiture depuis telle date)",
+    "trajetve_voiture.py : envoie à chaque synchronisation un compte rendu (heure, psa_car_controller joignable, date de la dernière donnée voiture)"]},
+  {v:"2.25.2", d:"31/10/2026", c:[
+    "Arrêt imposé par la règle de temps sans besoin de recharger (mode « juste assez ») : affiché comme une pause (« pause · 42 % ») au lieu de « 42 → 42 % », avec une durée de pause (durée minimale d'arrêt, ou 15 min par défaut) comptée dans les pauses et non dans les recharges"]},
   {v:"2.25.1", d:"30/10/2026", c:[
     "Carte : boutons « Trajet », « Voiture » et « Les deux » sous le zoom pour passer d'un cadrage à l'autre"]},
   {v:"2.25", d:"30/10/2026", c:[
@@ -1392,7 +1398,10 @@ function simulate(R,C,p){
       if(want>soc+0.5){ socOut=want; overCap=true; }
       else return {error:`Aucune borne utilisable plus loin sur le trajet avec tes réglages (la seule possible est à ${fmtKm(c.km)}, batterie déjà à ${Math.round(soc)} %). Ajoute des opérateurs, baisse la puissance minimale, décoche « Rester sur l'autoroute » ou augmente la distance max de la route.`, partial:steps};
     }
-    soc=socOut; t+=dur*60; chargeSec+=dur*60;
+    // Règle de temps sans besoin de recharger (mode « juste assez ») : c'est une pause, pas une recharge
+    const isPause = reason==="time" && socOut<=soc+0.5 && !ov;
+    if(isPause) dur=Math.max(dur, p.useMinStop ? p.minStop : 15);
+    soc=socOut; t+=dur*60; if(isPause) pauseSec+=dur*60; else chargeSec+=dur*60;
     curve.push([c.km,soc]);
     const kwhBilled=Math.max(0,(socOut-socIn))/100*p.cap/EFF, price=pr(c), cost=kwhBilled*price;
     costTot+=cost; kwhCharged+=kwhBilled;
@@ -1403,7 +1412,7 @@ function simulate(R,C,p){
                : reason==="via" ? {ok:true, txt:"batterie minimale à l'étape suivante"} : {ok:true, txt:"% d'arrivée souhaité"};
     // borne choisie à la main : la borne d'origine revient en tête des alternatives, la borne choisie en sort
     const altsOut = forced ? [altOf(c0,[...(c0.flags||[]),...winFlag(c0)],["orig"]), ...alts.filter(x=>x.id!==c.id)] : alts;
-    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, ov:!!ov, origId, forced, rule, alts: altsOut, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
+    steps.push({type:"stop", c, t:arrive, socIn, socOut, dur, pause:isPause, ov:!!ov, origId, forced, rule, alts: altsOut, kwhBilled, price, cost, reason, late, over: p.useTime && driveFromRef(c)>p.maxMin+0.5 ? Math.round(driveFromRef(c)-p.maxMin) : 0, lastLeg, effKW:effKW(c), kwUnknown:c.kw==null});
     // détour retour
     soc-=pct(c.det*kDet); kwh+=c.det*kDet; t+=c.det/DET_KMH*3600; driveSec+=c.det/DET_KMH*3600;
     i=c.idx; tRef=c.idx;
@@ -1461,8 +1470,8 @@ const altGoodTxt=g=>{ const [k,v]=g.split(":"); return ({orig:"↺ borne d'origi
 function stopInfo(s,k,clk,leg){
   const c=s.c;
   return `<b>Arrêt ${k} · ${esc(c.name)}</b><br>${esc([c.operator,c.kw?Math.round(c.kw)+" kW":"",c.onAire?"sur aire":""].filter(Boolean).join(" · "))}`
-    + `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b>, recharge jusqu'à <b>${Math.round(s.socOut)} %</b>`
-    + `<br>Arrêt de ${Math.round(s.dur)} min, départ ${clk(s.t+s.dur*60)}`
+    + (s.pause ? `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b> · <b>pause</b>, pas de recharge nécessaire` : `<br>Arrivée ${clk(s.t)} avec <b>${Math.round(s.socIn)} %</b>, recharge jusqu'à <b>${Math.round(s.socOut)} %</b>`)
+    + `<br>${s.pause?"Pause":"Arrêt"} de ${Math.round(s.dur)} min, départ ${clk(s.t+s.dur*60)}`
     + (s.cost!=null && s.kwhBilled>0.05 ? `<br>${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}` : "")
     + (leg ? `<br>Depuis l'arrêt précédent : ${fmtKm(leg.km)} · ${fmtH(leg.sec)} de route` : "")
     + (s.rule ? `<br><i>${esc(s.rule.txt)}</i>` : "")
@@ -1493,7 +1502,7 @@ function drawMap(R,C,res,a,b,showAll,dep){
       tip(m,h); m.bindPopup(h);
     }
     else if(s.type==="stop"){ k++;
-      const m=L.marker([s.c.lat,s.c.lon],{icon:pinIcon("c",k,`${Math.round(s.socIn)}→${Math.round(s.socOut)} %${legTxt?" · "+legTxt:""}`),zIndexOffset:1000}).addTo(layers);
+      const m=L.marker([s.c.lat,s.c.lon],{icon:pinIcon(s.pause?"c pz":"c",k,`${s.pause?"pause · "+Math.round(s.socIn)+" %":Math.round(s.socIn)+"→"+Math.round(s.socOut)+" %"}${legTxt?" · "+legTxt:""}`),zIndexOffset:1000}).addTo(layers);
       const h=stopInfo(s,k,clk,leg); tip(m,h);
       const n=(s.alts||[]).length;
       m.bindPopup(h + (!viewingSheet ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${s.forced?`<button type="button" class="mini primary" data-unforce="${esc(s.origId)}">Revenir à la borne d'origine</button>`:""}${n?`<button type="button" class="mini" data-showalts="${si}">Voir les ${n} autres bornes possibles</button>`:""}</div>` : ""));
@@ -1521,7 +1530,7 @@ function render(res,p,a,b){
     else if(s.type==="drive") html+=`<li class="drive">${`<div class="clock"></div><div class="rail"><span class="dot drive"></span></div><div class="item"><p>${fmtKm(s.km)} · ${fmtH(s.sec)} de route</p>${s.kwh!=null?`<p class="leg">${Math.round(s.from)} % → ${Math.round(s.to)} % · ${s.kwh.toFixed(1).replace(".",",")} kWh consommés · ${(s.kwh/Math.max(0.1,s.km)*100).toFixed(1).replace(".",",")} kWh/100 km</p>`:""}</div>`}</li>`;
     else if(s.type==="stop"){ k++;
       const c=s.c;
-      const chips=[`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
+      const chips=[s.pause?`<span class="chip">pause · ${Math.round(s.socIn)} %</span>`:`<span class="chip">${Math.round(s.socIn)} % → ${Math.round(s.socOut)} %</span>`,
         `<span class="chip kw">${c.kw?Math.round(c.kw)+" kW":"~"+Math.round(s.effKW)+" kW (non renseigné)"}</span>`,
         ...(s.cost!=null && s.kwhBilled>0.05 ? [`<span class="chip eur">${fmtEur(s.cost)} · ${s.kwhBilled.toFixed(1).replace(".",",")} kWh à ${fmtPrice(s.price)}</span>`] : []),
         s.rule ? `<span class="chip ${s.rule.ok?"rok":"why"}" title="${s.rule.ok?"dans la fenêtre de la règle":"hors de la fenêtre : aucune borne retenue n'y était, ou une autre priorité l'a emporté"}">${esc(s.rule.txt)}${s.rule.ok?"":` (${esc(s.rule.win)})`}</span>`
@@ -1547,7 +1556,7 @@ function render(res,p,a,b){
         <ul class="altlist">${(s.alts||[]).map((x,ai)=>`<li data-aire="${x.onAire?1:0}" data-ai="${ai}" title="Voir sur la carte"><div><b>${esc(x.name)}</b><span>${[x.operator, (x.kw?Math.round(x.kw)+" kW":"kW inconnu")+(x.eff&&x.kw&&x.eff<x.kw?` (${x.eff} pour ta voiture)`:""), fmtPrice(x.price)+"/kWh", (x.dkm>0?"+":"")+x.dkm+" km", x.drive+" min de route", "arrivée "+x.soc+" %", x.onAire?"sur aire":""].filter(Boolean).map(esc).join(" · ")}</span>
           <span class="altfl">${(x.good||[]).map(g=>`<i class="ok${g==="orig"?" orig":""}">${esc(altGoodTxt(g))}</i>`).join("")}${x.id===cheapId?'<i class="ok">la moins chère</i>':""}${x.id===fastId?'<i class="ok">la plus rapide</i>':""}${x.flags.length?x.flags.map(f=>`<i>${esc(altFlagTxt(f))}</i>`).join(""):'<i class="ok">respecte tes réglages</i>'}</span></div>
           <button type="button" class="mini" data-force="${esc(s.origId)}|${esc(x.id)}">Choisir</button></li>`).join("")}</ul></details>` : "";
-      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
+      html+=li(at(s.t),"charge",`<h3>Arrêt ${k} · ${esc(c.name)}</h3><p>${esc([c.operator,c.sockets.join(", ")].filter(Boolean).join(" · "))}</p><p>${s.pause?`Pause de ${Math.round(s.dur)} min (règle de temps), pas de recharge nécessaire, départ à ${at(s.t+s.dur*60)}`:s.dur<1?"Pause libre, aucune charge nécessaire":`Arrêt de ${Math.round(s.dur)} min, départ à ${at(s.t+s.dur*60)}`}${s.lastLeg?" · charge juste suffisante pour finir":""} · <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Maps</a></p><div class="chips">${chips.join("")}</div>${adj}${altHtml}`);
     }
     else if(s.type==="via"){ kv++;
       const vadj = lastCalcOk && !viewingSheet ? `<div class="adjust" data-via="${kv-1}"><span>Ajuster :</span><label>pause <input type="number" min="0" max="900" step="5" data-vpause value="${s.pause||""}" placeholder="0"> min</label><label>batterie min <input type="number" min="0" max="100" data-vmin value="${s.min??""}" placeholder="—"> %</label></div>` : "";
@@ -1563,7 +1572,7 @@ function render(res,p,a,b){
   const N=need(p), tiles=[[Math.round(N.tripPct)+" %","batterie pour le trajet",1],[Math.round(N.toCharge)+" %","à recharger en route",1]];
   if(res.summary){
     const S=res.summary;
-    tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont recharges"],...(S.pauseSec?[[fmtH(S.pauseSec),"dont pauses aux étapes"]]:[]),
+    tiles.push([fmtKm(S.km),"distance"],[fmtH(S.totalSec),"durée totale"],[fmtH(S.chargeSec),"dont recharges"],...(S.pauseSec?[[fmtH(S.pauseSec),"dont pauses"]]:[]),
       [String(S.stops),"arrêt"+(S.stops>1?"s":"")],...(S.cost!=null?[[fmtEur(S.cost),"coût des recharges",1],[fmtEur(S.cost/S.km*100),"coût /100 km"]]:[]),[at(S.totalSec),"arrivée"],[Math.round(S.soc)+" %","batterie à l'arrivée"],[S.avg.toFixed(1).replace(".",",")+" kWh","conso moyenne /100 km"]);
     drawChart(res.curve,p,S.km); $("chartPanel").hidden=false;
   } else $("chartPanel").hidden=true;
@@ -2340,6 +2349,20 @@ function socChart(pts,etats,key="soc"){
 }
 const tripRows=T=>`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th></tr></thead><tbody>${T.map(t=>`<tr><td>${fmtDT(carDate(t.t))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td></tr>`).join("")}</tbody></table></div>`;
 const chargeRows=C=>`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${C.map(c=>`<tr><td>${fmtDT(carDate(c.t))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"en cours"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`;
+// Jour vide : explique pourquoi (PC arrêté, psa_car_controller arrêté, ou voiture garée qui n'envoie rien)
+async function histWhyEmpty(day){
+  if(day!==isoDay(new Date())) return "";
+  let H=null;
+  try{ const s=await fb.db.collection("trajetve_car").doc(fb.auth.currentUser.uid).get(); H=s.exists?s.data().histSync:null; }catch(e){ return ""; }
+  const when=ms=>new Date(ms).toLocaleString("fr-FR",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"});
+  if(!H) return `<p class="note">Le PC n'a encore envoyé aucun compte rendu de synchronisation (version de trajetve_voiture.py antérieure à la 2.25.3, ou service arrêté).</p>`;
+  const L=[], age=Date.now()-H.at;
+  if(age>30*60000) L.push(`<b>Le PC n'a pas synchronisé depuis ${when(H.at)}</b> (${agoTxt(age)}). Vérifie que trajetve_voiture.py tourne : tant qu'il est arrêté, rien n'est historisé.`);
+  else L.push(`Dernière synchronisation du PC : ${agoTxt(age)}.`);
+  if(!H.psacc) L.push(`<b>psa_car_controller ne répondait pas</b> lors de cette synchronisation : il doit tourner en même temps que trajetve_voiture.py, c'est lui qui interroge Stellantis et enregistre les positions.`);
+  if(H.carAt && H.psacc && age<=30*60000){ const d=new Date(H.carAt); if(isoDay(d)!==day) L.push(`Dernière donnée envoyée par la voiture : <b>${when(H.carAt)}</b>. Rien de nouveau depuis : une voiture garée et endormie ne remonte pas d'information, la journée se remplira au prochain trajet ou à la prochaine recharge.`); }
+  return `<p class="note">${L.join("<br>")}</p>`;
+}
 async function loadHistDay(){
   const day=$("hDay").value, box=$("hDayBody"), msg=$("hMsg");
   if(!fb || !fb.auth.currentUser){ msg.className="note status err"; msg.textContent="Connecte-toi (bandeau en haut du panneau) pour voir l'historique."; return; }
@@ -2351,7 +2374,7 @@ async function loadHistDay(){
     const T=tr.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1), C=ch.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1);
     histDayData={day,pts,et};
     msg.textContent="";
-    if(!pts.length && !et.length && !T.length && !C.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>`; return; }
+    if(!pts.length && !et.length && !T.length && !C.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>${await histWhyEmpty(day)}`; return; }
     const kms=pts.map(x=>x.km).filter(v=>v!=null), socs=[...pts,...et].map(x=>x.soc).filter(v=>v!=null), temps=[...pts,...et].map(x=>x.temp).filter(v=>v!=null);
     const last=et[et.length-1]||{};
     const card=(v,l)=>`<div class="car-card"><b>${v}</b><span>${l}</span></div>`;
