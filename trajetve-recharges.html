@@ -141,11 +141,11 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
   <!-- Import -->
   <section class="panel" id="importPanel">
-    <header><h2>Importer</h2><p class="note">CSV de la wallbox ou d'un opérateur, captures d'écran d'une appli, sauvegarde JSON</p></header>
+    <header><h2>Importer</h2><p class="note">CSV ou PDF de Free2Move ou d'un opérateur, captures d'écran d'une appli, sauvegarde JSON</p></header>
     <label class="drop" id="drop">
       <b>Déposer des fichiers ici ou toucher pour choisir</b>
-      <span class="note">Plusieurs fichiers à la fois possibles · .csv, .txt, .json, images (PNG, JPG)</span>
-      <input type="file" id="files" multiple accept=".csv,.txt,.json,image/*">
+      <span class="note">Plusieurs fichiers à la fois possibles · .csv, .pdf, .json, images (PNG, JPG)</span>
+      <input type="file" id="files" multiple accept=".csv,.txt,.json,.pdf,application/pdf,image/*">
     </label>
     <div class="row">
       <label>Opérateur si non reconnu <small>(captures et CSV sans colonne opérateur)</small>
@@ -185,6 +185,42 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     </div>
     <h3>Toutes les recharges</h3>
     <div class="tbl"><table id="list"></table></div>
+  </section>
+
+  <!-- Coût au kilomètre -->
+  <section class="panel" id="kmPanel">
+    <header><h2>Coût au kilomètre</h2><p class="note">À partir des relevés du compteur et des recharges importées</p></header>
+    <div class="cols">
+      <div>
+        <h3>Relevés du compteur</h3>
+        <div class="row" style="margin-top:6px">
+          <label>Date<input type="date" id="oDate"></label>
+          <label>Compteur (km)<input type="number" id="oKm" min="0" step="1" inputmode="numeric"></label>
+          <button type="button" class="mini primary" id="oAdd">Ajouter</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button type="button" class="mini" id="oCar">Compteur de la voiture à cette date</button>
+          <span class="note" id="oCarMsg" role="status"></span>
+        </div>
+        <div class="tbl" style="margin-top:8px"><table id="odoTbl"></table></div>
+      </div>
+      <div>
+        <h3>Comparaison avec une voiture thermique</h3>
+        <div class="row" style="margin-top:6px">
+          <label>Prix du litre (€)<input type="number" id="tPrice" min="0" step="0.001"></label>
+          <label>Consommation (L/100 km)<input type="number" id="tCons" min="0" step="0.1"></label>
+        </div>
+        <h3 style="margin-top:12px">Période</h3>
+        <div class="row" style="margin-top:6px">
+          <label>Du relevé<select id="kFrom"></select></label>
+          <label>Au relevé<select id="kTo"></select></label>
+        </div>
+      </div>
+    </div>
+    <div class="tiles" id="kmTiles"></div>
+    <p class="note" id="kmWarn"></p>
+    <div class="tbl"><table id="kmTbl"></table></div>
+    <p class="note">Les recharges comptées sont celles faites entre le jour du premier relevé (inclus) et le jour du second (exclu). Les km sont répartis entre maison et déplacement au prorata des kWh rechargés. Sur une période courte, l'écart de batterie entre le début et la fin fausse le résultat : plus la période est longue, plus le chiffre est fiable.</p>
   </section>
 
   <!-- Réglages et sauvegarde -->
@@ -236,6 +272,15 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.4", d:"31/10/2026", c:[
+    "Relevés du compteur : bouton « Compteur de la voiture à cette date », qui reprend le kilométrage enregistré dans l'historique de la voiture (début de journée, ou dernier connu avant). La saisie à la main reste possible"]},
+  {v:"1.3", d:"31/10/2026", c:[
+    "Coût au kilomètre : relevés du compteur à plusieurs dates, coût par km sur la période choisie (global, à la maison, en déplacement), kWh rechargés aux 100 km, détail entre chaque relevé",
+    "Comparaison avec une voiture thermique (prix du litre et consommation) : coût équivalent et économie réalisée",
+    "Relevés et réglages thermiques synchronisés avec le compte et inclus dans la sauvegarde JSON"]},
+  {v:"1.2", d:"31/10/2026", c:[
+    "Import du rapport PDF Free2Move (« Session Report ») et de tout PDF dont le texte est sélectionnable",
+    "Export Free2Move (CSV ou PDF) : chaque recharge est classée maison (wallbox) ou en déplacement selon le numéro de chargeur ; l'opérateur est déduit de l'identifiant de borne (FR*IOY* = Ionity, FRALLEGO = Allego…)"]},
   {v:"1.1", d:"31/10/2026", c:[
     "Captures : appli Ionity (date « 30 mai 2026 », nom de la station au-dessus) et historiques mensuels où la date n'a pas d'année (« 31/01 11:40 - 12:38 », année lue dans « Janvier 2026 »)",
     "Captures : heure de fin lue quand elle est affichée, « IONITY » reconnu même mal lu (JONITY…), « kWh » mal lu toléré"]},
@@ -256,7 +301,7 @@ $("ver").textContent="v"+CHANGELOG[0].v;
 // ---------- Données ----------
 // Une recharge : {id, start:"AAAA-MM-JJTHH:MM" (heure locale), noTime, end, kwh, cost (null = estimé), op, lieu, type:"maison"|"exterieur", src, note, added}
 const LKEY="trajetve-recharges-v1";
-let S={sessions:[], settings:{homePrice:0.2, homeName:"Maison"}, dirty:[], deleted:[], known:[]};
+let S={sessions:[], settings:{homePrice:0.2, homeName:"Maison", odo:[], fuelPrice:1.8, fuelCons:6.5}, dirty:[], deleted:[], known:[]};
 try{ const o=JSON.parse(localStorage.getItem(LKEY)||"null"); if(o) S={...S,...o, settings:{...S.settings,...(o.settings||{})}}; }catch(e){}
 const saveLocal=()=>{ try{ localStorage.setItem(LKEY,JSON.stringify(S)); }catch(e){} };
 const byId=()=>new Map(S.sessions.map(s=>[s.id,s]));
@@ -402,9 +447,10 @@ function rowsFromCsv(rows, map, opts){
     const en=map.end!=null ? toLocal(parseDate(r[map.end]),opts.utc) : null;
     const cost=map.cost!=null ? num(r[map.cost]) : null;
     const lieuRaw=map.lieu!=null ? r[map.lieu] : "";
-    const op=(map.op!=null && r[map.op]) || guessOp(lieuRaw) || opts.op || "";
+    const type=opts.typeOf ? opts.typeOf(r) : opts.type;
+    const op=(opts.opOf && opts.opOf(r)) || (map.op!=null && r[map.op]) || guessOp(lieuRaw) || (type==="maison" ? "" : opts.op) || "";
     out.push({start:st.s, noTime:st.noTime, end:en?.s||null, kwh, cost:cost==null?null:cost,
-      op: opts.type==="maison" && !op ? "" : op, lieu: opts.type==="maison" ? (S.settings.homeName||"Maison") : lieuRaw, type:opts.type, src:opts.src, note:""});
+      op: type==="maison" ? "" : op, lieu: type==="maison" ? (S.settings.homeName||"Maison") : lieuRaw.replace(/^"|"$/g,"").trim(), type, src:opts.src, note:""});
   }
   return out;
 }
@@ -483,6 +529,66 @@ async function ocr(file, onProg){
   return r.data.text;
 }
 
+// ---------- Free2Move (export CSV ou rapport PDF « Session Report ») ----------
+// Colonnes : Horaire de début, Horaire de fin, Durée, Energie (kwh), Numéro de chargeur, RFID, Coût, Lieu… (heures en UTC)
+// Numéro de chargeur : identifiant de borne publique (FR*IOY*E402752, FRALLEGO…) = recharge en déplacement ; sinon la wallbox de la maison.
+const isF2M=head=>head.some(h=>/horaire de d[ée]but/i.test(h)) && head.some(h=>/num[ée]ro de chargeur/i.test(h));
+const EVSE_OP={IOY:"Ionity",ALL:"Allego",ALLEGO:"Allego",TES:"Tesla",TSL:"Tesla",FST:"Fastned",FAS:"Fastned",ELC:"Electra",ELE:"Electra",ATL:"Atlante",IZI:"Izivia",
+  TCB:"TotalEnergies",TOT:"TotalEnergies",PWD:"Powerdot",ENG:"Engie Vianeo",VIA:"Engie Vianeo",LDL:"Lidl",ZUN:"Zunder",FRE:"Freshmile",STE:"Stations-e"};
+const isPublicEvse=id=>/^[A-Z]{2}[*\-]?[A-Z]{3}/i.test((id||"").trim());
+function evseOp(id){
+  const m=(id||"").trim().toUpperCase().match(/^[A-Z]{2}[*\-]?([A-Z0-9]{3,6})/); if(!m) return "";
+  for(const k of [m[1],m[1].slice(0,3)]) if(EVSE_OP[k]) return EVSE_OP[k];
+  return "";
+}
+function f2mRows(rows,hi,defOp){
+  const head=rows[hi], col=rx=>head.findIndex(h=>rx.test(h));
+  const map={start:col(/horaire de d[ée]but/i), end:col(/horaire de fin/i), kwh:col(/energie|kwh/i), cost:col(/co[uû]t/i), lieu:col(/^lieu$/i)};
+  const ch=col(/num[ée]ro de chargeur/i);
+  return rowsFromCsv(rows,map,{hi,utc:true,src:"free2move",op:defOp,
+    typeOf:r=>isPublicEvse(r[ch])?"exterieur":"maison", opOf:r=>evseOp(r[ch])});
+}
+function f2mMsg(r){ const h=r.filter(x=>x.type==="maison").length; return `export Free2Move, ${r.length} recharges (${h} à la maison, ${r.length-h} en déplacement, heures UTC converties)`; }
+// PDF : texte avec positions (pdf.js). Rapport Free2Move → lignes de tableau ; autre PDF → texte lu comme une capture.
+async function readPdf(file){
+  if(!window.pdfjsLib){
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const items=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const tc=await (await doc.getPage(p)).getTextContent();
+    for(const it of tc.items) if(it.str.trim()) items.push({p, x:it.transform[4], y:it.transform[5], s:it.str.trim()});
+  }
+  const fix=s=>{ try{ return /Ã|â/.test(s) ? decodeURIComponent(escape(s)) : s; }catch(e){ return s; } };   // accents mal encodés (« DurÃ©e »)
+  items.forEach(it=>it.s=fix(it.s));
+  // texte ligne par ligne (même page, même hauteur)
+  const byLine=[...items].sort((a,b)=>a.p-b.p||b.y-a.y||a.x-b.x), lines=[]; let cur=null;
+  for(const it of byLine){ if(cur && cur.p===it.p && Math.abs(cur.y-it.y)<3) cur.t.push(it.s); else { cur={p:it.p,y:it.y,t:[it.s]}; lines.push(cur); } }
+  const text=lines.map(l=>l.t.join("  ")).join("\n");
+  if(!/horaire de d[ée]but/i.test(text) || !/chargeur/i.test(text)) return {text};
+  // colonnes repérées par la position des en-têtes
+  const hx=rx=>{ const it=items.find(i=>rx.test(i.s)); return it?it.x:null; };
+  const X={kwh:hx(/^energie/i), ch:hx(/^num[ée]ro de/i), rfid:hx(/^rfid$/i), cost:hx(/^co[uû]t/i), lieu:hx(/^lieu$/i), pay:hx(/^moyen de/i)};
+  const DT=/^\d{2}\/\d{2}\/\d{4} \d{1,2}:\d{2}$/;
+  const anchors=items.filter(i=>DT.test(i.s) && i.x<(X.kwh||120)-40).sort((a,b)=>a.p-b.p||b.y-a.y);
+  const starts=anchors.filter((a,k)=>!(k && anchors[k-1].p===a.p && anchors[k-1].y-a.y<15));   // la 2e date sous chaque début = fin
+  const rows=[["Horaire de début","Horaire de fin","Energie (kwh)","Numéro de chargeur","Coût","Lieu"]];
+  starts.forEach((a,k)=>{
+    const nx=starts[k+1], inRec=i=>i.p===a.p && i.y<=a.y+2 && (!nx || nx.p!==a.p || i.y>nx.y+2) && i.y>a.y-45;
+    const its=items.filter(inRec).sort((u,v)=>v.y-u.y||u.x-v.x);
+    const inCol=(lo,hi)=>its.filter(i=>i.x>=lo && (hi==null||i.x<hi));
+    const dts=its.filter(i=>DT.test(i.s) && i.x<(X.kwh||120)-40);
+    const kwh=inCol((X.kwh||140)-10,(X.ch||195)-10).map(i=>i.s).find(s=>/^\d+([.,]\d+)?$/.test(s))||"";
+    const ch=inCol((X.ch||195)-10,(X.rfid||260)-15).map(i=>i.s).join("");
+    const cost=inCol((X.cost||305)-10,(X.cost||305)+40).map(i=>i.s).find(s=>/\d/.test(s))||"";
+    const lieu=inCol((X.cost||305)+40,(X.pay||470)-5).map(i=>i.s).join(" ").replace(/"/g,"").replace(/\s+/g," ").trim();
+    rows.push([dts[0]?.s||"", dts[1]?.s||"", kwh, ch, cost, lieu]);
+  });
+  return {rows,text};
+}
+
 // ---------- Import ----------
 let pending=[];   // lignes en attente de vérification
 function impMsg(t,cls){ $("impMsg").textContent=t; $("impMsg").className="note"+(cls?" "+cls:""); }
@@ -501,18 +607,18 @@ async function handleFiles(list){
         msgs.push(`${f.name} : ${r.length} recharge${r.length>1?"s":""} lue${r.length>1?"s":""}`);
         continue;
       }
+      if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
+        const P=await readPdf(f);
+        if(P.rows){ const r=f2mRows(P.rows,0,defOp); found.push(...r); msgs.push(`${f.name} : ${f2mMsg(r)}`); }
+        else{ const r=parseOcr(P.text,defOp,defType); found.push(...r); msgs.push(`${f.name} : ${r.length} recharge${r.length>1?"s":""} lue${r.length>1?"s":""} dans le PDF`); }
+        continue;
+      }
       const text=await f.text();
       if(/\.json$/i.test(f.name)||/^\s*[\[{]/.test(text)){ startRestore(text,f.name); continue; }
       const rows=parseCSV(text), hi=headerRow(rows);
       if(hi<0){ msgs.push(`${f.name} : aucune colonne d'énergie (kWh) trouvée`); continue; }
       const head=rows[hi], utc=/time ?zone utc|utc/i.test(rows.slice(0,hi+1).flat().join(" "));
-      // export de la wallbox : « Horaire de début, Horaire de fin, Durée, Energie (kwh), Numéro de chargeur… »
-      if(head.some(h=>/horaire de d[ée]but/i.test(h)) && head.some(h=>/num[ée]ro de chargeur/i.test(h))){
-        const map=guessMap(head); map.start=head.findIndex(h=>/horaire de d[ée]but/i.test(h)); map.end=head.findIndex(h=>/horaire de fin/i.test(h)); map.lieu=head.findIndex(h=>/^lieu$/i.test(h)); delete map.op;
-        const r=rowsFromCsv(rows,map,{hi,utc:true,type:"maison",src:"wallbox",op:""});
-        found.push(...r); msgs.push(`${f.name} : export de la wallbox, ${r.length} recharges (heures UTC converties)`);
-        continue;
-      }
+      if(isF2M(head)){ const r=f2mRows(rows,hi,defOp); found.push(...r); msgs.push(`${f.name} : ${f2mMsg(r)}`); continue; }
       // autre CSV : choix des colonnes
       await askMapping(f.name,rows,hi,utc,defOp).then(r=>{ if(r){ found.push(...r); msgs.push(`${f.name} : ${r.length} recharges`); } else msgs.push(`${f.name} : import annulé`); });
     }catch(e){ console.error(e); msgs.push(`${f.name} : lecture impossible (${e.message||e})`); }
@@ -623,7 +729,7 @@ function renderFilters(){
   $("opList").innerHTML=[...new Set([...OPS.map(o=>o[1]),...S.sessions.map(s=>s.op).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"fr")).map(o=>`<option value="${esc(o)}">`).join("");
 }
 function render(){
-  renderFilters();
+  renderFilters(); renderKm();
   const L=filtered();
   const kwh=L.reduce((a,s)=>a+s.kwh,0), costs=L.map(costOf), cost=costs.reduce((a,c)=>a+(c||0),0);
   const priced=L.filter(s=>costOf(s)!=null), pkwh=priced.reduce((a,s)=>a+s.kwh,0);
@@ -695,7 +801,116 @@ $("dlgDel").onclick=async()=>{
 };
 
 // ---------- Réglages, sauvegarde, restauration ----------
-function renderSettings(){ $("homePrice").value=S.settings.homePrice??""; $("homeName").value=S.settings.homeName||""; }
+function renderSettings(){ $("homePrice").value=S.settings.homePrice??""; $("homeName").value=S.settings.homeName||""; $("tPrice").value=S.settings.fuelPrice??""; $("tCons").value=S.settings.fuelCons??""; }
+
+// ---------- Coût au kilomètre ----------
+const odoList=()=>(S.settings.odo||[]).filter(o=>o&&o.d&&o.km>0).slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.km-b.km);
+const fmtDay=d=>new Date(d+"T12:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});
+// bilan entre deux relevés : km, kWh et coûts maison / déplacement, comparaison thermique
+function kmStats(a,b){
+  const km=b.km-a.km, L=S.sessions.filter(s=>s.start.slice(0,10)>=a.d && s.start.slice(0,10)<b.d);
+  const H=L.filter(s=>s.type==="maison"), A=L.filter(s=>s.type!=="maison");
+  const sum=(arr,f)=>arr.reduce((x,s)=>x+(f(s)||0),0);
+  const hk=sum(H,s=>s.kwh), ak=sum(A,s=>s.kwh), tk=hk+ak;
+  const hc=sum(H,costOf), ac=sum(A,costOf), noPrice=A.filter(s=>costOf(s)==null);
+  const akp=ak-sum(noPrice,s=>s.kwh);                           // kWh en déplacement dont on connaît le prix
+  // recharges sans prix : prix moyen des autres recharges en déplacement de la période, sinon de tout l'historique
+  const allA=S.sessions.filter(s=>s.type!=="maison" && costOf(s)!=null), avgAll=allA.reduce((x,s)=>x+s.kwh,0) ? allA.reduce((x,s)=>x+costOf(s),0)/allA.reduce((x,s)=>x+s.kwh,0) : null;
+  const avgA=akp>0 ? ac/akp : avgAll;
+  const acFull=ac + (ak-akp)*(avgA??0);
+  const kmH=tk?km*hk/tk:0, kmA=tk?km*ak/tk:0;
+  const fuel=(+S.settings.fuelPrice||0)*(+S.settings.fuelCons||0)/100;   // €/km thermique
+  return {km,n:L.length,hk,ak,tk,hc,ac:acFull,acKnown:ac,noPrice:noPrice.length,est:H.some(s=>s.cost==null)||noPrice.length>0,
+    cost:hc+acFull, kmH, kmA, perKm:km>0?(hc+acFull)/km:null, perKmH:kmH>0?hc/kmH:null, perKmA:kmA>0&&avgA!=null?acFull/kmA:null, unknownA:ak>akp&&avgA==null,
+    cons:km>0?tk/km*100:null, fuel, fuelCost:fuel*km};
+}
+function renderKm(){
+  const O=odoList();
+  $("odoTbl").innerHTML=O.length?`<tr><th>Date</th><th class="n">Compteur</th><th class="n">Depuis le précédent</th><th></th></tr>`+O.map((o,k)=>
+    `<tr><td class="d">${fmtDay(o.d)}</td><td class="n">${o.km.toLocaleString("fr-FR")} km</td><td class="n">${k?"+ "+(o.km-O[k-1].km).toLocaleString("fr-FR")+" km":"—"}</td>
+     <td class="act"><button type="button" class="mini" data-odel="${k}">Supprimer</button></td></tr>`).join("")
+    :`<tr><td class="empty">Ajoute au moins deux relevés (par exemple le compteur au 1er janvier et aujourd'hui).</td></tr>`;
+  const opt=(sel,def)=>{ const v=sel.value; sel.innerHTML=O.map((o,k)=>`<option value="${k}">${fmtDay(o.d)} · ${o.km.toLocaleString("fr-FR")} km</option>`).join(""); sel.value=v!==""&&+v<O.length?v:String(def); };
+  opt($("kFrom"),0); opt($("kTo"),Math.max(0,O.length-1));
+  const i=+$("kFrom").value, j=+$("kTo").value;
+  if(O.length<2 || !(j>i)){ $("kmTiles").innerHTML=""; $("kmTbl").innerHTML=""; $("kmWarn").textContent=O.length>=2?"Choisis un second relevé postérieur au premier.":""; return; }
+  const T=kmStats(O[i],O[j]), e=v=>v==null?"—":fmtN(v,3)+" €";
+  const save=T.fuelCost-T.cost;
+  $("kmTiles").innerHTML=[
+    [T.km.toLocaleString("fr-FR")+" km","parcourus"],[fmtN(T.tk,0)+" kWh",`rechargés (${T.n} recharges)`],
+    [T.cons!=null?fmtN(T.cons,1):"—","kWh rechargés / 100 km (pertes de charge comprises)"],
+    [(T.est?"≈ ":"")+fmtE(T.cost),"coût de l'électricité"],
+    [(T.est?"≈ ":"")+e(T.perKm),"par km, tout compris"],
+    [e(T.perKmH),`par km à la maison (${fmtN(T.kmH,0)} km)`],
+    [e(T.perKmA),`par km en déplacement (${fmtN(T.kmA,0)} km)`],
+    [e(T.fuel),`par km en thermique (${fmtN(+S.settings.fuelCons||0,1)} L à ${fmtN(+S.settings.fuelPrice||0,2)} €)`],
+    [fmtE(save),save>=0?`économisés vs thermique (${T.fuelCost?Math.round(save/T.fuelCost*100):0} %)`:"de plus qu'en thermique"]
+  ].map(([b,t])=>`<div class="tile"><b>${b}</b><span>${t}</span></div>`).join("");
+  const W=[];
+  if(T.noPrice) W.push(T.unknownA ? `${T.noPrice} recharge${T.noPrice>1?"s":""} en déplacement sans prix et aucune autre pour estimer : leur coût n'est pas compté.` : `${T.noPrice} recharge${T.noPrice>1?"s":""} en déplacement sans prix : coût estimé au prix moyen des recharges en déplacement (de la période, ou de tout l'historique à défaut).`);
+  if(!T.n) W.push("Aucune recharge importée sur cette période : le coût est nul, ce qui est sûrement faux.");
+  else if(T.cons!=null && (T.cons<10||T.cons>35)) W.push(`Consommation de ${fmtN(T.cons,1)} kWh/100 km peu plausible : il manque probablement des recharges sur la période${T.cons<10?"":", ou un relevé est faux"}.`);
+  $("kmWarn").textContent=W.join(" ");
+  // détail entre relevés successifs
+  const rowsK=[]; for(let k=i;k<j;k++) rowsK.push([O[k],O[k+1],kmStats(O[k],O[k+1])]);
+  $("kmTbl").innerHTML=`<tr><th>Période</th><th class="n">km</th><th class="n">kWh</th><th class="n">kWh/100</th><th class="n">€ maison</th><th class="n">€ dépl.</th><th class="n">€/km</th><th class="n">€ thermique</th><th class="n">Écart</th></tr>`+
+    rowsK.map(([a,b,t])=>`<tr><td class="d">${fmtDay(a.d)} → ${fmtDay(b.d)}</td><td class="n">${t.km.toLocaleString("fr-FR")}</td><td class="n">${fmtN(t.tk,0)}</td>
+      <td class="n">${t.cons!=null?fmtN(t.cons,1):"—"}</td><td class="n">${fmtE(t.hc)}</td><td class="n">${t.unknownA?"?":(t.noPrice?"≈ ":"")+fmtE(t.ac)}</td><td class="n">${t.perKm!=null?fmtN(t.perKm,3):"—"}</td>
+      <td class="n">${fmtE(t.fuelCost)}</td><td class="n">${fmtE(t.fuelCost-t.cost)}</td></tr>`).join("")+
+    (rowsK.length>1?`<tr><td><b>Total</b></td><td class="n"><b>${T.km.toLocaleString("fr-FR")}</b></td><td class="n"><b>${fmtN(T.tk,0)}</b></td><td class="n"><b>${T.cons!=null?fmtN(T.cons,1):"—"}</b></td>
+      <td class="n"><b>${fmtE(T.hc)}</b></td><td class="n"><b>${fmtE(T.ac)}</b></td><td class="n"><b>${T.perKm!=null?fmtN(T.perKm,3):"—"}</b></td><td class="n"><b>${fmtE(T.fuelCost)}</b></td><td class="n"><b>${fmtE(save)}</b></td></tr>`:"");
+}
+$("oDate").value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+$("oAdd").onclick=()=>{
+  const d=$("oDate").value, km=Math.round(num($("oKm").value)||0);
+  if(!d||!(km>0)){ $("kmWarn").textContent="Indique la date et la valeur du compteur."; return; }
+  const O=odoList().filter(o=>o.d!==d), prev=O.filter(o=>o.d<d).pop(), next=O.find(o=>o.d>d);
+  if((prev&&km<prev.km)||(next&&km>next.km)){ $("kmWarn").textContent=`Ce relevé n'est pas cohérent avec les autres (${prev?`${prev.km.toLocaleString("fr-FR")} km le ${fmdOk(prev.d)}`:""}${prev&&next?", ":""}${next?`${next.km.toLocaleString("fr-FR")} km le ${fmdOk(next.d)}`:""}).`; return; }
+  S.settings.odo=[...O,{d,km}]; $("oKm").value="";
+  $("kTo").value=String(S.settings.odo.length-1); renderKm(); pushSettings();
+};
+const fmdOk=fmtDay;
+// Compteur lu dans l'historique de la voiture (Firebase, alimenté par trajetve_voiture.py) : valeur en début de journée,
+// pour rester cohérent avec les recharges comptées (du jour du relevé inclus au jour suivant exclu).
+async function carOdo(day){
+  const col=fb.db.collection("trajetve_car").doc(user.uid).collection("jours");
+  const kms=d=>{ const x=d.exists?d.data():{}; return [...(x.points||[]),...(x.etats||[])].filter(p=>p.km>0).sort((a,b)=>a.t<b.t?-1:1); };
+  const today=await col.doc(day).get(), k0=kms(today);
+  if(k0.length) return {km:k0[0].km, t:k0[0].t, same:true};
+  const d=new Date(day+"T12:00");
+  for(let n=1;n<=30;n++){                 // pas de donnée ce jour-là : dernier compteur connu avant
+    d.setDate(d.getDate()-1);
+    const k=kms(await col.doc(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`).get());
+    if(k.length) return {km:k[k.length-1].km, t:k[k.length-1].t, same:false};
+  }
+  // après la date (relevé le jour même pas encore remonté) : premier compteur des jours suivants
+  const f=new Date(day+"T12:00");
+  for(let n=1;n<=7;n++){
+    f.setDate(f.getDate()+1); if(f>new Date()) break;
+    const k=kms(await col.doc(`${f.getFullYear()}-${pad(f.getMonth()+1)}-${pad(f.getDate())}`).get());
+    if(k.length) return {km:k[0].km, t:k[0].t, same:false, after:true};
+  }
+  return null;
+}
+$("oCar").onclick=async()=>{
+  const m=$("oCarMsg"), day=$("oDate").value;
+  if(!day){ m.textContent="Choisis d'abord une date."; return; }
+  if(!fb||!user){ m.textContent="Connecte-toi (bandeau en haut) pour lire l'historique de la voiture."; return; }
+  m.textContent="Lecture de l'historique…"; $("oCar").disabled=true;
+  try{
+    const r=await carOdo(day);
+    if(!r){ $("oKm").value=""; m.textContent="Aucun kilométrage dans l'historique de la voiture autour de cette date : saisis-le à la main."; return; }
+    $("oKm").value=Math.round(r.km);
+    const when=new Date(r.t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    m.textContent=r.same ? `${Math.round(r.km).toLocaleString("fr-FR")} km relevés par la voiture le ${when} (premier relevé de la journée). Vérifie puis « Ajouter ».`
+      : `Pas de donnée ce jour-là : ${Math.round(r.km).toLocaleString("fr-FR")} km, ${r.after?"premier":"dernier"} compteur connu, le ${when}. Vérifie puis « Ajouter ».`;
+  }catch(e){ console.error(e); m.textContent=e.code==="permission-denied"?"Accès refusé à l'historique de la voiture (règle Firestore « trajetve_car »).":`Lecture impossible (${e.code||e.message}).`; }
+  finally{ $("oCar").disabled=false; }
+};
+$("odoTbl").addEventListener("click",e=>{ const b=e.target.closest("[data-odel]"); if(!b) return; const O=odoList(); O.splice(+b.dataset.odel,1); S.settings.odo=O; renderKm(); pushSettings(); });
+["kFrom","kTo"].forEach(id=>$(id).addEventListener("change",renderKm));
+$("tPrice").addEventListener("change",()=>{ S.settings.fuelPrice=num($("tPrice").value)||0; renderKm(); pushSettings(); });
+$("tCons").addEventListener("change",()=>{ S.settings.fuelCons=num($("tCons").value)||0; renderKm(); pushSettings(); });
 $("homePrice").addEventListener("change",()=>{ S.settings.homePrice=num($("homePrice").value)||0; render(); pushSettings(); });
 $("homeName").addEventListener("change",()=>{ S.settings.homeName=$("homeName").value.trim()||"Maison"; render(); pushSettings(); });
 function download(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
