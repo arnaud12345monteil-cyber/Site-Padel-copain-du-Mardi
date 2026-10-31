@@ -231,6 +231,7 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
       <label>Nom <small>(facultatif)</small><input id="sName" placeholder="ex. Passport"></label>
       <label>Montant (€)<input id="sAmt" type="number" min="0" step="0.01"></label>
       <label>Par<select id="sPer"><option value="mois">mois</option><option value="an">an</option></select></label>
+      <label>Prix du kWh sans abonnement (€) <small>(facultatif, pour savoir s'il est rentable)</small><input id="sPub" type="number" min="0" step="0.01"></label>
       <label>Début<input id="sFrom" type="date"></label>
       <label>Fin <small>(vide = en cours)</small><input id="sTo" type="date"></label>
       <button type="button" class="mini primary" id="sAdd">Ajouter</button>
@@ -288,6 +289,9 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.6", d:"31/10/2026", c:[
+    "Abonnements : colonnes renommées (« payé à la borne » = prix remisé déjà payé ; « abonnement compris » = ce prix plus l'abonnement réparti sur les kWh)",
+    "Prix du kWh sans abonnement (facultatif) : bilan en euros de l'abonnement (économisé ou perdu) et consommation mensuelle à partir de laquelle il est rentable"]},
   {v:"1.5", d:"31/10/2026", c:[
     "Abonnements par opérateur (montant par mois ou par an, début, fin facultative) : coût réparti au jour et ajouté aux totaux de l'inventaire, au tableau par opérateur (€/kWh tout compris) et au coût au kilomètre",
     "Pour chaque abonnement : montant payé à ce jour, recharges faites chez l'opérateur pendant l'abonnement et prix au kWh avec et sans l'abonnement"]},
@@ -757,22 +761,31 @@ function periodBounds(){
 }
 function renderSubs(){
   const L=subsList().slice().sort((a,b)=>a.from<b.from?1:-1);
-  $("subTbl").innerHTML=L.length?`<tr><th>Opérateur</th><th>Formule</th><th class="n">Montant</th><th>Période</th><th class="n">Payé à ce jour</th><th class="n">Recharges</th><th class="n">€/kWh sans abo</th><th class="n">€/kWh avec abo</th><th></th></tr>`+L.map(x=>{
+  $("subTbl").innerHTML=L.length?`<tr><th>Opérateur</th><th>Formule</th><th class="n">Montant</th><th>Période</th><th class="n">Abonnement payé</th><th class="n">Recharges</th>
+    <th class="n">€/kWh payé à la borne</th><th class="n">€/kWh abonnement compris</th><th class="n">€/kWh sans abonnement</th><th class="n">Bilan</th><th></th></tr>`+L.map(x=>{
     const toEx=x.to?isoU(dU(x.to)+86400000):tomorrowIso(), paid=subFee(x,x.from,toEx);
     const R=S.sessions.filter(s=>s.type!=="maison" && (s.op||"—")===(x.op||"—") && s.start.slice(0,10)>=x.from && s.start.slice(0,10)<toEx && costOf(s)!=null);
     const k=R.reduce((a,s)=>a+s.kwh,0), c=R.reduce((a,s)=>a+costOf(s),0);
     return `<tr><td>${esc(x.op||"—")}</td><td>${esc(x.name||"")}</td><td class="n">${fmtE(x.amt)} / ${x.per}</td>
       <td class="d">${fmtDay(x.from)} → ${x.to?fmtDay(x.to):"en cours"}</td><td class="n">${fmtE(paid)}</td>
       <td class="n">${R.length} · ${fmtN(k,0)} kWh</td><td class="n">${k?fmtN(c/k,3):"—"}</td><td class="n">${k?fmtN((c+paid)/k,3):"—"}</td>
+      <td class="n">${x.pub!=null?fmtN(x.pub,3):"—"}</td><td class="n">${bilan(x,k,c,paid)}</td>
       <td class="act"><button type="button" class="mini" data-sdel="${esc(x.id)}">Supprimer</button></td></tr>`; }).join("")
     : `<tr><td class="empty">Aucun abonnement. Exemple : Ionity Passport, 11,99 € par mois depuis le 01/05/2026.</td></tr>`;
 }
+// Bilan d'un abonnement : ce que les mêmes kWh auraient coûté au prix sans abonnement, comparé à prix remisé + abonnement
+function bilan(x,k,c,paid){
+  if(x.pub==null) return `<span class="note">indique le prix sans abonnement</span>`;
+  const g=k*x.pub-(c+paid), month=subDaily(x)*365/12, gainKwh=k?x.pub-c/k:null;
+  const seuil=gainKwh>0 ? ` · rentable à partir de ${fmtN(month/gainKwh,0)} kWh/mois` : "";
+  return `<b style="color:var(${g>=0?"--charge":"--bad"})">${g>=0?"+ ":"− "}${fmtE(Math.abs(g))}</b><br><span class="note">${g>=0?"économisés":"perdus"}${seuil}</span>`;
+}
 $("sFrom").value=todayIso();
 $("sAdd").onclick=()=>{
-  const x={id:"a"+Date.now().toString(36), op:$("sOp").value.trim(), name:$("sName").value.trim(), amt:num($("sAmt").value), per:$("sPer").value, from:$("sFrom").value, to:$("sTo").value||null};
+  const x={id:"a"+Date.now().toString(36), op:$("sOp").value.trim(), name:$("sName").value.trim(), amt:num($("sAmt").value), per:$("sPer").value, pub:$("sPub").value===""?null:num($("sPub").value), from:$("sFrom").value, to:$("sTo").value||null};
   if(!x.op||x.amt==null||!x.from){ $("subMsg").textContent="Indique au moins l'opérateur, le montant et la date de début."; return; }
   if(x.to && x.to<x.from){ $("subMsg").textContent="La fin est avant le début."; return; }
-  S.settings.subs=[...subsList(),x]; $("subMsg").textContent=""; ["sOp","sName","sAmt","sTo"].forEach(id=>$(id).value="");
+  S.settings.subs=[...subsList(),x]; $("subMsg").textContent=""; ["sOp","sName","sAmt","sPub","sTo"].forEach(id=>$(id).value="");
   render(); pushSettings();
 };
 $("subTbl").addEventListener("click",e=>{ const b=e.target.closest("[data-sdel]"); if(!b) return; S.settings.subs=subsList().filter(x=>x.id!==b.dataset.sdel); render(); pushSettings(); });
