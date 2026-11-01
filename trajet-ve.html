@@ -64,12 +64,28 @@ body.wide aside.panel{display:none}
   body.wide #stats{order:1} body.wide #exportBar{order:2} body.wide #hereBox{order:3}
   body.wide #roadPanel{order:4} body.wide #quick{order:5} body.wide #chartPanel{order:6} body.wide section.main>p.note{order:7}
   body.wide section.main{row-gap:16px}
-  body.wide #map{grid-column:1;grid-row:1 / span 30;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);height:calc(100vh - 110px);min-height:380px}
+  body.wide #map{grid-column:1;grid-row:1 / span 30;position:sticky;top:calc(var(--hdrH,0px) + 8px);height:calc(100vh - var(--hdrH,0px) - 24px);min-height:380px}
 }
 .panel{overflow-wrap:anywhere;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
 header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:1400px;margin:0 auto 14px}
 header.top p{margin:0;color:var(--muted)}
-header.top{position:relative}
+header.top{position:sticky;top:0;z-index:1200;background:var(--bg);padding:8px 0 10px;margin-top:-8px;border-bottom:1px solid transparent}
+header.top.stuck{border-bottom-color:var(--line);box-shadow:0 4px 10px -8px rgb(0 0 0/.35)}
+html{scroll-padding-top:calc(var(--hdrH,0px) + 8px)}
+/* une seule ligne : titre à gauche, boutons à droite (défilement horizontal si la place manque) */
+header.top.top{flex-wrap:nowrap;align-items:center}
+header.top.top h1{white-space:nowrap;flex:0 0 auto}
+header.top.top p{display:none}
+header.top .top-right{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:2px 0;min-width:0;flex:0 1 auto;gap:8px}
+header.top .top-right::-webkit-scrollbar{display:none}
+header.top .top-right>*{flex:0 0 auto}
+header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
+@media (max-width:860px){ header.top.top h1{font-size:1.2rem} header.top .top-right{justify-content:flex-start} }
+label.chk{display:flex;gap:8px;align-items:baseline;font-weight:400;font-size:.86rem}
+label.chk input{width:auto;flex:0 0 auto}
+.livectl button{font:600 12px var(--f-body);padding:6px 9px;border:0;background:#fff;color:#16202c;cursor:pointer}
+.livectl button.on{background:#c62828;color:#fff}
+.livectl button:hover:not(.on){background:#f0f3f8}
 .top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
 .ver{font:600 .78rem var(--f-mono);padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
 .ver[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
@@ -192,10 +208,10 @@ details.csec[open]>summary::after{transform:rotate(-135deg)}
 .csec-b{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding-bottom:12px;min-width:0}
 .car-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .car-head h2{margin-right:auto}
-.car-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
-.car-card{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field);min-width:0}
-.car-card b{display:block;font:600 1.15rem var(--f-mono);font-variant-numeric:tabular-nums}
-.car-card span{font-size:.8rem;color:var(--muted)}
+.car-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:6px}
+.car-card{padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--field);min-width:0;line-height:1.3}
+.car-card b{display:block;font:600 .98rem var(--f-mono);font-variant-numeric:tabular-nums}
+.car-card span{font-size:.72rem;color:var(--muted)}
 .car-card.warn{border-color:var(--warn)} .car-card.warn b{color:var(--warn)}
 .car h3{font-size:.95rem;margin-top:4px}
 .car-tbl{overflow-x:auto}
@@ -400,6 +416,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
     <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
+    <button type="button" class="mini primary" id="topCalc">Calculer</button>
+    <button type="button" class="mini" id="topClear">Effacer</button>
     <a class="mini" href="trajetve-recharges.html" style="text-decoration:none">Mes recharges</a>
     <button type="button" class="mini" id="sohBtn">Santé batterie</button>
     <button type="button" class="mini" id="mapFullBtn" aria-pressed="false">Carte plein écran</button>
@@ -423,10 +441,6 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
         <button type="button" class="mini clear">Effacer</button>
       </div>
       <div class="secctl"><button type="button" class="swap" id="secOpen">Tout développer</button><button type="button" class="swap" id="secClose">Tout réduire</button></div>
-      <details class="sec" data-sec="feuilles" open>
-        <summary><span class="sec-t">Feuilles de route</span><span class="sec-s" id="sum-feuilles"></span></summary>
-        <div class="sec-b"><div id="sheetList"></div></div>
-      </details>
       <details class="sec" data-sec="trajet" open>
         <summary><span class="sec-t">Trajet</span><span class="sec-s" id="sum-trajet"></span></summary>
         <div class="sec-b">
@@ -451,9 +465,14 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
           <label>Batterie au départ <small>%</small><input id="socStart" type="number" min="1" max="100" value="85"></label>
           <label>Batterie à l'arrivée <small>% souhaité</small><input id="arrival" type="number" min="0" max="100" value="20"></label>
         </div>
-        <div class="carread" data-target="socStart"><button type="button" class="swap" data-carread>Lire la batterie de la voiture</button><span class="carmsg"></span></div>
+        <label class="chk"><input type="checkbox" id="useCarSoc"> Batterie au départ = dernière valeur de la voiture <small>(enregistrée par le PC, mise à jour à chaque calcul)</small></label>
+        <div class="carread" data-target="socStart"><button type="button" class="swap" data-carread>Lire la batterie de la voiture</button><span class="carmsg" id="carSocMsg"></span></div>
         <label>Heure de départ<input id="dep" type="datetime-local"></label>
         </div>
+      </details>
+      <details class="sec" data-sec="feuilles" open>
+        <summary><span class="sec-t">Feuilles de route</span><span class="sec-s" id="sum-feuilles"></span></summary>
+        <div class="sec-b"><div id="sheetList"></div></div>
       </details>
       <details class="sec" data-sec="voiture" open>
         <summary><span class="sec-t">Voiture</span><span class="sec-s" id="sum-voiture"></span></summary>
@@ -738,6 +757,12 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.28", d:"01/11/2026", c:[
+    "Barre du haut figée au défilement, avec les boutons Calculer et Effacer ; sur téléphone, une seule ligne de boutons qui défile horizontalement",
+    "Feuilles de route placées juste sous le trajet",
+    "Case « Batterie au départ = dernière valeur de la voiture » : reprise à chaque calcul de la dernière batterie enregistrée (sans interroger la voiture) ; une saisie à la main décoche la case",
+    "Bouton « Suivi » sur la carte pour lancer ou arrêter le suivi en temps réel",
+    "Cartes d'information de « Ma voiture » plus compactes"]},
   {v:"2.27.1", d:"01/11/2026", c:[
     "Santé batterie : la courbe utilise la valeur donnée par la voiture (celle affichée dans « Ma voiture »), relevée dans l'historique, au lieu de l'estimation de psa_car_controller qui restait à 100 %",
     "Position de la voiture : la plus récente est retenue d'après sa propre date, même si la batterie a été lue à un autre moment (avant, une position plus ancienne pouvait l'emporter)"]},
@@ -1478,6 +1503,7 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
+let liveCtl=null;
 let map, layers, viewCtl=null, carLayer=null, carMarker=null, carShown=null, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null, altCtl=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
@@ -1506,6 +1532,14 @@ function initMap(){
       this._d.querySelector('[data-v="route"]').hidden=!hasR; this._d.querySelector('[data-v="car"]').hidden=!hasC; this._d.querySelector('[data-v="both"]').hidden=!(hasR&&hasC);
       this._d.hidden=!(hasR||hasC); } });
   viewCtl=new ViewCtl({position:"topleft"}).addTo(map); viewCtl.update();
+  // suivi en temps réel directement depuis la carte
+  const LiveCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar livectl");
+      d.innerHTML='<button type="button" title="Suivre ma position (GPS du téléphone) sur le trajet">● Suivi</button>';
+      L.DomEvent.disableClickPropagation(d);
+      d.querySelector("button").addEventListener("click",()=>{ $("hereBox").hidden=false; $("hereLive").click(); });
+      this._b=d.querySelector("button"); return d; },
+    sync(on){ if(!this._b) return; this._b.classList.toggle("on",on); this._b.textContent=on?"■ Arrêter le suivi":"● Suivi"; } });
+  liveCtl=new LiveCtl({position:"topleft"}).addTo(map);
   altLayer=L.layerGroup().addTo(map);
   // bouton sur la carte pour masquer les bornes alternatives
   const AltCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar altctl"); d.innerHTML='<button type="button">Masquer les autres bornes</button>'; d.hidden=true;
@@ -1659,7 +1693,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw","loss"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw","loss","useCarSoc"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -2167,7 +2201,7 @@ document.addEventListener("visibilitychange",()=>{ if(watchId!=null && document.
 function stopLive(){
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   watchId=null; try{ wakeLock?.release(); }catch(e){} wakeLock=null;
-  $("hereLive").textContent="Suivre en temps réel"; $("hereLive").classList.remove("on"); $("hereBtn").classList.remove("live");
+  $("hereLive").textContent="Suivre en temps réel"; $("hereLive").classList.remove("on"); $("hereBtn").classList.remove("live"); liveCtl?.sync(false);
   $("hereLiveSt").textContent=lastPos?`Suivi arrêté. Dernière position à ${fmtClock(new Date(lastPos.timestamp))}.`:"";
 }
 $("hereLive").addEventListener("click",()=>{
@@ -2175,7 +2209,7 @@ $("hereLive").addEventListener("click",()=>{
   if(!lastRun?.res?.summary){ $("hereOut").innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
   if(!("geolocation" in navigator)){ $("hereOut").innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
   trailPts=[]; lastCards=0;
-  $("hereLive").textContent="Arrêter le suivi"; $("hereLive").classList.add("on"); $("hereBtn").classList.add("live");
+  $("hereLive").textContent="Arrêter le suivi"; $("hereLive").classList.add("on"); $("hereBtn").classList.add("live"); liveCtl?.sync(true);
   $("hereLiveSt").textContent="Suivi actif, recherche de la position…";
   keepAwake();
   watchId=navigator.geolocation.watchPosition(pos=>{
@@ -2794,7 +2828,9 @@ function openSheet(sh){
 renderSheets();
 
 $("f").addEventListener("submit", async e=>{
-  e.preventDefault(); save();
+  e.preventDefault();
+  if($("useCarSoc").checked) await fillCarSoc();
+  save();
   const num=id=>parseFloat($(id).value);
   const p={curve:($("car").value!=="0" && CARS[$("car").value]?.curve) || null, socStart:num("socStart"),c90:num("c90"),c130:num("c130"),hw:radioVal("hw"),season:radioVal("season"),cap:num("cap"),dcmax:num("dcmax"),acmax:num("acmax"),
     useTime:$("useTime").checked,usePmax:$("usePmax").checked,pmax:parseFloat($("pmax").value)||0,prio:prio.slice(),ov:stopOv,force:stopForce,priceOf,isPref:c=>prefOps.includes(opOf(c)),maxMin:num("maxMin"),timeTolHi:parseFloat($("timeTol").value)||0,timeTolLo:parseFloat($("timeTolLo").value)||0,socTolLo:parseFloat($("socTolLo").value)||0,socTolHi:parseFloat($("socTolHi").value)||0,useSoc:$("useSoc").checked,socTrig:num("socTrig"),
@@ -3029,6 +3065,35 @@ $("bakFile").addEventListener("change",async e=>{
     $("bakMsg").textContent=`Restauré : réglages, ${(st.favs?.trips||[]).length} trajets favoris, ${(st.sheets||[]).length} feuilles de route${o.exportedAt?` (sauvegarde du ${new Date(o.exportedAt).toLocaleDateString("fr-FR")})`:""}.`;
   }catch(err){ $("bakMsg").textContent=`Restauration impossible : ${err.message}.`; }
 });
+
+// ---------- En-tête figé : boutons Calculer / Effacer, hauteur pour la carte collante ----------
+$("topCalc").addEventListener("click",()=>$("f").requestSubmit());
+$("topClear").addEventListener("click",()=>$("clearBtn").dispatchEvent(new Event("clear")));
+{
+  const hdr=document.querySelector("header.top");
+  const setH=()=>document.documentElement.style.setProperty("--hdrH",hdr.offsetHeight+"px");
+  const tr=hdr.querySelector(".top-right"), more=()=>tr.classList.toggle("more",tr.scrollLeft+tr.clientWidth<tr.scrollWidth-4);
+  tr.addEventListener("scroll",more,{passive:true}); addEventListener("resize",more); more();
+  setH(); if(window.ResizeObserver) new ResizeObserver(setH).observe(hdr); else addEventListener("resize",setH);
+  addEventListener("scroll",()=>hdr.classList.toggle("stuck",scrollY>4),{passive:true});
+}
+// ---------- Batterie au départ = dernière valeur de la voiture ----------
+// Lit le dernier état connu (lecture gardée sur l'appareil + historique Firebase) : aucune requête à la voiture.
+async function fillCarSoc(){
+  const msg=$("carSocMsg");
+  let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
+  try{ if(fb && fb.auth.currentUser) c=mergeCar(c,await lastStoredState()); }catch(e){}
+  if(!c || c.soc==null){ msg.className="carmsg err"; msg.textContent=fb&&fb.auth.currentUser?"Aucune valeur de batterie enregistrée pour la voiture.":"Connecte-toi pour reprendre la batterie de la voiture."; return false; }
+  $("socStart").value=Math.round(c.soc);
+  const at=carDate(c.carAt), age=at?Date.now()-at:null;
+  msg.className="carmsg "+(age!=null&&age>6*3600000?"err":"ok");
+  msg.textContent=`${Math.round(c.soc)} % · donnée de la voiture ${at?agoTxt(age):"d'heure inconnue"}${age!=null&&age>6*3600000?" (ancienne : « Lire la batterie de la voiture » pour une valeur fraîche)":""}`;
+  return true;
+}
+$("useCarSoc").addEventListener("change",async()=>{ if($("useCarSoc").checked) await fillCarSoc(); else $("carSocMsg").textContent=""; });
+// une saisie à la main reprend la main sur la case
+$("socStart").addEventListener("input",e=>{ if(e.isTrusted && $("useCarSoc").checked){ $("useCarSoc").checked=false; $("carSocMsg").textContent="Valeur saisie à la main."; save(); } });
+setTimeout(()=>{ if($("useCarSoc").checked) fillCarSoc(); },2500);
 </script>
 </body>
 </html>
