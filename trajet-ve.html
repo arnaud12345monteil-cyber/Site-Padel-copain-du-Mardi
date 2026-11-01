@@ -375,6 +375,22 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
 .toggle:has(input[type=checkbox]:not(:checked)) .inline input{opacity:.45}
 .stat.hl b{color:var(--accent)}
+/* Carte plein écran */
+body.mapfull{overflow:hidden}
+body.mapfull #map{position:fixed!important;inset:0;width:100vw;height:100vh!important;height:100dvh!important;z-index:1500;border-radius:0;border:0;margin:0;max-height:none}
+#mapExit{display:none;position:fixed;z-index:1600;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);box-shadow:0 2px 8px rgb(0 0 0/.25)}
+body.mapfull #mapExit{display:inline-block}
+/* Fenêtres (santé batterie, sauvegarde) */
+dialog.big{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:16px;width:min(1100px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
+dialog.big::backdrop{background:rgb(0 0 0/.45)}
+dialog.big>header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.soh-set{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:10px}
+.soh-set label{flex:1 1 150px}
+.soh-chart svg{width:100%;height:auto;display:block}
+.soh-chart text{font-family:var(--f-mono);font-size:12px;fill:var(--muted)}
+.soh-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:.82rem;color:var(--muted);margin:6px 0}
+.soh-legend i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px}
+.bak-grid{display:grid;gap:10px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -385,6 +401,9 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
     <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
     <a class="mini" href="trajetve-recharges.html" style="text-decoration:none">Mes recharges</a>
+    <button type="button" class="mini" id="sohBtn">Santé batterie</button>
+    <button type="button" class="mini" id="mapFullBtn" aria-pressed="false">Carte plein écran</button>
+    <button type="button" class="mini" id="bakBtn">Sauvegarde</button>
     <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
@@ -597,7 +616,7 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
           <input type="date" id="hDay">
           <button type="button" class="mini" id="hNext" aria-label="Jour suivant">▶</button>
           <button type="button" class="mini" id="hToday">Aujourd'hui</button>
-          <select id="hRange" aria-label="Période du récapitulatif"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option><option value="365">1 an</option></select>
+          <select id="hRange" aria-label="Période du récapitulatif"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option><option value="365">1 an</option><option value="730">2 ans</option><option value="36500">tout</option></select>
         </div>
         <p class="note" id="hMsg"></p>
         <div id="hDayBody"></div>
@@ -687,11 +706,43 @@ svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
   </section>
 </div>
 
+<button type="button" class="mini primary" id="mapExit">Quitter le plein écran</button>
+
+<dialog class="big" id="sohDlg" aria-labelledby="sohTitle">
+  <header><h2 id="sohTitle">Santé de la batterie</h2><button type="button" class="mini" id="sohClose">Fermer</button></header>
+  <div class="soh-set">
+    <label>Mise en circulation <small>(carte grise, case B)</small><input type="date" id="sohStart"></label>
+    <label>Perte la 1re année (%)<input type="number" id="sohL1" min="0" max="15" step="0.1"></label>
+    <label>Perte par an ensuite (%)<input type="number" id="sohLy" min="0" max="10" step="0.1"></label>
+    <label>Afficher<select id="sohSpan"><option value="data">période mesurée</option><option value="3">3 ans</option><option value="8" selected>8 ans (garantie)</option></select></label>
+  </div>
+  <div class="soh-legend"><span><i style="border-color:var(--accent)"></i>état mesuré (psa_car_controller)</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>courbe théorique</span><span><i style="border-color:var(--warn);border-top-style:dotted"></i>tendance des mesures</span><span><i style="border-color:var(--bad)"></i>seuil de garantie (70 %)</span></div>
+  <div class="soh-chart" id="sohChart"></div>
+  <p class="note" id="sohTxt"></p>
+  <p class="note">Courbe théorique : ordre de grandeur pour une batterie lithium-ion de ce type (perte rapide la première année, puis à peu près régulière), à ajuster avec les deux champs ci-dessus. La santé mesurée vient de l'historique enregistré par le PC ; elle varie de quelques dixièmes d'une lecture à l'autre selon la température et le niveau de charge.</p>
+</dialog>
+
+<dialog class="big" id="bakDlg" aria-labelledby="bakTitle" style="width:min(560px,calc(100vw - 24px))">
+  <header><h2 id="bakTitle">Sauvegarde</h2><button type="button" class="mini" id="bakClose">Fermer</button></header>
+  <div class="bak-grid">
+    <p class="note">Un seul fichier JSON avec tout : réglages, favoris, feuilles de route, tarifs, et, si tu es connecté, tout l'historique de la voiture (chaque jour, trajets, recharges, santé de la batterie, dernier état) et Mes recharges (recharges, abonnements, relevés du compteur), sans limite de durée.</p>
+    <button type="button" class="mini primary" id="bakExport">Exporter toutes les données (.json)</button>
+    <label class="mini" style="cursor:pointer;text-align:center">Restaurer les réglages, favoris et feuilles de route depuis une sauvegarde…<input type="file" id="bakFile" accept=".json,application/json" hidden></label>
+    <p class="note">L'historique de la voiture n'est pas restauré : il est écrit uniquement par le PC (sécurité). Les recharges se restaurent depuis la page Mes recharges, qui accepte ce même fichier.</p>
+    <p class="note" id="bakMsg" role="status"></p>
+  </div>
+</dialog>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.27", d:"01/11/2026", c:[
+    "Bouton « Sauvegarde » en haut : export JSON de toutes les données (réglages, favoris, feuilles de route, tout l'historique de la voiture sans limite de durée, Mes recharges) et restauration des réglages, favoris et feuilles de route",
+    "Bouton « Santé batterie » en haut : grande courbe de la santé mesurée dans le temps, comparée à une courbe théorique réglable (date de mise en circulation, perte la 1re année, perte par an), tendance des mesures et seuil de garantie à 70 %",
+    "Bouton « Carte plein écran » en haut (Échap ou « Quitter le plein écran » pour revenir)",
+    "Récapitulatif de l'historique : choix « 2 ans » et « tout »"]},
   {v:"2.26", d:"31/10/2026", c:[
     "Bouton « Mes recharges » à côté de « Ma voiture » : nouvelle page trajetve-recharges.html, inventaire et historique de toutes les recharges (maison et en déplacement), import CSV wallbox / opérateurs et captures d'écran, sauvegarde JSON, synchronisée avec le compte Google"]},
   {v:"2.25.3", d:"31/10/2026", c:[
@@ -2418,7 +2469,7 @@ async function loadHistSum(){
       <div class="car-tbl"><table><thead><tr><th>Jour</th><th>Trajets</th><th>Distance</th><th>Consommé</th><th>Conso</th><th>Rechargé</th><th>Coût</th></tr></thead><tbody>${keys.map(k=>{ const d=days[k]; return `<tr data-day="${k}"><td>${new Date(k+"T12:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</td><td>${d.n||"—"}</td><td>${d.km?n1(d.km)+" km":"—"}</td><td>${d.kwh?n1(d.kwh)+" kWh":"—"}</td><td>${d.km>0&&d.kwh?n1(d.kwh/d.km*100):"—"}</td><td>${d.rkwh?n1(d.rkwh)+" kWh":"—"}</td><td>${d.eur?fmtEur(d.eur):"—"}</td></tr>`; }).join("")}</tbody></table></div>`;
     const S=sa.docs.map(x=>x.data()).filter(x=>x.niveau!=null).sort((a,b)=>a.t<b.t?-1:1);
     if(S.length>1) h+=`<p class="note">Santé de la batterie : ${S[0].niveau} % le ${fmtDT(carDate(S[0].t)).slice(0,5)} → ${S[S.length-1].niveau} % le ${fmtDT(carDate(S[S.length-1].t)).slice(0,5)}.</p>`;
-    box.innerHTML=csec("hrecap",`Récapitulatif sur ${n} jours`,h);
+    box.innerHTML=csec("hrecap",n>=36500?"Récapitulatif de tout l'historique":`Récapitulatif sur ${n} jours`,h);
   }catch(e){ box.innerHTML=`<p class="note status err">Récapitulatif impossible (${e.code||e.message}).</p>`; }
 }
 function showHist(){ if(!$("hDay").value) $("hDay").value=isoDay(new Date()); loadHistDay(); loadHistSum(); }
@@ -2499,7 +2550,7 @@ const FIREBASE_CONFIG={
 };
 const DEVICE_ID=(()=>{ try{ let d=localStorage.getItem("trajetve-device"); if(!d){ d=Math.random().toString(36).slice(2); localStorage.setItem("trajetve-device",d); } return d; }catch(e){ return "x"; } })();
 function loadScript(src){ return new Promise((ok,ko)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=ok; sc.onerror=ko; document.head.appendChild(sc); }); }
-const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets, prices, prio, prefOps}; };
+const localState=()=>{ const st=readSettings(); delete st.from; delete st.to; return {favs, ops:opsSel, settings:st, sheets, prices, prio, prefOps, soh:sohCfg}; };
 function applyState(st){
   if(st.favs){ favs={trips:st.favs.trips||[],places:st.favs.places||[]}; try{ localStorage.setItem(FKEY,JSON.stringify(favs)); }catch(e){} }
   if(Array.isArray(st.sheets)){ sheets=st.sheets; try{ localStorage.setItem(SHEETS_KEY,JSON.stringify(sheets)); }catch(e){} renderSheets(); }
@@ -2508,6 +2559,7 @@ function applyState(st){
   if(Array.isArray(st.prefOps)){ prefOps=st.prefOps; try{ localStorage.setItem(PREF_KEY,JSON.stringify(prefOps)); }catch(e){} renderPrices(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
   if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
+  if(st.soh && typeof st.soh==="object"){ sohCfg={...sohCfg,...st.soh}; try{ localStorage.setItem(SOH_KEY,JSON.stringify(sohCfg)); }catch(e){} }
   renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps();
 }
 // Lit un document distant : format 2 = état en JSON ; ancien format = champs directs
@@ -2814,6 +2866,145 @@ let installEvt=null;
 addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; $("installBtn").hidden=false; });
 $("installBtn").addEventListener("click",async()=>{ if(!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(()=>{}); installEvt=null; $("installBtn").hidden=true; });
 addEventListener("appinstalled",()=>{ $("installBtn").hidden=true; });
+
+// ---------- Carte plein écran ----------
+function setMapFull(on){
+  document.body.classList.toggle("mapfull",on); $("mapFullBtn").setAttribute("aria-pressed",on);
+  $("mapFullBtn").textContent=on?"Quitter le plein écran":"Carte plein écran";
+  setTimeout(()=>{ if(map){ const c=map.getCenter(), z=map.getZoom(); map.invalidateSize(); map.setView(c,z,{animate:false}); } },60);
+}
+$("mapFullBtn").addEventListener("click",()=>setMapFull(!document.body.classList.contains("mapfull")));
+$("mapExit").addEventListener("click",()=>setMapFull(false));
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && document.body.classList.contains("mapfull")) setMapFull(false); });
+
+// ---------- Santé de la batterie : mesures vs courbe théorique ----------
+var SOH_KEY="trajetve-soh";
+var sohCfg={start:"", l1:2.5, ly:1.5};
+try{ sohCfg={...sohCfg,...JSON.parse(localStorage.getItem(SOH_KEY)||"{}")}; }catch(e){}
+let sohData=null;
+// perte théorique (points de %) après t années : rapide la 1re année (exponentielle), puis linéaire
+function sohTheo(t){
+  if(t<=0) return 100;
+  const k=3, first=sohCfg.l1*(1-Math.exp(-k*Math.min(t,1)))/(1-Math.exp(-k));
+  return 100-first-(t>1?sohCfg.ly*(t-1):0);
+}
+async function loadSoh(){
+  const pts=[];
+  if(fb && fb.auth.currentUser){
+    const sa=await carColl("sante").get();
+    sa.docs.forEach(x=>{ const d=x.data(), t=carDate(d.t); if(t && d.niveau!=null && isFinite(+d.niveau)) pts.push({t:+t,v:+d.niveau}); });
+  }
+  pts.sort((a,b)=>a.t-b.t);
+  return pts;
+}
+function drawSoh(){
+  const P=sohData||[], YR=365.25*86400000, st=sohCfg.start?+new Date(sohCfg.start+"T12:00"):null;
+  const span=$("sohSpan").value, now=Date.now();
+  let t0, t1;
+  if(span==="data" || !st){ t0=P.length?P[0].t:now-YR; t1=Math.max(P.length?P[P.length-1].t:now, now); if(st && span!=="data") t0=st; const pad=(t1-t0)*0.05||30*86400000; t0-=pad; t1+=pad; }
+  else { t0=st; t1=st+(+span)*YR; if(P.length && P[P.length-1].t>t1) t1=P[P.length-1].t+30*86400000; }
+  // tendance : régression linéaire des mesures (si au moins 60 jours d'écart)
+  let trend=null;
+  if(P.length>=3 && P[P.length-1].t-P[0].t>60*86400000){
+    const n=P.length, mx=P.reduce((a,p)=>a+p.t,0)/n, my=P.reduce((a,p)=>a+p.v,0)/n;
+    const b=P.reduce((a,p)=>a+(p.t-mx)*(p.v-my),0)/P.reduce((a,p)=>a+(p.t-mx)**2,0);
+    trend={f:t=>my+b*(t-mx), perYear:b*YR};
+  }
+  const theoAt=t=>st?sohTheo((t-st)/YR):null;
+  const vals=[...P.map(p=>p.v)];
+  if(st) vals.push(theoAt(t1), 100);
+  if(trend) vals.push(trend.f(t1));
+  if(span==="8") vals.push(70);
+  let lo=Math.floor(Math.min(...vals,95)-1), hi=Math.min(101,Math.ceil(Math.max(...vals,100)+0.5));
+  const W=1000,H=440,ml=48,mr=16,mt=14,mb=34;
+  const X=t=>ml+(t-t0)/(t1-t0)*(W-ml-mr), Y=v=>mt+(hi-v)/(hi-lo)*(H-mt-mb);
+  let g="";
+  const step=hi-lo>20?5:hi-lo>8?2:1;
+  for(let v=Math.ceil(lo/step)*step; v<=hi; v+=step) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-6}" y="${Y(v)+4}" text-anchor="end">${v} %</text>`;
+  // graduations de temps : années (ou mois sur une période courte)
+  const yrs=(t1-t0)/YR, d=new Date(t0); d.setHours(0,0,0,0);
+  if(yrs>1.5){ d.setMonth(0,1); for(d.setFullYear(d.getFullYear()+(+d<t0?1:0)); +d<=t1; d.setFullYear(d.getFullYear()+1)) g+=`<line x1="${X(+d)}" x2="${X(+d)}" y1="${mt}" y2="${H-mb}" stroke="var(--line)"/><text x="${X(+d)}" y="${H-mb+18}" text-anchor="middle">${d.getFullYear()}</text>`; }
+  else { d.setDate(1); const stp=yrs>0.6?3:1; for(d.setMonth(d.getMonth()+1); +d<=t1; d.setMonth(d.getMonth()+stp)) g+=`<line x1="${X(+d)}" x2="${X(+d)}" y1="${mt}" y2="${H-mb}" stroke="var(--line)"/><text x="${X(+d)}" y="${H-mb+18}" text-anchor="middle">${d.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"})}</text>`; }
+  if(70>=lo) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(70)}" y2="${Y(70)}" stroke="var(--bad)" stroke-width="2"/><text x="${W-mr}" y="${Y(70)-6}" text-anchor="end" style="fill:var(--bad)">garantie constructeur : 70 % (8 ans / 160 000 km)</text>`;
+  if(st){
+    const pts=[]; for(let k=0;k<=200;k++){ const t=Math.max(t0,st)+(t1-Math.max(t0,st))*k/200; pts.push(`${X(t).toFixed(1)},${Y(theoAt(t)).toFixed(1)}`); }
+    g+=`<polyline fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="7 5" points="${pts.join(" ")}"/>`;
+  }
+  if(trend){ const a=P[0].t, b=t1; g+=`<line x1="${X(a)}" y1="${Y(trend.f(a))}" x2="${X(b)}" y2="${Y(trend.f(b))}" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 4"/>`; }
+  if(P.length>1) g+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${P.map(p=>X(p.t).toFixed(1)+","+Y(p.v).toFixed(1)).join(" ")}"/>`;
+  g+=P.map(p=>`<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="4" fill="var(--accent)"><title>${new Date(p.t).toLocaleDateString("fr-FR")} : ${String(p.v).replace(".",",")} %${st?` (théorique ${theoAt(p.t).toFixed(1).replace(".",",")} %)`:""}</title></circle>`).join("");
+  $("sohChart").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Santé de la batterie dans le temps">${g}</svg>`;
+  // texte de synthèse
+  const T=[];
+  if(!fb || !fb.auth.currentUser) T.push("Connecte-toi pour charger les mesures enregistrées.");
+  else if(!P.length) T.push("Aucune mesure de santé dans l'historique pour l'instant (psa_car_controller l'enregistre quand la voiture la remonte).");
+  if(!st) T.push("Indique la date de mise en circulation pour afficher la courbe théorique.");
+  if(P.length){
+    const last=P[P.length-1]; T.push(`Dernière mesure : ${String(last.v).replace(".",",")} % le ${new Date(last.t).toLocaleDateString("fr-FR")}.`);
+    if(st){ const th=theoAt(last.t), e=last.v-th; T.push(`Courbe théorique à cette date : ${th.toFixed(1).replace(".",",")} %, soit ${e>=0?"+":"−"}${Math.abs(e).toFixed(1).replace(".",",")} point${Math.abs(e)>=2?"s":""} ${e>=0?"au-dessus":"en dessous"}.`); }
+  }
+  if(trend){ T.push(`Tendance des mesures : ${trend.perYear>=0?"+":"−"}${Math.abs(trend.perYear).toFixed(1).replace(".",",")} point par an${st?`, soit ${trend.f(st+8*YR).toFixed(0)} % à 8 ans si elle se maintenait`:""}.`); }
+  else if(P.length) T.push("Pas encore assez de recul (au moins 3 mesures sur 2 mois) pour une tendance fiable.");
+  $("sohTxt").textContent=T.join(" ");
+}
+function sohSave(){ try{ localStorage.setItem(SOH_KEY,JSON.stringify(sohCfg)); }catch(e){} syncPush(); }
+$("sohBtn").addEventListener("click",async()=>{
+  $("sohStart").value=sohCfg.start||""; $("sohL1").value=sohCfg.l1; $("sohLy").value=sohCfg.ly;
+  $("sohDlg").showModal(); sohData=sohData||[]; drawSoh();
+  try{ sohData=await loadSoh(); drawSoh(); }catch(e){ $("sohTxt").textContent=e.code==="permission-denied"?"Accès refusé à l'historique (règle Firestore « trajetve_car »).":`Lecture impossible (${e.code||e.message}).`; }
+});
+$("sohClose").addEventListener("click",()=>$("sohDlg").close());
+$("sohStart").addEventListener("change",()=>{ sohCfg.start=$("sohStart").value; sohSave(); drawSoh(); });
+$("sohL1").addEventListener("change",()=>{ sohCfg.l1=Math.max(0,parseFloat($("sohL1").value)||0); sohSave(); drawSoh(); });
+$("sohLy").addEventListener("change",()=>{ sohCfg.ly=Math.max(0,parseFloat($("sohLy").value)||0); sohSave(); drawSoh(); });
+$("sohSpan").addEventListener("change",drawSoh);
+
+// ---------- Sauvegarde complète ----------
+async function collectAll(onStep){
+  const out={app:"trajetve", version:CHANGELOG[0].v, exportedAt:new Date().toISOString(), etat:localState()};
+  const u=fb && fb.auth.currentUser;
+  if(!u) return out;
+  out.compte=u.email||"";
+  const car=fb.db.collection("trajetve_car").doc(u.uid), all=async ref=>{ const sn=await ref.get(); const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); return o; };
+  try{
+    onStep("Historique de la voiture…");
+    const top=await car.get();
+    if(top.exists){ const d={...top.data()}; if(typeof d.full==="string"){ try{ d.full=JSON.parse(d.full); }catch(e){} } out.voiture={dernierEtat:d}; } else out.voiture={};
+    const [jours,trajets,recharges,sante]=await Promise.all(["jours","trajets","recharges","sante"].map(n=>all(car.collection(n))));
+    Object.assign(out.voiture,{jours,trajets,recharges,sante});
+  }catch(e){ out.voiture={erreur:e.code||e.message}; }
+  try{
+    onStep("Mes recharges…");
+    const r=fb.db.collection("trajetve_recharges").doc(u.uid), top=await r.get(), ses=await all(r.collection("sessions"));
+    out.mesRecharges={settings:top.exists?(top.data().settings||{}):{}, sessions:Object.values(ses).sort((a,b)=>a.start<b.start?-1:1)};
+  }catch(e){ out.mesRecharges={erreur:e.code||e.message}; }
+  return out;
+}
+$("bakBtn").addEventListener("click",()=>{ $("bakMsg").textContent=fb&&fb.auth.currentUser?"":"Non connecté : seuls les réglages, favoris et feuilles de route de cet appareil seront exportés."; $("bakDlg").showModal(); });
+$("bakClose").addEventListener("click",()=>$("bakDlg").close());
+$("bakExport").addEventListener("click",async()=>{
+  const m=$("bakMsg"), b=$("bakExport"); b.disabled=true;
+  try{
+    const o=await collectAll(t=>m.textContent=t);
+    const txt=JSON.stringify(o), a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"})); a.download=`trajetve-sauvegarde-${isoDay(new Date())}.json`;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+    const V=o.voiture||{}, nJ=Object.keys(V.jours||{}).length, nR=(o.mesRecharges?.sessions||[]).length;
+    const days=Object.keys(V.jours||{}).sort();
+    const pl=(n,w)=>`${n} ${w}${n>1?"s":""}`;
+    m.textContent=`Fichier exporté (${(txt.length/1024).toFixed(0)} Ko)`+(o.compte?` : ${nJ} jour${nJ>1?"s":""} d'historique voiture${days.length?` (du ${new Date(days[0]+"T12:00").toLocaleDateString("fr-FR")} au ${new Date(days[days.length-1]+"T12:00").toLocaleDateString("fr-FR")})`:""}, ${pl(Object.keys(V.trajets||{}).length,"trajet")}, ${pl(Object.keys(V.recharges||{}).length,"recharge")} détectée${Object.keys(V.recharges||{}).length>1?"s":""} par la voiture, ${pl(Object.keys(V.sante||{}).length,"mesure")} de santé, ${pl(nR,"recharge")} dans Mes recharges.`:".")+(V.erreur?` Historique voiture non lu (${V.erreur}).`:"")+(o.mesRecharges?.erreur?` Mes recharges non lu (${o.mesRecharges.erreur}).`:"");
+  }catch(e){ m.textContent=`Export impossible (${e.code||e.message}).`; }
+  finally{ b.disabled=false; }
+});
+$("bakFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const o=JSON.parse(await f.text()), st=o.etat||o;
+    if(!st || (!st.favs && !st.settings && !st.sheets)) throw new Error("ce fichier n'est pas une sauvegarde de Trajet VE");
+    applyState(st); save();
+    $("bakMsg").textContent=`Restauré : réglages, ${(st.favs?.trips||[]).length} trajets favoris, ${(st.sheets||[]).length} feuilles de route${o.exportedAt?` (sauvegarde du ${new Date(o.exportedAt).toLocaleDateString("fr-FR")})`:""}.`;
+  }catch(err){ $("bakMsg").textContent=`Restauration impossible : ${err.message}.`; }
+});
 </script>
 </body>
 </html>

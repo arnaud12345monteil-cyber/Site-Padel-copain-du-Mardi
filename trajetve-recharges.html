@@ -289,6 +289,7 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.7", d:"01/11/2026", c:["Restauration : accepte aussi la sauvegarde complète exportée depuis Trajet VE (bouton « Sauvegarde »)"]},
   {v:"1.6", d:"31/10/2026", c:[
     "Abonnements : colonnes renommées (« payé à la borne » = prix remisé déjà payé ; « abonnement compris » = ce prix plus l'abonnement réparti sur les kWh)",
     "Prix du kWh sans abonnement (facultatif) : bilan en euros de l'abonnement (économisé ou perdu) et consommation mensuelle à partir de laquelle il est rentable"]},
@@ -1018,6 +1019,7 @@ function setMsg(t,cls){ $("setMsg").textContent=t; $("setMsg").className="note"+
 let restoreData=null;
 function startRestore(text,name){
   let o; try{ o=JSON.parse(text); }catch(e){ setMsg(`${name} : fichier JSON illisible.`,"err"); return; }
+  if(o && !Array.isArray(o) && o.mesRecharges) o=o.mesRecharges;   // sauvegarde complète de Trajet VE
   const list=Array.isArray(o)?o:o.sessions;
   if(!Array.isArray(list)){ setMsg(`${name} : ce n'est pas une sauvegarde de Mes recharges.`,"err"); return; }
   const ok=list.filter(s=>s&&typeof s.start==="string"&&s.kwh>0).map(s=>({start:s.start, noTime:!!s.noTime, end:s.end||null, kwh:+s.kwh, cost:s.cost==null?null:+s.cost,
