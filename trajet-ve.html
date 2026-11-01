@@ -81,8 +81,16 @@ header.top .top-right::-webkit-scrollbar{display:none}
 header.top .top-right>*{flex:0 0 auto}
 header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
 @media (max-width:860px){ header.top.top h1{font-size:1.2rem} header.top .top-right{justify-content:flex-start} }
-label.chk{display:flex;gap:8px;align-items:baseline;font-weight:400;font-size:.86rem}
-label.chk input{width:auto;flex:0 0 auto}
+.pcstat{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-mono);font-size:.78rem}
+.pcstat i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.pcstat i.ok{background:var(--charge)} .pcstat i.bad{background:var(--bad)} .pcstat i.warn{background:var(--warn)}
+.pcstat i+i,.pcstat i:not(:first-child){margin-left:4px}
+.pc-row{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line)}
+.pc-row:last-of-type{border-bottom:0}
+.pc-row b{min-width:170px}
+label.chk{display:block;font-weight:400;font-size:.86rem;line-height:1.4}
+label.chk input{width:auto;margin:0 6px 0 0;vertical-align:-2px}
+label.chk small{display:inline;color:var(--muted)}
 .livectl button{font:600 12px var(--f-body);padding:6px 9px;border:0;background:#fff;color:#16202c;cursor:pointer}
 .livectl button.on{background:#c62828;color:#fff}
 .livectl button:hover:not(.on){background:#f0f3f8}
@@ -416,6 +424,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <div class="top-right">
     <p>Itinéraire, bornes et arrêts calculés selon ta voiture et tes règles d'arrêt.</p>
     <button type="button" class="mini" id="carBtn" aria-expanded="false">Ma voiture</button>
+    <button type="button" class="mini pcstat" id="pcStat" title="État des programmes du PC" hidden><i id="pcDot1"></i>PC <i id="pcDot2"></i>PSA</button>
     <button type="button" class="mini primary" id="topCalc">Calculer</button>
     <button type="button" class="mini" id="topClear">Effacer</button>
     <a class="mini" href="trajetve-recharges.html" style="text-decoration:none">Mes recharges</a>
@@ -741,6 +750,14 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <p class="note">Courbe théorique : ordre de grandeur pour une batterie lithium-ion de ce type (perte rapide la première année, puis à peu près régulière), à ajuster avec les deux champs ci-dessus. La santé mesurée vient de l'historique enregistré par le PC ; elle varie de quelques dixièmes d'une lecture à l'autre selon la température et le niveau de charge.</p>
 </dialog>
 
+<dialog class="big" id="pcDlg" aria-labelledby="pcTitle" style="width:min(520px,calc(100vw - 24px))">
+  <header><h2 id="pcTitle">Programmes du PC</h2><button type="button" class="mini" id="pcClose">Fermer</button></header>
+  <div id="pcBody"></div>
+  <label class="chk" style="margin-top:10px"><input type="checkbox" id="pcNoSleep"> Empêcher la mise en veille du PC <small>(trajetve_voiture.py ; l'écran peut toujours s'éteindre)</small></label>
+  <p class="note" id="pcMsg" role="status"></p>
+  <p class="note">L'état est envoyé par trajetve_voiture.py toutes les 2 minutes. S'il ne tourne pas, rien ne remonte : l'état de psa_car_controller est alors inconnu.</p>
+</dialog>
+
 <dialog class="big" id="bakDlg" aria-labelledby="bakTitle" style="width:min(560px,calc(100vw - 24px))">
   <header><h2 id="bakTitle">Sauvegarde</h2><button type="button" class="mini" id="bakClose">Fermer</button></header>
   <div class="bak-grid">
@@ -757,6 +774,9 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.29", d:"01/11/2026", c:[
+    "Barre du haut : état des programmes du PC (pastille PC = trajetve_voiture.py, pastille PSA = psa_car_controller ; vert = actif, rouge = arrêté)",
+    "Clic sur l'état : détail (dernier signal, psa_car_controller joignable, mise en veille) et case « Empêcher la mise en veille du PC », appliquée par trajetve_voiture.py en moins d'une minute"]},
   {v:"2.28", d:"01/11/2026", c:[
     "Barre du haut figée au défilement, avec les boutons Calculer et Effacer ; sur téléphone, une seule ligne de boutons qui défile horizontalement",
     "Feuilles de route placées juste sous le trajet",
@@ -3094,6 +3114,43 @@ $("useCarSoc").addEventListener("change",async()=>{ if($("useCarSoc").checked) a
 // une saisie à la main reprend la main sur la case
 $("socStart").addEventListener("input",e=>{ if(e.isTrusted && $("useCarSoc").checked){ $("useCarSoc").checked=false; $("carSocMsg").textContent="Valeur saisie à la main."; save(); } });
 setTimeout(()=>{ if($("useCarSoc").checked) fillCarSoc(); },2500);
+
+// ---------- État des programmes du PC (barre du haut) ----------
+let pcSvc=null, pcCfg=null, pcUnsub=[];
+function pcRender(){
+  const b=$("pcStat"), d1=$("pcDot1"), d2=$("pcDot2"), u=fb && fb.auth.currentUser;
+  b.hidden=!u; if(!u) return;
+  const age=pcSvc?.alive ? Date.now()-pcSvc.alive : null, up=age!=null && age<6*60000;
+  d1.className=pcSvc==null?"":up?"ok":"bad";
+  d2.className=!up?"":pcSvc.psacc?"ok":"bad";
+  b.title=`trajetve_voiture.py : ${up?"actif":"ne répond pas"} · psa_car_controller : ${!up?"inconnu":pcSvc.psacc?"actif":"arrêté"}`;
+  if(!$("pcDlg").open) return;
+  const row=(n,cls,txt)=>`<div class="pc-row"><b><span class="pcstat"><i class="${cls}"></i></span> ${n}</b><span>${txt}</span></div>`;
+  const sleepTxt=!up?"inconnu":!pcSvc.windows?"sans objet (pas Windows)":pcSvc.noSleep===true?"bloquée par trajetve_voiture.py":pcSvc.noSleep===false?"autorisée (selon les réglages Windows)":"en cours de réglage";
+  $("pcBody").innerHTML=
+    row("trajetve_voiture.py",d1.className,pcSvc==null?"jamais vu en ligne":up?`actif · dernier signal ${agoTxt(age)}`:`ne répond pas · dernier signal ${agoTxt(age)} (${fmtDT(new Date(pcSvc.alive))})`)+
+    row("psa_car_controller",d2.className,!up?"inconnu (trajetve_voiture.py ne répond pas)":pcSvc.psacc?"actif (répond sur le PC)":"arrêté ou bloqué : il ne répond pas sur le PC")+
+    row("Mise en veille du PC","",sleepTxt);
+  $("pcNoSleep").checked=pcCfg?.noSleep ?? pcSvc?.noSleepWanted ?? true;
+  const pending=up && pcCfg && pcSvc.noSleepWanted!==undefined && pcCfg.noSleep!==pcSvc.noSleepWanted;
+  $("pcMsg").textContent=pending?"Réglage envoyé, en attente de prise en compte par le PC…":"";
+}
+function pcWatch(){
+  pcUnsub.forEach(f=>f()); pcUnsub=[]; pcSvc=null; pcCfg=null;
+  const u=fb && fb.auth.currentUser; pcRender(); if(!u) return;
+  const col=fb.db.collection("trajetve_car");
+  pcUnsub.push(col.doc("_service").onSnapshot(d=>{ pcSvc=d.exists?d.data():null; pcRender(); },()=>{}));
+  pcUnsub.push(col.doc(u.uid).onSnapshot(d=>{ pcCfg=d.exists?(d.data().cfg||null):null; pcRender(); },()=>{}));
+}
+{ let lastUid=null; setInterval(()=>{ const uid=fb?.auth?.currentUser?.uid||null; if(uid!==lastUid){ lastUid=uid; pcWatch(); } else pcRender(); },3000); }
+$("pcStat").addEventListener("click",()=>{ $("pcDlg").showModal(); pcRender(); });
+$("pcClose").addEventListener("click",()=>$("pcDlg").close());
+$("pcNoSleep").addEventListener("change",async()=>{
+  const u=fb && fb.auth.currentUser; if(!u) return;
+  const v=$("pcNoSleep").checked; pcCfg={...(pcCfg||{}),noSleep:v}; pcRender();
+  try{ await fb.db.collection("trajetve_car").doc(u.uid).set({cfg:{noSleep:v}},{merge:true}); }
+  catch(e){ $("pcMsg").textContent=`Réglage non envoyé (${e.code||e.message}).`; }
+});
 </script>
 </body>
 </html>
