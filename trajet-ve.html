@@ -716,7 +716,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
     <label>Perte par an ensuite (%)<input type="number" id="sohLy" min="0" max="10" step="0.1"></label>
     <label>Afficher<select id="sohSpan"><option value="data">période mesurée</option><option value="3">3 ans</option><option value="8" selected>8 ans (garantie)</option></select></label>
   </div>
-  <div class="soh-legend"><span><i style="border-color:var(--accent)"></i>état mesuré (psa_car_controller)</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>courbe théorique</span><span><i style="border-color:var(--warn);border-top-style:dotted"></i>tendance des mesures</span><span><i style="border-color:var(--bad)"></i>seuil de garantie (70 %)</span></div>
+  <div class="soh-legend"><span><i style="border-color:var(--accent)"></i>santé indiquée par la voiture</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>courbe théorique</span><span><i style="border-color:var(--warn);border-top-style:dotted"></i>tendance des mesures</span><span><i style="border-color:var(--bad)"></i>seuil de garantie (70 %)</span></div>
   <div class="soh-chart" id="sohChart"></div>
   <p class="note" id="sohTxt"></p>
   <p class="note">Courbe théorique : ordre de grandeur pour une batterie lithium-ion de ce type (perte rapide la première année, puis à peu près régulière), à ajuster avec les deux champs ci-dessus. La santé mesurée vient de l'historique enregistré par le PC ; elle varie de quelques dixièmes d'une lecture à l'autre selon la température et le niveau de charge.</p>
@@ -738,6 +738,9 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.27.1", d:"01/11/2026", c:[
+    "Santé batterie : la courbe utilise la valeur donnée par la voiture (celle affichée dans « Ma voiture »), relevée dans l'historique, au lieu de l'estimation de psa_car_controller qui restait à 100 %",
+    "Position de la voiture : la plus récente est retenue d'après sa propre date, même si la batterie a été lue à un autre moment (avant, une position plus ancienne pouvait l'emporter)"]},
   {v:"2.27", d:"01/11/2026", c:[
     "Bouton « Sauvegarde » en haut : export JSON de toutes les données (réglages, favoris, feuilles de route, tout l'historique de la voiture sans limite de durée, Mes recharges) et restauration des réglages, favoris et feuilles de route",
     "Bouton « Santé batterie » en haut : grande courbe de la santé mesurée dans le temps, comparée à une courbe théorique réglable (date de mise en circulation, perte la 1re année, perte par an), tendance des mesures et seuil de garantie à 70 %",
@@ -2328,10 +2331,22 @@ function setCarMarker(st){
   if(!lastLine) map.setView([st.lat,st.lon],11);   // pas de trajet affiché : on centre sur la voiture
   viewCtl?.update();
 }
+// Fusion de deux états de la voiture (dernière lecture gardée sur l'appareil, historique Firebase) :
+// batterie, autonomie… viennent du plus récent par date de donnée ; la position, du plus récent par date de position.
+// (la voiture met souvent à jour sa position sans changer la date de la batterie, et inversement)
+function mergeCar(a,b){
+  if(!a) return b||null; if(!b) return a;
+  const ta=+carDate(a.carAt)||0, tb=+carDate(b.carAt)||0;
+  const out=tb>ta ? {...a,...b, soh:a.soh??b.soh, trips:a.trips??b.trips, chargings:a.chargings??b.chargings} : {...b,...a};
+  const pa=a.lat!=null?(+carDate(a.posAt)||0):-1, pb=b.lat!=null?(+carDate(b.posAt)||0):-1;
+  const P=pb>pa?b:a;
+  if(P.lat!=null){ out.lat=P.lat; out.lon=P.lon; out.posAt=P.posAt; }
+  return out;
+}
 async function refreshCarMarker(){
   let best=null;
   try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c) best=c; }catch(e){}
-  try{ const st=await lastStoredState(); if(st && (!best || (+carDate(st.carAt)||0)>(+carDate(best.carAt)||0))) best={...best,...st}; }catch(e){}
+  try{ best=mergeCar(best,await lastStoredState()); }catch(e){}
   // la position vient de l'état le plus récent qui en contient une
   if(best) setCarMarker(best);
 }
@@ -2362,7 +2377,8 @@ function carRender(r){
   if(r.lat!=null) etat+=`<p class="note">Dernière position connue ${posAt?"("+fmtDT(posAt)+")":""} · <a href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank" rel="noopener">ouvrir dans Maps</a> · <button type="button" class="swap" id="carOnMap">voir sur la carte</button></p>`;
   let html=csec("etat","État actuel",etat);
   // historique santé batterie
-  const soh=(r.soh||[]).map(x=>({d:carDate(x.date),v:+x.level})).filter(x=>x.d&&isFinite(x.v));
+  html+=csec("sante","Santé de la batterie",`<p class="note">Santé indiquée par la voiture : <b>${r.health!=null?r.health+" %":"inconnue"}</b>. <button type="button" class="mini" onclick="document.getElementById('sohBtn').click()">Voir la courbe dans le temps</button></p>`);
+  const soh=[];
   if(soh.length>1){
     const W=640,H=150,ml=40,mr=12,mt=10,mb=24, t0=+soh[0].d, t1=+soh[soh.length-1].d||t0+1;
     const lo=Math.floor(Math.min(...soh.map(x=>x.v))-1), hi=Math.ceil(Math.max(...soh.map(x=>x.v))+1);
@@ -2467,7 +2483,7 @@ async function loadHistSum(){
     if(!keys.length) h+='<p class="note">Rien sur cette période. L\'historique se remplit dès que psa_car_controller tourne avec -r et que le script PC est lancé.</p>';
     else h+=`<p class="note">${n1(tot.km)} km · ${n1(tot.kwh)} kWh consommés${tot.km>0?` · <b>${n1(tot.kwh/tot.km*100)} kWh/100 km</b>`:""} · ${n1(tot.rkwh)} kWh rechargés · ${fmtEur(tot.eur)}</p>
       <div class="car-tbl"><table><thead><tr><th>Jour</th><th>Trajets</th><th>Distance</th><th>Consommé</th><th>Conso</th><th>Rechargé</th><th>Coût</th></tr></thead><tbody>${keys.map(k=>{ const d=days[k]; return `<tr data-day="${k}"><td>${new Date(k+"T12:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</td><td>${d.n||"—"}</td><td>${d.km?n1(d.km)+" km":"—"}</td><td>${d.kwh?n1(d.kwh)+" kWh":"—"}</td><td>${d.km>0&&d.kwh?n1(d.kwh/d.km*100):"—"}</td><td>${d.rkwh?n1(d.rkwh)+" kWh":"—"}</td><td>${d.eur?fmtEur(d.eur):"—"}</td></tr>`; }).join("")}</tbody></table></div>`;
-    const S=sa.docs.map(x=>x.data()).filter(x=>x.niveau!=null).sort((a,b)=>a.t<b.t?-1:1);
+    const S=[];
     if(S.length>1) h+=`<p class="note">Santé de la batterie : ${S[0].niveau} % le ${fmtDT(carDate(S[0].t)).slice(0,5)} → ${S[S.length-1].niveau} % le ${fmtDT(carDate(S[S.length-1].t)).slice(0,5)}.</p>`;
     box.innerHTML=csec("hrecap",n>=36500?"Récapitulatif de tout l'historique":`Récapitulatif sur ${n} jours`,h);
   }catch(e){ box.innerHTML=`<p class="note status err">Récapitulatif impossible (${e.code||e.message}).</p>`; }
@@ -2505,9 +2521,9 @@ async function lastStoredState(){
     const et=(D.etats||[]).slice().sort((a,b)=>a.t<b.t?-1:1), pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
     if(!res && et.length){ const e=et[et.length-1]; res={...e, health:e.health??e.sante, chargeStatus:e.chargeStatus??e.charge, carAt:+carDate(e.t), readAt:null, stored:true}; }
     // position : la plus récente trouvée dans les états ou les relevés
-    if(!pos){
+    {
       const cand=[...et.filter(x=>x.lat!=null).map(x=>({lat:x.lat,lon:x.lon,at:+carDate(x.posAt)||+carDate(x.t)})), ...pts.filter(x=>x.lat!=null).map(x=>({lat:x.lat,lon:x.lon,at:+carDate(x.t)}))].sort((a,b)=>a.at-b.at);
-      if(cand.length) pos=cand[cand.length-1];
+      if(cand.length && (!pos || cand[cand.length-1].at>pos.at)) pos=cand[cand.length-1];
     }
   }
   if(!res && !pos) return null;
@@ -2519,7 +2535,7 @@ $("carBtn").addEventListener("click",async()=>{ const p=$("carPanel"); p.hidden=
   if(p.hidden) return;
   let c=null; try{ c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); }catch(e){}
   const st=await lastStoredState();
-  if(st && (!c || (st.carAt||0)>(c.carAt||0))) c={...(c||{}), ...st, soh:c?.soh, trips:c?.trips, chargings:c?.chargings};
+  c=mergeCar(c,st);
   if(c){ carRender(c); setCarMarker(c); }
   p.scrollIntoView({behavior:"smooth",block:"start"}); });
 $("carClose").addEventListener("click",()=>{ $("carPanel").hidden=true; $("carBtn").setAttribute("aria-expanded","false"); });
@@ -2888,14 +2904,21 @@ function sohTheo(t){
   const k=3, first=sohCfg.l1*(1-Math.exp(-k*Math.min(t,1)))/(1-Math.exp(-k));
   return 100-first-(t>1?sohCfg.ly*(t-1):0);
 }
+// Santé = « capacity » renvoyée par la voiture (celle de l'appli et de « Ma voiture »), relevée dans les états de chaque jour.
+// La table battery_soh de psa_car_controller n'est pas utilisée : c'est un autre calcul, qui ne correspond pas à la voiture.
+let sohPsa=[];
 async function loadSoh(){
-  const pts=[];
+  const pts=[]; sohPsa=[];
   if(fb && fb.auth.currentUser){
-    const sa=await carColl("sante").get();
-    sa.docs.forEach(x=>{ const d=x.data(), t=carDate(d.t); if(t && d.niveau!=null && isFinite(+d.niveau)) pts.push({t:+t,v:+d.niveau}); });
+    const [jr,sa]=await Promise.all([carColl("jours").get(), carColl("sante").get()]);
+    jr.docs.forEach(x=>(x.data().etats||[]).forEach(e=>{ const v=e.health??e.sante, t=carDate(e.t); if(t && v!=null && isFinite(+v) && +v>0) pts.push({t:+t,v:+v}); }));
+    sa.docs.forEach(x=>{ const d=x.data(), t=carDate(d.t); if(t && d.niveau!=null) sohPsa.push({t:+t,v:+d.niveau}); });
+    sohPsa.sort((a,b)=>a.t-b.t);
   }
-  pts.sort((a,b)=>a.t-b.t);
-  return pts;
+  try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c && c.health!=null && carDate(c.carAt)) pts.push({t:+carDate(c.carAt),v:+c.health}); }catch(e){}
+  // une valeur par jour (la dernière)
+  const day=new Map(); pts.sort((a,b)=>a.t-b.t).forEach(p=>day.set(isoDay(new Date(p.t)),p));
+  return [...day.values()];
 }
 function drawSoh(){
   const P=sohData||[], YR=365.25*86400000, st=sohCfg.start?+new Date(sohCfg.start+"T12:00"):null;
@@ -2937,12 +2960,13 @@ function drawSoh(){
   // texte de synthèse
   const T=[];
   if(!fb || !fb.auth.currentUser) T.push("Connecte-toi pour charger les mesures enregistrées.");
-  else if(!P.length) T.push("Aucune mesure de santé dans l'historique pour l'instant (psa_car_controller l'enregistre quand la voiture la remonte).");
+  else if(!P.length) T.push("Aucune valeur de santé dans l'historique pour l'instant : elle est enregistrée avec chaque état de la voiture.");
   if(!st) T.push("Indique la date de mise en circulation pour afficher la courbe théorique.");
   if(P.length){
     const last=P[P.length-1]; T.push(`Dernière mesure : ${String(last.v).replace(".",",")} % le ${new Date(last.t).toLocaleDateString("fr-FR")}.`);
     if(st){ const th=theoAt(last.t), e=last.v-th; T.push(`Courbe théorique à cette date : ${th.toFixed(1).replace(".",",")} %, soit ${e>=0?"+":"−"}${Math.abs(e).toFixed(1).replace(".",",")} point${Math.abs(e)>=2?"s":""} ${e>=0?"au-dessus":"en dessous"}.`); }
   }
+  if(sohPsa.length){ const lp=sohPsa[sohPsa.length-1]; if(!P.length || Math.abs(lp.v-P[P.length-1].v)>=1) T.push(`(psa_car_controller enregistre de son côté ${String(lp.v).replace(".",",")} % : c'est son propre calcul, différent de la valeur de la voiture, donc il n'est pas utilisé.)`); }
   if(trend){ T.push(`Tendance des mesures : ${trend.perYear>=0?"+":"−"}${Math.abs(trend.perYear).toFixed(1).replace(".",",")} point par an${st?`, soit ${trend.f(st+8*YR).toFixed(0)} % à 8 ans si elle se maintenait`:""}.`); }
   else if(P.length) T.push("Pas encore assez de recul (au moins 3 mesures sur 2 mois) pour une tendance fiable.");
   $("sohTxt").textContent=T.join(" ");
