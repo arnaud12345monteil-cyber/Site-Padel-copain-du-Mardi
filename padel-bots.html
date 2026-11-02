@@ -4,6 +4,21 @@
 <!--
   PADEL BOTS — Historique des versions
   ─────────────────────────────────────────
+  v2.0 — 2026-11-02
+    Refonte complète : la page configure directement les tâches du
+    Planificateur de tâches Windows (une par compte). Plusieurs déclencheurs
+    par compte (une fois, quotidien, hebdomadaire, mensuel par jours du mois
+    ou « 2e mardi », au démarrage, à l'ouverture de session), date/heure de
+    début à la seconde, expiration, répétition (intervalle + durée), délai
+    aléatoire, et les options de la tâche (rattrapage, réveil, réseau,
+    batterie, durée max, instances multiples, priorité, redémarrage).
+    Résumé en français + aperçu des prochains lancements, état de
+    synchronisation et statut Windows (dernière/prochaine exécution) par
+    compte. Le veilleur (bot_watcher.py v2) ne lance plus les bots : il
+    applique cette config au Planificateur Windows. Un compte sans
+    planification enregistrée n'est pas touché (sa tâche Windows reste telle
+    quelle). Anciens champs weekday/time conservés mais plus utilisés.
+
   v1.4 — 2026-09-19
     Bouton d'installation persistant "📲 Installer" dans le bandeau du haut
     (même logique que le tracker principal v1.35).
@@ -54,7 +69,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; min-height: 100vh; padding: 24px 16px 80px; }
   body.locked .admin-only { opacity: 0.3; pointer-events: none; user-select: none; }
-  .wrap { max-width: 760px; margin: 0 auto; }
+  .wrap { max-width: 820px; margin: 0 auto; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
   header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 3px; color: var(--accent); line-height: 1; }
   header p { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
@@ -113,6 +128,46 @@
   .modal input[type="password"] { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; padding: 10px 14px; border-radius: 4px; outline: none; margin-bottom: 10px; }
   .modal .err { color: var(--danger); font-size: 11px; display: none; margin-bottom: 10px; }
 
+
+  /* ── Éditeur de planification (v2.0) ── */
+  input[type="number"], input[type="date"] { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 9px 10px; border-radius: 4px; outline: none; color-scheme: dark; min-width: 0; }
+  input[type="number"] { width: 70px; }
+  input[type="date"] { width: 150px; }
+  select.inline { width: auto; padding: 9px 8px; }
+  .account-card { padding: 16px; }
+  .sync-line, .win-line { font-size: 10px; line-height: 1.6; margin-bottom: 6px; }
+  .sync-ok { color: var(--accent2); } .sync-pending { color: var(--orange); } .sync-error { color: var(--danger); } .sync-new { color: var(--muted); }
+  .win-line { color: var(--muted); }
+  .trig { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 10px; }
+  .trig.off { opacity: .55; }
+  .trig-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .trig-head select { flex: 1; min-width: 150px; }
+  .trig-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; }
+  .trig-row .account-field { min-width: 0; flex: 0 1 auto; max-width: 100%; }
+  .field-label { display: block; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { padding: 6px 9px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 4px; font-family: inherit; font-size: 11px; cursor: pointer; min-width: 34px; }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: rgba(184,245,60,0.1); }
+  .chip.small { padding: 5px 0; min-width: 32px; font-size: 10px; }
+  .days-grid { display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px; }
+  .icon-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; width: 32px; height: 32px; cursor: pointer; font-size: 13px; flex-shrink: 0; }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn.del:hover { border-color: var(--danger); color: var(--danger); }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; line-height: 1.5; }
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+  .dur { display: inline-flex; gap: 6px; align-items: center; }
+  details.adv { margin-top: 10px; }
+  details.adv > summary { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; cursor: pointer; padding: 4px 0; }
+  details.adv[open] > summary { color: var(--accent); }
+  .summary-box { margin-top: 12px; padding: 10px 12px; background: var(--bg); border: 1px dashed var(--border); border-radius: 6px; font-size: 11px; line-height: 1.7; }
+  .summary-box ul { margin: 4px 0 0 18px; padding: 0; }
+  .summary-box .next { color: var(--muted); font-size: 10px; margin-top: 8px; }
+  .err-list { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-size: 11px; line-height: 1.6; }
+  .card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 10px 16px; margin-top: 10px; }
+  .time-spinner { display: inline-flex; width: 150px; }
+
   /* ── Navigation d'appli — partagée entre les 4 pages de l'appli unifiée ── */
   .app-nav { position: sticky; top: 0; z-index: 200; display: flex; align-items: center; height: 40px; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 8px; overflow-x: auto; margin: -24px -16px 24px; }
   .app-nav a { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s, border-color .15s; }
@@ -167,12 +222,11 @@
       <div class="section-title">Veilleur (mini PC)</div>
       <div class="watcher-badge" id="watcher-badge"><span class="watcher-dot"></span> Chargement…</div>
       <div class="hint">
-        Le veilleur est un script qui tourne en tâche planifiée sur le mini PC toutes les
-        5 min. Il lit ce qui est réglé ci-dessous et lance lui-même le bon bot au bon
-        moment — plus besoin de reprogrammer le planificateur Windows à la main. Quand un
-        lancement approche (dans les 5 prochaines minutes), il attend précisément jusqu'à
-        la seconde programmée avant de lancer — il ne se contente pas d'attendre son
-        prochain passage.
+        Ce qui est réglé ci-dessous est appliqué au <b>Planificateur de tâches Windows</b> du
+        mini PC par le veilleur, qui passe toutes les 5 min : une tâche par compte, lancée
+        par Windows lui-même (à la seconde près). Une modification peut donc mettre jusqu'à
+        5 min à arriver dans Windows. Le veilleur remonte aussi l'état de toutes les tâches
+        dans le suivi (onglet « Tâches planifiées »).
       </div>
     </div>
 
@@ -180,10 +234,13 @@
       <div class="section-title">Comptes</div>
       <div id="accounts-container"></div>
       <div class="hint">
-        Pour chaque compte : jour et heure auxquels le veilleur doit lancer le bot
-        (le bot cherche ensuite lui-même le bon créneau à réserver). « Lancer maintenant »
-        déclenche un lancement immédiat au prochain passage du veilleur, sans attendre
-        l'heure programmée — pratique pour tester.
+        Les heures sont celles du mini PC. Chaque compte peut avoir plusieurs déclencheurs.
+        Rien n'est envoyé au veilleur tant que tu n'as pas appuyé sur « Enregistrer ». Au
+        premier enregistrement d'un compte, sa tâche Windows existante du même nom
+        (<code>PadelBot&lt;Compte&gt;</code>) est remplacée par celle décrite ici ; avant, elle n'est pas touchée.
+        Les tâches sont créées en « exécuter uniquement si l'utilisateur est connecté »
+        (le navigateur du bot doit pouvoir s'afficher).
+        « Lancer maintenant » demande au Planificateur de démarrer la tâche au prochain passage du veilleur.
       </div>
     </div>
 
@@ -212,36 +269,338 @@ const db = firebase.firestore();
 const DOC_REF = db.collection("padel").doc("tracker");
 const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 
-const APP_VERSION = 'v1.4';
-const APP_VERSION_DATE = '2026-09-18';
+const APP_VERSION = 'v2.0';
+const APP_VERSION_DATE = '2026-11-02';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
+const TASK_PREFIX = 'PadelBot';              // même préfixe que bot_watcher.py
 const DEFAULT_ACCOUNTS = ['Arnaud', 'Nicolas', 'Thibault'];
-const WEEKDAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const TRIGGER_TYPES = [
+  ['once', 'Une seule fois'],
+  ['daily', 'Quotidien'],
+  ['weekly', 'Hebdomadaire'],
+  ['monthly', 'Mensuel — jours du mois'],
+  ['monthlyDow', 'Mensuel — ex. 2e mardi du mois'],
+  ['startup', 'Au démarrage de Windows'],
+  ['logon', "À l'ouverture de session"],
+];
+const CALENDAR_TYPES = ['once', 'daily', 'weekly', 'monthly', 'monthlyDow'];
+const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const DAYS_LONG = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+const MONTHS_SHORT = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const WEEK_LABELS = { 1: '1er', 2: '2e', 3: '3e', 4: '4e' };
+const MULTIPLE_OPTIONS = [
+  ['ignoreNew', 'Ne pas démarrer une nouvelle instance'],
+  ['parallel', 'Exécuter une nouvelle instance en parallèle'],
+  ['queue', 'Mettre en file d\'attente'],
+  ['stopExisting', "Arrêter l'instance existante"],
+];
 
-let state = { bot_schedule: { accounts: {}, watcher_status: {} } };
+let state = { bot_schedule: { accounts: {}, watcher_status: {} }, task_status: {}, task_status_updated: null };
+const drafts = {};        // brouillons non enregistrés : nom -> { triggers, settings }
+const openDetails = {};   // état ouvert/fermé des <details> pour survivre aux rafraîchissements
 
-function accountDefaults() {
-  return { enabled: false, weekday: 0, time: '22:00:00', runNow: false, lastFiredAt: null, lastFiredStatus: '' };
+// ── Utilitaires ─────────────────────────────────────────────────────────
+function pad2(n) { return String(n).padStart(2, '0'); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function toInt(v, def, lo, hi) {
+  let n = parseInt(v, 10);
+  if (isNaN(n)) n = def;
+  if (lo != null) n = Math.max(lo, n);
+  if (hi != null) n = Math.min(hi, n);
+  return n;
 }
-
-function allAccountNames() {
-  const fromData = Object.keys(state.bot_schedule.accounts || {});
-  return Array.from(new Set([...DEFAULT_ACCOUNTS, ...fromData]));
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
-
+// 'YYYY-MM-DDTHH:MM:SS' <-> morceaux
+function splitDT(s) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(s || '');
+  if (!m) return { date: '', h: 0, m: 0, s: 0 };
+  return { date: m[1], h: +m[2], m: +m[3], s: +(m[4] || 0) };
+}
+function joinDT(p) { return p.date ? p.date + 'T' + pad2(p.h) + ':' + pad2(p.m) + ':' + pad2(p.s) : ''; }
+function parseDT(s) {
+  const p = splitDT(s);
+  if (!p.date) return null;
+  const [y, mo, d] = p.date.split('-').map(Number);
+  return new Date(y, mo - 1, d, p.h, p.m, p.s);
+}
+function fmtDate(dateStr) { const [y, m, d] = dateStr.split('-'); return d + '/' + m + '/' + y; }
+function fmtTime(p) { return pad2(p.h) + ':' + pad2(p.m) + ':' + pad2(p.s); }
+function fmtFull(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return esc(iso);
+  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+}
 function formatDateTime(iso) {
   const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' à '
-    + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (isNaN(d)) return esc(iso);
+  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' à ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+function durText(min) {
+  if (min % 1440 === 0) return (min / 1440) + (min / 1440 > 1 ? ' jours' : ' jour');
+  if (min % 60 === 0) return (min / 60) + ' h';
+  if (min > 60) return Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
+  return min + ' min';
+}
+function listFr(arr) {
+  if (arr.length <= 1) return arr.join('');
+  return arr.slice(0, -1).join(', ') + ' et ' + arr[arr.length - 1];
 }
 
+// ── Modèle (même contrat que bot_watcher.py) ───────────────────────────
+function intList(v, lo, hi) {
+  const out = [];
+  (v || []).forEach(x => { const n = parseInt(x, 10); if (!isNaN(n) && n >= lo && n <= hi && !out.includes(n)) out.push(n); });
+  return out.sort((a, b) => a - b);
+}
+function normTrigger(t) {
+  t = t || {};
+  const months = intList(t.months, 1, 12);
+  return {
+    id: t.id || ('t' + Math.random().toString(36).slice(2, 8)),
+    type: TRIGGER_TYPES.some(x => x[0] === t.type) ? t.type : 'weekly',
+    enabled: t.enabled !== false,
+    start: t.start || '',
+    end: t.end || '',
+    daysInterval: toInt(t.daysInterval, 1, 1, 999),
+    weeksInterval: toInt(t.weeksInterval, 1, 1, 52),
+    daysOfWeek: intList(t.daysOfWeek, 0, 6),
+    months: months.length ? months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    daysOfMonth: intList(t.daysOfMonth, 1, 31),
+    lastDay: !!t.lastDay,
+    weeksOfMonth: intList(t.weeksOfMonth, 1, 4),
+    lastWeek: !!t.lastWeek,
+    repeatEveryMin: toInt(t.repeatEveryMin, 0, 0, 31 * 24 * 60),
+    repeatDurationMin: toInt(t.repeatDurationMin, 0, 0, 10 * 365 * 24 * 60),
+    stopAtEnd: !!t.stopAtEnd,
+    randomDelayMin: toInt(t.randomDelayMin, 0, 0, 24 * 60),
+    delayMin: toInt(t.delayMin, 0, 0, 24 * 60),
+  };
+}
+function normSettings(s) {
+  s = s || {};
+  const d = (k, def) => (s[k] === undefined ? def : !!s[k]);
+  return {
+    startWhenAvailable: d('startWhenAvailable', false),
+    wakeToRun: d('wakeToRun', false),
+    runOnlyIfNetwork: d('runOnlyIfNetwork', false),
+    disallowOnBattery: d('disallowOnBattery', true),
+    stopOnBattery: d('stopOnBattery', true),
+    execLimitMin: toInt(s.execLimitMin, 4320, 0, 365 * 24 * 60),
+    multiple: MULTIPLE_OPTIONS.some(x => x[0] === s.multiple) ? s.multiple : 'ignoreNew',
+    priority: toInt(s.priority, 7, 0, 10),
+    restartCount: toInt(s.restartCount, 0, 0, 999),
+    restartIntervalMin: toInt(s.restartIntervalMin, 1, 1, 24 * 60),
+    runLevel: s.runLevel === 'highest' ? 'highest' : 'limited',
+  };
+}
+function normModel(m) {
+  m = m || {};
+  return { triggers: (m.triggers || []).map(normTrigger), settings: normSettings(m.settings) };
+}
+function modelKey(m) {
+  // comparaison sans les identifiants aléatoires des déclencheurs
+  return JSON.stringify({ t: m.triggers.map(t => Object.assign({}, t, { id: '' })), s: m.settings });
+}
+
+function validTriggerType(t, i) {
+  const errs = [];
+  const label = 'Déclencheur ' + (i + 1);
+  if (CALENDAR_TYPES.includes(t.type) && !parseDT(t.start)) errs.push(label + ' : date/heure de début manquante');
+  if (t.type === 'weekly' && !t.daysOfWeek.length) errs.push(label + ' : aucun jour de la semaine coché');
+  if (t.type === 'monthly' && !t.daysOfMonth.length && !t.lastDay) errs.push(label + ' : aucun jour du mois choisi');
+  if (t.type === 'monthlyDow') {
+    if (!t.weeksOfMonth.length && !t.lastWeek) errs.push(label + ' : aucune semaine du mois choisie');
+    if (!t.daysOfWeek.length) errs.push(label + ' : aucun jour de la semaine coché');
+  }
+  const s = parseDT(t.start), e = parseDT(t.end);
+  if (s && e && e <= s) errs.push(label + ' : la date de fin doit être après le début');
+  if (t.repeatEveryMin && t.repeatDurationMin && t.repeatDurationMin < t.repeatEveryMin) errs.push(label + " : la durée de répétition doit être au moins égale à l'intervalle");
+  return errs;
+}
+function validateModel(m) {
+  let errs = [];
+  m.triggers.forEach((t, i) => { errs = errs.concat(validTriggerType(t, i)); });
+  return errs;
+}
+function warnings(m, enabled) {
+  const w = [];
+  const now = new Date();
+  if (!m.triggers.length) w.push('Aucun déclencheur : la tâche ne se lancera jamais toute seule.');
+  m.triggers.forEach((t, i) => {
+    if (t.enabled && t.type === 'once') {
+      const s = parseDT(t.start);
+      if (s && s < now) w.push('Déclencheur ' + (i + 1) + " : la date est déjà passée, il ne se déclenchera pas.");
+    }
+    if (t.enabled && t.end) {
+      const e = parseDT(t.end);
+      if (e && e < now) w.push('Déclencheur ' + (i + 1) + ' : expiré, il ne se déclenchera plus.');
+    }
+  });
+  if (!enabled && m.triggers.length) w.push('Le compte est désactivé : la tâche Windows sera créée mais désactivée.');
+  return w;
+}
+
+function defaultTrigger(type) {
+  const t = normTrigger({ type: type || 'weekly', start: todayStr() + 'T22:00:00' });
+  return seedForType(t);
+}
+// Remplit des valeurs par défaut cohérentes quand on change de type
+function seedForType(t) {
+  const s = parseDT(t.start) || new Date();
+  const dow = (s.getDay() + 6) % 7;
+  if (t.type === 'weekly' && !t.daysOfWeek.length) t.daysOfWeek = [dow];
+  if (t.type === 'monthly' && !t.daysOfMonth.length && !t.lastDay) t.daysOfMonth = [s.getDate()];
+  if (t.type === 'monthlyDow') {
+    if (!t.weeksOfMonth.length && !t.lastWeek) t.weeksOfMonth = [1];
+    if (!t.daysOfWeek.length) t.daysOfWeek = [dow];
+  }
+  if (!CALENDAR_TYPES.includes(t.type)) { t.repeatEveryMin = 0; t.randomDelayMin = 0; t.start = ''; t.end = ''; }
+  else if (!t.start) t.start = todayStr() + 'T22:00:00';
+  return t;
+}
+
+function accountKey(name) { return /^[\w-]+$/.test(name); }
+function allAccountNames() {
+  const fromData = Object.keys(state.bot_schedule.accounts || {});
+  return Array.from(new Set([...DEFAULT_ACCOUNTS, ...fromData])).filter(accountKey);
+}
+function accountCfg(name) { return (state.bot_schedule.accounts || {})[name] || {}; }
+function hasStored(name) { const s = accountCfg(name).schedule; return !!(s && typeof s === 'object'); }
+
+// Ancien format (jour + heure) converti en un déclencheur hebdomadaire
+function legacyModel(cfg) {
+  const wd = typeof cfg.weekday === 'number' ? cfg.weekday : 0;
+  const tp = String(cfg.time || '22:00:00').split(':').map(x => parseInt(x, 10) || 0);
+  const t = normTrigger({
+    type: 'weekly', daysOfWeek: [wd],
+    start: todayStr() + 'T' + pad2(tp[0] || 0) + ':' + pad2(tp[1] || 0) + ':' + pad2(tp[2] || 0),
+  });
+  return { triggers: [t], settings: normSettings({}) };
+}
+function storedModel(name) {
+  const cfg = accountCfg(name);
+  if (hasStored(name)) return normModel(cfg.schedule);
+  return legacyModel(cfg);
+}
+function currentModel(name) { return drafts[name] || storedModel(name); }
+function isDirty(name) {
+  if (!hasStored(name)) return true;   // jamais enregistré : à enregistrer
+  if (!drafts[name]) return false;
+  return modelKey(drafts[name]) !== modelKey(normModel(accountCfg(name).schedule));
+}
+function edit(name, fn) {
+  if (!drafts[name]) drafts[name] = clone(currentModel(name));
+  fn(drafts[name]);
+  renderCard(name);
+}
+
+// ── Résumé en français + aperçu des prochains lancements ───────────────
+function triggerSummary(t) {
+  const sp = splitDT(t.start);
+  const at = ' à ' + fmtTime(sp);
+  let txt;
+  if (t.type === 'once') txt = 'Une seule fois, le ' + (sp.date ? fmtDate(sp.date) : '?') + at;
+  else if (t.type === 'daily') txt = (t.daysInterval === 1 ? 'Tous les jours' : 'Tous les ' + t.daysInterval + ' jours') + at;
+  else if (t.type === 'weekly') {
+    const days = listFr(t.daysOfWeek.map(d => DAYS_LONG[d]));
+    txt = (t.weeksInterval === 1 ? 'Chaque ' : 'Toutes les ' + t.weeksInterval + ' semaines, ') + (days || '(aucun jour)') + at;
+  } else if (t.type === 'monthly') {
+    const parts = t.daysOfMonth.map(d => String(d));
+    if (t.lastDay) parts.push('dernier jour');
+    txt = 'Le ' + (listFr(parts) || '(aucun jour)') + ' du mois' + monthsSuffix(t) + at;
+  } else if (t.type === 'monthlyDow') {
+    const w = t.weeksOfMonth.map(x => WEEK_LABELS[x]);
+    if (t.lastWeek) w.push('dernier');
+    txt = 'Le ' + (listFr(w) || '?') + ' ' + (listFr(t.daysOfWeek.map(d => DAYS_LONG[d])) || '?') + ' du mois' + monthsSuffix(t) + at;
+  } else if (t.type === 'startup') {
+    return 'Au démarrage de Windows' + (t.delayMin ? ', avec ' + durText(t.delayMin) + ' de délai' : '');
+  } else {
+    return "À l'ouverture de session" + (t.delayMin ? ', avec ' + durText(t.delayMin) + ' de délai' : '');
+  }
+  if (t.type !== 'once' && sp.date) txt += ', à partir du ' + fmtDate(sp.date);
+  if (t.repeatEveryMin) {
+    txt += ', puis toutes les ' + durText(t.repeatEveryMin) + (t.repeatDurationMin ? ' pendant ' + durText(t.repeatDurationMin) : ' indéfiniment');
+  }
+  if (t.randomDelayMin) txt += ' (délai aléatoire jusqu\'à ' + durText(t.randomDelayMin) + ')';
+  if (t.end) { const ep = splitDT(t.end); txt += ", jusqu'au " + fmtDate(ep.date) + ' ' + fmtTime(ep); }
+  return txt;
+}
+function monthsSuffix(t) {
+  if (t.months.length === 12) return '';
+  return ', en ' + listFr(t.months.map(m => MONTHS_LONG[m - 1]));
+}
+
+function daysInMonth(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+function dayMatches(t, day, startDay) {
+  if (t.type === 'daily') {
+    const diff = Math.round((day - startDay) / 864e5);
+    return diff % t.daysInterval === 0;
+  }
+  const dow = (day.getDay() + 6) % 7;
+  if (t.type === 'weekly') {
+    const mon = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    const weeks = Math.round((mon(day) - mon(startDay)) / (7 * 864e5));
+    return weeks % t.weeksInterval === 0 && t.daysOfWeek.includes(dow);
+  }
+  if (!t.months.includes(day.getMonth() + 1)) return false;
+  const dom = day.getDate(), dim = daysInMonth(day.getFullYear(), day.getMonth());
+  if (t.type === 'monthly') return t.daysOfMonth.includes(dom) || (t.lastDay && dom === dim);
+  if (t.type === 'monthlyDow') {
+    if (!t.daysOfWeek.includes(dow)) return false;
+    return t.weeksOfMonth.includes(Math.ceil(dom / 7)) || (t.lastWeek && dom + 7 > dim);
+  }
+  return false;
+}
+function occurrences(t, now, limit) {
+  if (!t.enabled || !CALENDAR_TYPES.includes(t.type)) return [];
+  const s = parseDT(t.start);
+  if (!s) return [];
+  const end = parseDT(t.end);
+  const stepMs = t.repeatEveryMin * 60000;
+  const spanMs = t.repeatDurationMin ? t.repeatDurationMin * 60000 : 86400000;
+  const out = [];
+  const pushDay = (first) => {
+    for (let k = 0; k < 400; k++) {
+      const f = new Date(first.getTime() + k * stepMs);
+      if (stepMs && k * stepMs >= spanMs) break;
+      if (f >= now && (!end || f <= end)) out.push(f);
+      if (!stepMs) break;
+    }
+  };
+  if (t.type === 'once') { pushDay(s); return out.slice(0, limit); }
+  const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const horizon = now.getTime() + 800 * 864e5;
+  for (let i = 0; i < 4000; i++) {
+    const day = new Date(startDay.getFullYear(), startDay.getMonth(), startDay.getDate() + i);
+    if (day.getTime() > horizon || (end && day > end)) break;
+    if (!dayMatches(t, day, startDay)) continue;
+    pushDay(new Date(day.getFullYear(), day.getMonth(), day.getDate(), s.getHours(), s.getMinutes(), s.getSeconds()));
+    if (out.length >= limit) break;
+  }
+  return out.slice(0, limit);
+}
+function nextRuns(model, count) {
+  const now = new Date();
+  let all = [];
+  model.triggers.forEach(t => { all = all.concat(occurrences(t, now, count)); });
+  all.sort((a, b) => a - b);
+  return all.slice(0, count);
+}
+function fmtRun(d) {
+  return DAYS_SHORT[(d.getDay() + 6) % 7].toLowerCase() + ' ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+}
+
+// ── Rendu : bandeau veilleur ───────────────────────────────────────────
 function render() {
   renderWatcherStatus();
   renderAccounts();
 }
-
 function renderWatcherStatus() {
   const ws = state.bot_schedule.watcher_status || {};
   const el = document.getElementById('watcher-badge');
@@ -252,83 +611,397 @@ function renderWatcherStatus() {
   const last = new Date(ws.lastCheckAt);
   const diffMin = Math.max(0, Math.round((Date.now() - last.getTime()) / 60000));
   const ok = diffMin < 15;
-  el.innerHTML = '<span class="watcher-dot ' + (ok ? 'ok' : 'stale') + '"></span> Veilleur' + (ws.hostname ? ' (' + ws.hostname + ')' : '')
+  // Un veilleur v1 n'écrit pas "version" : il lancerait encore les bots lui-même
+  const old = !ws.version ? ' <span style="color:var(--orange)">— ancienne version du veilleur (v1) : remplace bot_watcher.py par la v2, sinon cette page n\'a aucun effet sur Windows.</span>' : '';
+  el.innerHTML = '<span class="watcher-dot ' + (ok ? 'ok' : 'stale') + '"></span> Veilleur' + (ws.hostname ? ' (' + esc(ws.hostname) + ')' : '') + (ws.version ? ' v' + esc(ws.version) : '')
     + ' — dernière vérification ' + (diffMin <= 0 ? "à l'instant" : 'il y a ' + diffMin + ' min')
-    + (ok ? '' : ' <span style="color:var(--danger)">— semble arrêté, vérifie le mini PC</span>');
+    + (ok ? '' : ' <span style="color:var(--danger)">— semble arrêté, vérifie le mini PC</span>') + old;
 }
 
-function renderAccounts() {
-  const container = document.getElementById('accounts-container');
-  container.innerHTML = allAccountNames().map(name => {
-    const cfg = Object.assign(accountDefaults(), (state.bot_schedule.accounts || {})[name] || {});
-    return accountCardHtml(name, cfg);
-  }).join('');
+// ── Rendu : briques d'interface ────────────────────────────────────────
+function chip(on, attrs, label, small) {
+  return '<button type="button" class="chip' + (small ? ' small' : '') + (on ? ' on' : '') + '" ' + attrs + '>' + label + '</button>';
 }
-
-function pad2(n) { return String(n).padStart(2, '0'); }
-
-function timeSpinnerUnitHtml(name, unit, value) {
-  return '<div class="time-spinner-unit">'
-    +   '<button type="button" class="time-spinner-arrow" onclick="changeTime(\'' + name + '\',\'' + unit + '\',1)" aria-label="Augmenter">▲</button>'
-    +   '<div class="time-spinner-value">' + pad2(value) + '</div>'
-    +   '<button type="button" class="time-spinner-arrow" onclick="changeTime(\'' + name + '\',\'' + unit + '\',-1)" aria-label="Diminuer">▼</button>'
+function spinnerHtml(base, p) {
+  const unit = (u, v) => '<div class="time-spinner-unit">'
+    + '<button type="button" class="time-spinner-arrow" ' + base + ' data-act="spin" data-u="' + u + '" data-d="1" aria-label="Augmenter">▲</button>'
+    + '<div class="time-spinner-value">' + pad2(v) + '</div>'
+    + '<button type="button" class="time-spinner-arrow" ' + base + ' data-act="spin" data-u="' + u + '" data-d="-1" aria-label="Diminuer">▼</button>'
     + '</div>';
+  return '<div class="time-spinner">' + unit('h', p.h) + '<div class="time-spinner-sep">:</div>' + unit('m', p.m) + '<div class="time-spinner-sep">:</div>' + unit('s', p.s) + '</div>';
+}
+// Champ durée : nombre + unité, avec une valeur « zéro » libellée (jamais / indéfiniment / illimité)
+function durHtml(base, minutes, zeroLabel, allowDays) {
+  let unit = 'zero', n = 1;
+  if (minutes > 0) {
+    if (allowDays && minutes % 1440 === 0) { unit = 'd'; n = minutes / 1440; }
+    else if (minutes % 60 === 0) { unit = 'h'; n = minutes / 60; }
+    else { unit = 'm'; n = minutes; }
+  }
+  const opt = (v, l) => '<option value="' + v + '"' + (unit === v ? ' selected' : '') + '>' + l + '</option>';
+  return '<span class="dur" ' + base + ' data-act="dur">'
+    + '<input type="number" min="1" value="' + n + '"' + (unit === 'zero' ? ' style="display:none"' : '') + '>'
+    + '<select class="inline">' + opt('zero', zeroLabel) + opt('m', 'minutes') + opt('h', 'heures') + (allowDays ? opt('d', 'jours') : '') + '</select>'
+    + '</span>';
+}
+function numHtml(base, field, value, min, max, w) {
+  return '<input type="number" ' + base + ' data-act="num" data-f="' + field + '" min="' + min + '" max="' + max + '" value="' + value + '"' + (w ? ' style="width:' + w + 'px"' : '') + '>';
 }
 
-function accountCardHtml(name, cfg) {
-  const statusLine = cfg.lastFiredAt
-    ? 'Dernier lancement : ' + formatDateTime(cfg.lastFiredAt) + (cfg.lastFiredStatus ? ' — ' + cfg.lastFiredStatus : '')
-    : 'Jamais encore lancé par le veilleur.';
-  const pending = cfg.runNow ? ' <span style="color:var(--accent)">— lancement manuel en attente du prochain passage du veilleur…</span>' : '';
-  const timeParts = (cfg.time || '22:00:00').split(':').map(p => parseInt(p, 10) || 0);
-  const th = timeParts[0] || 0, tm = timeParts[1] || 0, ts = timeParts[2] || 0;
-  return '<div class="account-card' + (cfg.enabled ? '' : ' disabled') + '">'
+function boundaryFieldHtml(base, field, label, value) {
+  const p = splitDT(value);
+  return '<div class="account-field"><span class="field-label">' + label + '</span>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<input type="date" ' + base + ' data-act="date" data-f="' + field + '" value="' + p.date + '">'
+    + spinnerHtml(base + ' data-f="' + field + '"', p)
+    + '</div></div>';
+}
+
+function triggerHtml(name, t, i) {
+  const base = 'data-a="' + name + '" data-i="' + i + '"';
+  const typeOpts = TRIGGER_TYPES.map(x => '<option value="' + x[0] + '"' + (x[0] === t.type ? ' selected' : '') + '>' + x[1] + '</option>').join('');
+  let h = '<div class="trig' + (t.enabled ? '' : ' off') + '">'
+    + '<div class="trig-head">'
+    +   '<select ' + base + ' data-act="type">' + typeOpts + '</select>'
+    +   '<label class="check"><input type="checkbox" ' + base + ' data-act="trig-enabled"' + (t.enabled ? ' checked' : '') + '> actif</label>'
+    +   '<button type="button" class="icon-btn" ' + base + ' data-act="dup" title="Dupliquer" aria-label="Dupliquer">⧉</button>'
+    +   '<button type="button" class="icon-btn del" ' + base + ' data-act="del" title="Supprimer" aria-label="Supprimer">✕</button>'
+    + '</div>';
+
+  const cal = CALENDAR_TYPES.includes(t.type);
+  if (cal) {
+    h += '<div class="trig-row">' + boundaryFieldHtml(base, 'start', t.type === 'once' ? 'Date et heure' : 'Début (date et heure)', t.start) + '</div>';
+  }
+  if (t.type === 'daily') {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Se répète tous les</span>'
+      + numHtml(base, 'daysInterval', t.daysInterval, 1, 999) + ' <span style="font-size:11px">jour(s)</span></div></div>';
+  }
+  if (t.type === 'weekly') {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Se répète toutes les</span>'
+      + numHtml(base, 'weeksInterval', t.weeksInterval, 1, 52) + ' <span style="font-size:11px">semaine(s)</span></div>'
+      + '<div class="account-field"><span class="field-label">Jours</span><div class="chips">'
+      + DAYS_SHORT.map((d, k) => chip(t.daysOfWeek.includes(k), base + ' data-act="chip" data-f="daysOfWeek" data-v="' + k + '"', d)).join('')
+      + '</div></div></div>';
+  }
+  if (t.type === 'monthly') {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Jours du mois</span><div class="days-grid">'
+      + Array.from({ length: 31 }, (_, k) => chip(t.daysOfMonth.includes(k + 1), base + ' data-act="chip" data-f="daysOfMonth" data-v="' + (k + 1) + '"', k + 1, true)).join('')
+      + chip(t.lastDay, base + ' data-act="flag" data-f="lastDay"', 'Dernier jour')
+      + '</div></div></div>';
+  }
+  if (t.type === 'monthlyDow') {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Semaine du mois</span><div class="chips">'
+      + [1, 2, 3, 4].map(k => chip(t.weeksOfMonth.includes(k), base + ' data-act="chip" data-f="weeksOfMonth" data-v="' + k + '"', WEEK_LABELS[k])).join('')
+      + chip(t.lastWeek, base + ' data-act="flag" data-f="lastWeek"', 'Dernière')
+      + '</div></div>'
+      + '<div class="account-field"><span class="field-label">Jours</span><div class="chips">'
+      + DAYS_SHORT.map((d, k) => chip(t.daysOfWeek.includes(k), base + ' data-act="chip" data-f="daysOfWeek" data-v="' + k + '"', d)).join('')
+      + '</div></div></div>';
+  }
+  if (t.type === 'monthly' || t.type === 'monthlyDow') {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Mois (aucun coché = tous)</span><div class="chips">'
+      + MONTHS_SHORT.map((m, k) => chip(t.months.length < 12 && t.months.includes(k + 1), base + ' data-act="chip" data-f="months" data-v="' + (k + 1) + '"', m)).join('')
+      + '</div></div></div>';
+  }
+  if (!cal) {
+    h += '<div class="trig-row"><div class="account-field"><span class="field-label">Délai après l\'événement</span>'
+      + durHtml(base + ' data-f="delayMin"', t.delayMin, 'aucun', false) + '</div></div>';
+  }
+
+  if (cal) {
+    const key = name + ':' + i;
+    h += '<details class="adv" data-key="' + key + '"' + (openDetails[key] ? ' open' : '') + '><summary>Options avancées (répétition, expiration, délai aléatoire)</summary>'
+      + '<div class="trig-row"><div class="account-field"><span class="field-label">Répéter la tâche toutes les</span>'
+      + durHtml(base + ' data-f="repeatEveryMin"', t.repeatEveryMin, 'ne pas répéter', false) + '</div>';
+    if (t.repeatEveryMin) {
+      h += '<div class="account-field"><span class="field-label">pendant</span>' + durHtml(base + ' data-f="repeatDurationMin"', t.repeatDurationMin, 'indéfiniment', true) + '</div>'
+        + '<div class="account-field"><label class="check"><input type="checkbox" ' + base + ' data-act="flag" data-f="stopAtEnd"' + (t.stopAtEnd ? ' checked' : '') + '> arrêter la tâche en cours à la fin de la durée</label></div>';
+    }
+    h += '</div>'
+      + '<div class="trig-row"><div class="account-field"><span class="field-label">Délai aléatoire (jusqu\'à)</span>'
+      + durHtml(base + ' data-f="randomDelayMin"', t.randomDelayMin, 'aucun', false) + '</div></div>'
+      + '<div class="trig-row"><div class="account-field"><label class="check"><input type="checkbox" ' + base + ' data-act="end-toggle"' + (t.end ? ' checked' : '') + '> Expiration</label></div></div>';
+    if (t.end) h += '<div class="trig-row">' + boundaryFieldHtml(base, 'end', "Ce déclencheur s'arrête le", t.end) + '</div>';
+    h += '</details>';
+  }
+  return h + '</div>';
+}
+
+function settingsHtml(name, s) {
+  const base = 'data-a="' + name + '"';
+  const cb = (f, label) => '<label class="check"><input type="checkbox" ' + base + ' data-act="set-bool" data-f="' + f + '"' + (s[f] ? ' checked' : '') + '> ' + label + '</label>';
+  const key = name + ':settings';
+  return '<details class="adv" data-key="' + key + '"' + (openDetails[key] ? ' open' : '') + '><summary>Paramètres de la tâche Windows</summary>'
+    + '<div class="settings-grid">'
+    + cb('startWhenAvailable', 'Exécuter dès que possible si une exécution programmée a été manquée')
+    + cb('wakeToRun', "Réveiller l'ordinateur pour exécuter la tâche")
+    + cb('runOnlyIfNetwork', 'Démarrer seulement si une connexion réseau est disponible')
+    + cb('disallowOnBattery', 'Ne pas démarrer si l\'ordinateur est sur batterie')
+    + cb('stopOnBattery', 'Arrêter la tâche si l\'ordinateur passe sur batterie')
+    + '</div>'
+    + '<div class="trig-row">'
+    +   '<div class="account-field"><span class="field-label">Arrêter la tâche si elle dure plus de</span>' + durHtml(base + ' data-f="execLimitMin" data-scope="set"', s.execLimitMin, 'illimité', true) + '</div>'
+    +   '<div class="account-field" style="min-width:200px;flex:1 1 220px"><span class="field-label">Si la tâche tourne déjà</span><select ' + base + ' data-act="set-sel" data-f="multiple">'
+    +     MULTIPLE_OPTIONS.map(x => '<option value="' + x[0] + '"' + (s.multiple === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></div>'
+    + '</div>'
+    + '<div class="trig-row">'
+    +   '<div class="account-field"><span class="field-label">Priorité (0 haute – 10 basse)</span>' + numHtml(base + ' data-scope="set"', 'priority', s.priority, 0, 10) + '</div>'
+    +   '<div class="account-field"><span class="field-label">En cas d\'échec, redémarrer</span>' + numHtml(base + ' data-scope="set"', 'restartCount', s.restartCount, 0, 999) + ' <span style="font-size:11px">fois, toutes les</span> ' + numHtml(base + ' data-scope="set"', 'restartIntervalMin', s.restartIntervalMin, 1, 1440) + ' <span style="font-size:11px">min</span></div>'
+    +   '<div class="account-field" style="min-width:180px"><span class="field-label">Privilèges</span><select ' + base + ' data-act="set-sel" data-f="runLevel">'
+    +     '<option value="limited"' + (s.runLevel === 'limited' ? ' selected' : '') + '>Standard</option><option value="highest"' + (s.runLevel === 'highest' ? ' selected' : '') + '>Les plus élevés</option></select></div>'
+    + '</div>'
+    + '<div class="hint" style="margin-top:6px">Exécution : uniquement lorsque l\'utilisateur du mini PC est connecté (le navigateur du bot doit s\'afficher).</div>'
+    + '</details>';
+}
+
+// ── Rendu : lignes d'état ──────────────────────────────────────────────
+function syncLineHtml(name) {
+  const cfg = accountCfg(name);
+  if (!hasStored(name)) return '<span class="sync-new">⚠ Planification pas encore enregistrée depuis le site : la tâche Windows existante n\'est pas modifiée. Vérifie le déclencheur proposé (converti de l\'ancien réglage) puis enregistre.</span>';
+  if (isDirty(name)) return '<span class="sync-pending">✎ Modifications non enregistrées.</span>';
+  const rev = String(cfg.schedule.rev || '');
+  if (cfg.syncStatus === 'error' && String(cfg.syncErrorRev || '') === rev) {
+    return '<span class="sync-error">✗ Le veilleur n\'a pas pu appliquer cette planification' + (cfg.syncedAt ? ' (' + formatDateTime(cfg.syncedAt) + ')' : '') + ' : ' + esc(cfg.syncMessage || 'erreur inconnue') + '</span>';
+  }
+  if (cfg.syncStatus === 'ok' && String(cfg.syncedRev || '') === rev) {
+    return '<span class="sync-ok">✓ Appliqué dans le Planificateur Windows' + (cfg.syncedAt ? ' le ' + formatDateTime(cfg.syncedAt) : '') + '.</span>';
+  }
+  return '<span class="sync-pending">⏳ Enregistré — en attente du prochain passage du veilleur (5 min max).</span>';
+}
+function winLineHtml(name) {
+  const t = (state.task_status || {})[TASK_PREFIX + name];
+  if (!t) return 'Windows : aucun statut remonté pour la tâche ' + TASK_PREFIX + esc(name) + ' pour l\'instant.';
+  const ok = t.last_result_code === 0;
+  return 'Windows : <b>' + esc(t.state || '?') + '</b> · prochaine exécution : ' + (t.next_run ? fmtFull(t.next_run) : '—')
+    + ' · dernière : ' + (t.last_run ? fmtFull(t.last_run) : 'jamais') + ' <span style="color:' + (ok ? 'var(--accent2)' : 'var(--danger)') + '">(' + esc(t.last_result_label || '') + ')</span>';
+}
+function runNowLineHtml(name) {
+  const cfg = accountCfg(name);
+  if (cfg.runNow) return '<div class="win-line" style="color:var(--accent)">Lancement manuel en attente du prochain passage du veilleur…</div>';
+  if (cfg.lastRunNowAt) return '<div class="win-line">Dernier lancement manuel : ' + formatDateTime(cfg.lastRunNowAt) + (cfg.lastRunNowStatus ? ' — ' + esc(cfg.lastRunNowStatus) : '') + '</div>';
+  return '';
+}
+
+function summaryBoxHtml(name, m) {
+  const cfg = accountCfg(name);
+  const errs = validateModel(m);
+  let h = '';
+  if (errs.length) h += '<div class="err-list">' + errs.map(esc).join('<br>') + '</div>';
+  const warn = warnings(m, !!cfg.enabled);
+  const active = m.triggers.filter(t => t.enabled);
+  h += '<div class="summary-box"><b>Résumé</b>'
+    + (m.triggers.length ? '<ul>' + m.triggers.map(t => '<li' + (t.enabled ? '' : ' style="opacity:.5;text-decoration:line-through"') + '>' + esc(triggerSummary(t)) + '</li>').join('') + '</ul>' : '<div>Aucun déclencheur.</div>');
+  if (!errs.length && active.length) {
+    const runs = nextRuns(m, 5);
+    h += '<div class="next">Prochains lancements (calcul indicatif, heure du PC) : '
+      + (runs.length ? runs.map(fmtRun).join(' · ') : 'aucun dans les 2 prochaines années')
+      + '</div>';
+  }
+  if (warn.length) h += '<div class="next" style="color:var(--orange)">' + warn.map(esc).join('<br>') + '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── Rendu : carte de compte ────────────────────────────────────────────
+function cardHtml(name) {
+  const cfg = accountCfg(name);
+  const m = currentModel(name);
+  const dirty = isDirty(name);
+  const errs = validateModel(m);
+  const addOpts = '<option value="">+ Ajouter un déclencheur…</option>' + TRIGGER_TYPES.map(x => '<option value="' + x[0] + '">' + x[1] + '</option>').join('');
+  return '<div class="account-card' + (cfg.enabled ? '' : ' disabled') + '" data-card="' + name + '">'
     + '<div class="account-head">'
-    +   '<div class="account-name">' + name + '</div>'
-    +   '<label class="switch"><input type="checkbox" ' + (cfg.enabled ? 'checked' : '') + ' onchange="onFieldChange(\'' + name + '\',\'enabled\',this.checked)"><span class="switch-slider"></span></label>'
+    +   '<div class="account-name">' + esc(name) + '</div>'
+    +   '<label class="switch" title="Activer / désactiver la tâche"><input type="checkbox" data-a="' + name + '" data-act="enabled" ' + (cfg.enabled ? 'checked' : '') + '><span class="switch-slider"></span></label>'
     + '</div>'
-    + '<div class="account-fields">'
-    +   '<div class="account-field"><label>Jour de lancement</label><select onchange="onFieldChange(\'' + name + '\',\'weekday\',parseInt(this.value,10))">'
-    +     WEEKDAYS.map((w, i) => '<option value="' + i + '"' + (i === cfg.weekday ? ' selected' : '') + '>' + w + '</option>').join('')
-    +   '</select></div>'
-    +   '<div class="account-field"><label>Heure de lancement (précis à la seconde)</label>'
-    +     '<div class="time-spinner">'
-    +       timeSpinnerUnitHtml(name, 'h', th)
-    +       '<div class="time-spinner-sep">:</div>'
-    +       timeSpinnerUnitHtml(name, 'm', tm)
-    +       '<div class="time-spinner-sep">:</div>'
-    +       timeSpinnerUnitHtml(name, 's', ts)
-    +     '</div>'
-    +   '</div>'
-    +   '<div class="account-field" style="flex:0 0 auto"><button class="btn secondary" onclick="runNow(\'' + name + '\')">▶ Lancer maintenant</button></div>'
+    + '<div class="sync-line" data-slot="sync">' + syncLineHtml(name) + '</div>'
+    + '<div class="win-line" data-slot="win">' + winLineHtml(name) + '</div>'
+    + '<div data-slot="runnow">' + runNowLineHtml(name) + '</div>'
+    + m.triggers.map((t, i) => triggerHtml(name, t, i)).join('')
+    + '<div class="trig-row"><div class="account-field" style="flex:1 1 220px"><select data-a="' + name + '" data-act="add">' + addOpts + '</select></div></div>'
+    + settingsHtml(name, m.settings)
+    + '<div data-slot="summary">' + summaryBoxHtml(name, m) + '</div>'
+    + '<div class="card-actions">'
+    +   '<button class="btn" data-a="' + name + '" data-act="save"' + ((dirty && !errs.length) ? '' : ' disabled') + '>Enregistrer</button>'
+    +   '<button class="btn secondary" data-a="' + name + '" data-act="cancel"' + (drafts[name] ? '' : ' disabled') + '>Annuler les modifications</button>'
+    +   '<button class="btn secondary" data-a="' + name + '" data-act="runnow" style="margin-left:auto"' + (cfg.enabled && hasStored(name) ? '' : ' disabled title="Disponible quand la planification est enregistrée et le compte activé"') + '>▶ Lancer maintenant</button>'
     + '</div>'
-    + '<div class="account-status">' + statusLine + pending + '</div>'
     + '</div>';
 }
 
-function changeTime(name, unit, delta) {
-  const cfg = Object.assign(accountDefaults(), (state.bot_schedule.accounts || {})[name] || {});
-  const parts = (cfg.time || '22:00:00').split(':').map(p => parseInt(p, 10) || 0);
-  let h = parts[0] || 0, m = parts[1] || 0, s = parts[2] || 0;
-  if (unit === 'h') h = (h + delta + 24) % 24;
-  else if (unit === 'm') m = (m + delta + 60) % 60;
-  else if (unit === 's') s = (s + delta + 60) % 60;
-  onFieldChange(name, 'time', pad2(h) + ':' + pad2(m) + ':' + pad2(s));
+let replacing = false;
+// Remplace une carte en gardant une protection : retirer un champ qui a le focus peut
+// redéclencher un évènement « change » pendant le remplacement.
+function replaceCard(el, name) {
+  if (replacing) return;
+  replacing = true;
+  try {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = cardHtml(name);
+    el.replaceWith(tmp.firstElementChild);
+  } finally { replacing = false; }
+}
+function renderCard(name) {
+  const el = document.querySelector('[data-card="' + name + '"]');
+  if (!el) return renderAccounts(true);
+  replaceCard(el, name);
+}
+function refreshStatusOnly(name) {
+  const el = document.querySelector('[data-card="' + name + '"]');
+  if (!el) return;
+  const set = (slot, html) => { const s = el.querySelector('[data-slot="' + slot + '"]'); if (s) s.innerHTML = html; };
+  set('sync', syncLineHtml(name));
+  set('win', winLineHtml(name));
+  set('runnow', runNowLineHtml(name));
+}
+function renderAccounts(force) {
+  const container = document.getElementById('accounts-container');
+  const names = allAccountNames();
+  const existing = Array.from(container.querySelectorAll('[data-card]')).map(e => e.getAttribute('data-card'));
+  if (force || existing.join() !== names.join()) {
+    container.innerHTML = names.map(cardHtml).join('');
+    return;
+  }
+  names.forEach(name => {
+    const el = container.querySelector('[data-card="' + name + '"]');
+    const busy = el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName);
+    if (drafts[name] || busy) refreshStatusOnly(name);
+    else replaceCard(el, name);
+  });
 }
 
-function onFieldChange(name, field, value) {
-  const update = {};
-  update['bot_schedule.accounts.' + name + '.' + field] = value;
-  DOC_REF.set({}, { merge: true })
-    .then(() => DOC_REF.update(update))
+// ── Actions ────────────────────────────────────────────────────────────
+function trig(m, i) { return m.triggers[i]; }
+
+function handleAction(el, ev) {
+  const act = el.getAttribute('data-act');
+  const name = el.getAttribute('data-a');
+  const i = parseInt(el.getAttribute('data-i'), 10);
+  const f = el.getAttribute('data-f');
+  const isClick = ev.type === 'click', isChange = ev.type === 'change';
+
+  switch (act) {
+    case 'enabled': if (isChange) return setEnabled(name, el.checked); break;
+    case 'save': if (isClick) return save(name); break;
+    case 'cancel': if (isClick) { delete drafts[name]; renderCard(name); } return;
+    case 'runnow': if (isClick) return runNow(name); break;
+    case 'add':
+      if (isChange && el.value) { const type = el.value; edit(name, m => m.triggers.push(defaultTrigger(type))); }
+      return;
+    case 'del': if (isClick) edit(name, m => m.triggers.splice(i, 1)); return;
+    case 'dup': if (isClick) edit(name, m => { const c = clone(trig(m, i)); c.id = 't' + Math.random().toString(36).slice(2, 8); m.triggers.splice(i + 1, 0, c); }); return;
+    case 'type': if (isChange) edit(name, m => { const t = trig(m, i); t.type = el.value; seedForType(t); }); return;
+    case 'trig-enabled': if (isChange) edit(name, m => { trig(m, i).enabled = el.checked; }); return;
+    case 'chip':
+      if (isClick) {
+        const v = parseInt(el.getAttribute('data-v'), 10);
+        edit(name, m => {
+          const t = trig(m, i);
+          const arr = t[f];
+          const k = arr.indexOf(v);
+          if (f === 'months' && t.months.length === 12) { t.months = [v]; return; }  // partir de « tous » : on garde seulement le mois cliqué
+          if (k >= 0) arr.splice(k, 1); else arr.push(v);
+          arr.sort((a, b) => a - b);
+          if (f === 'months' && !arr.length) t.months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        });
+      }
+      return;
+    case 'flag':
+      if (isClick || isChange) edit(name, m => { const t = trig(m, i); t[f] = (el.type === 'checkbox') ? el.checked : !t[f]; });
+      return;
+    case 'num':
+      if (isChange) {
+        const scope = el.getAttribute('data-scope');
+        const v = parseInt(el.value, 10);
+        const lo = parseInt(el.min, 10), hi = parseInt(el.max, 10);
+        const val = isNaN(v) ? lo : Math.min(hi, Math.max(lo, v));
+        edit(name, m => { if (scope === 'set') m.settings[f] = val; else trig(m, i)[f] = val; });
+      }
+      return;
+    case 'date':
+      if (isChange && el.value) edit(name, m => { const t = trig(m, i); const p = splitDT(t[f]); p.date = el.value; t[f] = joinDT(p); });
+      return;
+    case 'spin':
+      if (isClick) {
+        const u = el.getAttribute('data-u'), d = parseInt(el.getAttribute('data-d'), 10);
+        edit(name, m => {
+          const t = trig(m, i);
+          const p = splitDT(t[f]);
+          if (!p.date) p.date = todayStr();
+          if (u === 'h') p.h = (p.h + d + 24) % 24;
+          else if (u === 'm') p.m = (p.m + d + 60) % 60;
+          else p.s = (p.s + d + 60) % 60;
+          t[f] = joinDT(p);
+        });
+      }
+      return;
+    case 'end-toggle':
+      if (isChange) edit(name, m => {
+        const t = trig(m, i);
+        if (!el.checked) { t.end = ''; return; }
+        const s = parseDT(t.start) || new Date();
+        const e = new Date(s.getTime() + 30 * 864e5);
+        t.end = e.getFullYear() + '-' + pad2(e.getMonth() + 1) + '-' + pad2(e.getDate()) + 'T' + pad2(s.getHours()) + ':' + pad2(s.getMinutes()) + ':' + pad2(s.getSeconds());
+      });
+      return;
+    case 'dur':
+      if (isChange) {
+        const unit = el.querySelector('select').value;
+        const n = Math.max(1, parseInt(el.querySelector('input').value, 10) || 1);
+        const mult = { zero: 0, m: 1, h: 60, d: 1440 }[unit];
+        const minutes = unit === 'zero' ? 0 : n * mult;
+        const scope = el.getAttribute('data-scope');
+        edit(name, m => { if (scope === 'set') m.settings[f] = minutes; else trig(m, i)[f] = minutes; });
+      }
+      return;
+    case 'set-bool': if (isChange) edit(name, m => { m.settings[f] = el.checked; }); return;
+    case 'set-sel': if (isChange) edit(name, m => { m.settings[f] = el.value; }); return;
+  }
+}
+
+document.getElementById('accounts-container').addEventListener('click', ev => {
+  const el = ev.target.closest('[data-act]');
+  if (el && !/^(INPUT|SELECT|SPAN)$/.test(el.tagName)) handleAction(el, ev);
+});
+document.getElementById('accounts-container').addEventListener('change', ev => {
+  const el = ev.target.closest('[data-act]');
+  if (el) handleAction(el, ev);
+});
+// <details> ouverts : mémorisés pour survivre aux rafraîchissements (l'évènement ne remonte pas → capture)
+document.getElementById('accounts-container').addEventListener('toggle', ev => {
+  const d = ev.target;
+  if (d.tagName === 'DETAILS' && d.dataset.key) openDetails[d.dataset.key] = d.open;
+}, true);
+
+function writeAccount(name, update) {
+  const u = {};
+  Object.keys(update).forEach(k => { u['bot_schedule.accounts.' + name + '.' + k] = update[k]; });
+  return DOC_REF.set({}, { merge: true }).then(() => DOC_REF.update(u));
+}
+
+function setEnabled(name, on) {
+  const upd = { enabled: on };
+  // Si une planification existe, on change aussi sa révision : le veilleur doit réappliquer l'état activé/désactivé
+  if (hasStored(name)) upd['schedule.rev'] = String(Date.now());
+  writeAccount(name, upd).catch(e => alert('Erreur : ' + e.message));
+}
+
+function save(name) {
+  const m = currentModel(name);
+  const errs = validateModel(m);
+  if (errs.length) { toast(errs[0]); return; }
+  const schedule = {
+    rev: String(Date.now()),
+    triggers: m.triggers.map(t => Object.assign({}, t)),
+    settings: Object.assign({}, m.settings),
+  };
+  writeAccount(name, { schedule })
+    .then(() => { delete drafts[name]; toast('Enregistré pour ' + name + ' — appliqué dans Windows au prochain passage du veilleur.'); })
     .catch(e => alert('Erreur : ' + e.message));
 }
 
 function runNow(name) {
-  const update = {};
-  update['bot_schedule.accounts.' + name + '.runNow'] = true;
-  DOC_REF.set({}, { merge: true })
-    .then(() => DOC_REF.update(update))
+  writeAccount(name, { runNow: true })
     .then(() => toast('Lancement demandé pour ' + name + ' — pris en compte au prochain passage du veilleur.'))
     .catch(e => alert('Erreur : ' + e.message));
 }
@@ -339,8 +1012,9 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3800);
 }
+
 
 // ── Admin lock (même mécanisme que les autres pages ; localStorage pour
 // persister entre les pages et entre les relances de l'appli installée) ──
@@ -392,10 +1066,12 @@ window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateN
 DOC_REF.onSnapshot(function(snap) {
   const data = snap.exists ? snap.data() : {};
   state.bot_schedule = Object.assign({ accounts: {}, watcher_status: {} }, data.bot_schedule || {});
+  state.task_status = data.task_status || {};
+  state.task_status_updated = data.task_status_updated || null;
   render();
 }, function(err) {
   document.getElementById('accounts-container').innerHTML =
-    '<div class="hint">Impossible de charger les données Firebase.<br>' + err.message + '</div>';
+    '<div class="hint">Impossible de charger les données Firebase.<br>' + esc(err.message) + '</div>';
 });
 
 setInterval(renderWatcherStatus, 60000);
