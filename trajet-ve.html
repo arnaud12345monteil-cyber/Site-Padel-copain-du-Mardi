@@ -88,6 +88,9 @@ header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,
 .pc-row{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line)}
 .pc-row:last-of-type{border-bottom:0}
 .pc-row b{min-width:170px}
+.pc-task{margin:2px 0 10px 18px;padding:8px 10px;border-left:3px solid var(--line);background:var(--field);border-radius:0 6px 6px 0;font-size:.86rem}
+.pc-task ul{margin:4px 0;padding-left:18px}
+.pc-task .chip{font-size:.72rem}
 label.chk{display:block;font-weight:400;font-size:.86rem;line-height:1.4}
 label.chk input{width:auto;margin:0 6px 0 0;vertical-align:-2px}
 label.chk small{display:inline;color:var(--muted)}
@@ -755,7 +758,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <div id="pcBody"></div>
   <label class="chk" style="margin-top:10px"><input type="checkbox" id="pcNoSleep"> Empêcher la mise en veille du PC <small>(trajetve_voiture.py ; l'écran peut toujours s'éteindre)</small></label>
   <p class="note" id="pcMsg" role="status"></p>
-  <p class="note">L'état est envoyé par trajetve_voiture.py toutes les 2 minutes. S'il ne tourne pas, rien ne remonte : l'état de psa_car_controller est alors inconnu.</p>
+  <p class="note">L'état est envoyé par trajetve_voiture.py toutes les 2 minutes, les tâches planifiées toutes les 10 minutes et à chaque ouverture de cette fenêtre. S'il ne tourne pas, rien ne remonte.</p>
 </dialog>
 
 <dialog class="big" id="bakDlg" aria-labelledby="bakTitle" style="width:min(560px,calc(100vw - 24px))">
@@ -774,6 +777,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.30", d:"02/11/2026", c:[
+    "Fenêtre « Programmes du PC » : sous chaque programme, ses tâches planifiées Windows (déclencheurs, état, dernière et prochaine exécution, résultat, réveil du PC, arrêt forcé), relevées par trajetve_voiture.py et rafraîchies à l'ouverture de la fenêtre"]},
   {v:"2.29", d:"01/11/2026", c:[
     "Barre du haut : état des programmes du PC (pastille PC = trajetve_voiture.py, pastille PSA = psa_car_controller ; vert = actif, rouge = arrêté)",
     "Clic sur l'état : détail (dernier signal, psa_car_controller joignable, mise en veille) et case « Empêcher la mise en veille du PC », appliquée par trajetve_voiture.py en moins d'une minute"]},
@@ -3116,7 +3121,34 @@ $("socStart").addEventListener("input",e=>{ if(e.isTrusted && $("useCarSoc").che
 setTimeout(()=>{ if($("useCarSoc").checked) fillCarSoc(); },2500);
 
 // ---------- État des programmes du PC (barre du haut) ----------
-let pcSvc=null, pcCfg=null, pcUnsub=[];
+let pcSvc=null, pcCfg=null, pcUnsub=[], pcTasks=null;
+// Tâches planifiées Windows (envoyées par trajetve_voiture.py) : description lisible
+const isoDur=d=>{ if(!d) return ""; const m=String(d).match(/P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/); if(!m) return d;
+  const [,D,H,M,S]=m.map(x=>+x||0); if(!D&&!H&&!M&&!S) return ""; return [D&&D+" j",H&&H+" h",M&&M+" min",S&&!D&&!H&&!M&&S+" s"].filter(Boolean).join(" "); };
+const TASK_RES={0:"terminée sans erreur",1:"erreur (code 1)",267008:"prête",267009:"en cours",267010:"désactivée",267011:"jamais lancée",267014:"arrêtée (fin forcée ou limite de durée)",2147750687:"déjà en cours, nouvelle instance refusée",3221225786:"fermée (Ctrl+C ou fenêtre fermée)",2147942402:"fichier introuvable"};
+const TASK_STATE={Ready:"prête",Running:"en cours",Disabled:"désactivée",Queued:"en file d'attente",Unknown:"inconnue"};
+const DOW=["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
+function trigTxt(t){
+  const at=t.start?new Date(t.start):null, hm=at&&!isNaN(at)?at.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"";
+  const ty=String(t.type||"").replace(/^MSFT_Task|Trigger$/g,"");
+  let x={Daily:`${t.days>1?"tous les "+t.days+" jours":"tous les jours"}${hm?" à "+hm:""}`,Weekly:`chaque semaine${t.dow?" ("+DOW.filter((_,k)=>t.dow&(1<<k)).join(" ")+")":""}${hm?" à "+hm:""}`,
+    Logon:"à l'ouverture de session",Boot:"au démarrage du PC",Time:`une fois${at&&!isNaN(at)?" le "+at.toLocaleDateString("fr-FR")+" à "+hm:""}`,Idle:"quand le PC est inactif",
+    SessionStateChange:"au déverrouillage / changement de session",Event:"sur un événement Windows"}[ty]||ty||"déclencheur";
+  if(isoDur(t.every)) x+=`, puis ${isoDur(t.every)==="1 h"?"toutes les heures":"toutes les "+isoDur(t.every)}${isoDur(t.duration)?" pendant "+isoDur(t.duration):""}`;
+  if(isoDur(t.delay)) x+=` (délai ${isoDur(t.delay)})`;
+  if(t.enabled===false) x+=" — désactivé";
+  return x;
+}
+function tasksHtml(prog){
+  if(!pcTasks) return `<p class="note">Tâches planifiées : pas encore reçues (trajetve_voiture.py à mettre à jour, ou envoi en cours).</p>`;
+  if(pcTasks.tasks?.error) return `<p class="note">Tâches planifiées illisibles : ${esc(pcTasks.tasks.error)}</p>`;
+  const L=(Array.isArray(pcTasks.tasks)?pcTasks.tasks:[]).filter(t=>t.prog===prog);
+  if(!L.length) return `<p class="note">Aucune tâche planifiée ne lance ce programme : il ne redémarrera pas tout seul après un redémarrage du PC.</p>`;
+  const d=v=>{ const x=v?new Date(v):null; return x&&!isNaN(x)?x.toLocaleString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"; };
+  return L.map(t=>`<div class="pc-task"><b>${esc(t.name)}</b> <span class="chip">${esc(TASK_STATE[t.state]||t.state||"?")}</span>
+    <ul>${(t.triggers||[]).map(x=>`<li>${esc(trigTxt(x))}</li>`).join("")||"<li>aucun déclencheur</li>"}</ul>
+    <span class="note">Dernière exécution : ${d(t.last)}${t.last?` · ${esc(TASK_RES[t.result]??("code 0x"+(+t.result>>>0).toString(16)))}`:""} · prochaine : ${d(t.next)}${isoDur(t.limit)?` · arrêt forcé après ${isoDur(t.limit)}`:t.limit?"":""}${t.wake?" · réveille le PC":""}${t.battery?" · pas sur batterie":""}</span></div>`).join("");
+}
 function pcRender(){
   const b=$("pcStat"), d1=$("pcDot1"), d2=$("pcDot2"), u=fb && fb.auth.currentUser;
   b.hidden=!u; if(!u) return;
@@ -3128,9 +3160,10 @@ function pcRender(){
   const row=(n,cls,txt)=>`<div class="pc-row"><b><span class="pcstat"><i class="${cls}"></i></span> ${n}</b><span>${txt}</span></div>`;
   const sleepTxt=!up?"inconnu":!pcSvc.windows?"sans objet (pas Windows)":pcSvc.noSleep===true?"bloquée par trajetve_voiture.py":pcSvc.noSleep===false?"autorisée (selon les réglages Windows)":"en cours de réglage";
   $("pcBody").innerHTML=
-    row("trajetve_voiture.py",d1.className,pcSvc==null?"jamais vu en ligne":up?`actif · dernier signal ${agoTxt(age)}`:`ne répond pas · dernier signal ${agoTxt(age)} (${fmtDT(new Date(pcSvc.alive))})`)+
-    row("psa_car_controller",d2.className,!up?"inconnu (trajetve_voiture.py ne répond pas)":pcSvc.psacc?"actif (répond sur le PC)":"arrêté ou bloqué : il ne répond pas sur le PC")+
-    row("Mise en veille du PC","",sleepTxt);
+    row("trajetve_voiture.py",d1.className,pcSvc==null?"jamais vu en ligne":up?`actif · dernier signal ${agoTxt(age)}`:`ne répond pas · dernier signal ${agoTxt(age)} (${fmtDT(new Date(pcSvc.alive))})`)+tasksHtml("trajetve")+
+    row("psa_car_controller",d2.className,!up?"inconnu (trajetve_voiture.py ne répond pas)":pcSvc.psacc?"actif (répond sur le PC)":"arrêté ou bloqué : il ne répond pas sur le PC")+tasksHtml("psacc")+
+    row("Mise en veille du PC","",sleepTxt)+
+    (pcTasks?`<p class="note">Tâches planifiées relevées ${agoTxt(Date.now()-pcTasks.at)}.</p>`:"");
   $("pcNoSleep").checked=pcCfg?.noSleep ?? pcSvc?.noSleepWanted ?? true;
   const pending=up && pcCfg && pcSvc.noSleepWanted!==undefined && pcCfg.noSleep!==pcSvc.noSleepWanted;
   $("pcMsg").textContent=pending?"Réglage envoyé, en attente de prise en compte par le PC…":"";
@@ -3140,10 +3173,15 @@ function pcWatch(){
   const u=fb && fb.auth.currentUser; pcRender(); if(!u) return;
   const col=fb.db.collection("trajetve_car");
   pcUnsub.push(col.doc("_service").onSnapshot(d=>{ pcSvc=d.exists?d.data():null; pcRender(); },()=>{}));
-  pcUnsub.push(col.doc(u.uid).onSnapshot(d=>{ pcCfg=d.exists?(d.data().cfg||null):null; pcRender(); },()=>{}));
+  pcUnsub.push(col.doc(u.uid).onSnapshot(d=>{ const x=d.exists?d.data():{}; pcCfg=x.cfg||null; try{ pcTasks=x.pcTasks?JSON.parse(x.pcTasks):null; }catch(e){ pcTasks=null; } pcRender(); },()=>{}));
 }
 { let lastUid=null; setInterval(()=>{ const uid=fb?.auth?.currentUser?.uid||null; if(uid!==lastUid){ lastUid=uid; pcWatch(); } else pcRender(); },3000); }
-$("pcStat").addEventListener("click",()=>{ $("pcDlg").showModal(); pcRender(); });
+$("pcStat").addEventListener("click",()=>{
+  $("pcDlg").showModal(); pcRender();
+  // demande au PC de relire les tâches planifiées (réponse en quelques secondes s'il est allumé)
+  const u=fb && fb.auth.currentUser;
+  if(u) fb.db.collection("trajetve_car").doc(u.uid).set({cfg:{tasksReq:Date.now()}},{merge:true}).catch(()=>{});
+});
 $("pcClose").addEventListener("click",()=>$("pcDlg").close());
 $("pcNoSleep").addEventListener("change",async()=>{
   const u=fb && fb.auth.currentUser; if(!u) return;
