@@ -4,6 +4,16 @@
 <!--
   PADEL BOTS — Historique des versions
   ─────────────────────────────────────────
+  v3.0 — 2026-11-02
+    La page ne part plus de 3 comptes fixes : elle liste les VRAIES tâches du
+    dossier du Planificateur Windows, telles que le veilleur (bot_watcher.py
+    v3) les lit (déclencheurs, paramètres, commande). Les réglages affichés
+    sont ceux de Windows ; les modifier remplace les déclencheurs et les
+    paramètres de la tâche existante (la commande n'est jamais touchée).
+    Tâches protégées (lecture seule) : celle du veilleur et toute tâche qui
+    contient un déclencheur non géré (sur événement, inactivité, …).
+    Ancien format bot_schedule.accounts abandonné.
+
   v2.0 — 2026-11-02
     Refonte complète : la page configure directement les tâches du
     Planificateur de tâches Windows (une par compte). Plusieurs déclencheurs
@@ -138,6 +148,7 @@
   .sync-line, .win-line { font-size: 10px; line-height: 1.6; margin-bottom: 6px; }
   .sync-ok { color: var(--accent2); } .sync-pending { color: var(--orange); } .sync-error { color: var(--danger); } .sync-new { color: var(--muted); }
   .win-line { color: var(--muted); }
+  .kind-badge { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
   .trig { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 10px; }
   .trig.off { opacity: .55; }
   .trig-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -222,24 +233,24 @@
       <div class="section-title">Veilleur (mini PC)</div>
       <div class="watcher-badge" id="watcher-badge"><span class="watcher-dot"></span> Chargement…</div>
       <div class="hint">
-        Ce qui est réglé ci-dessous est appliqué au <b>Planificateur de tâches Windows</b> du
-        mini PC par le veilleur, qui passe toutes les 5 min : une tâche par compte, lancée
-        par Windows lui-même (à la seconde près). Une modification peut donc mettre jusqu'à
-        5 min à arriver dans Windows. Le veilleur remonte aussi l'état de toutes les tâches
-        dans le suivi (onglet « Tâches planifiées »).
+        Le veilleur lit toutes les tâches du dossier du Planificateur de tâches Windows
+        du mini PC et les affiche ci-dessous avec leurs vrais réglages. Quand tu enregistres une
+        modification, il l'applique à la tâche existante à son prochain passage (toutes les
+        5 min, donc jusqu'à 5 min de délai) ; Windows lance ensuite le bot lui-même, à la seconde près.
+        Il remonte aussi l'état des tâches dans le suivi (onglet « Tâches planifiées »).
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">Comptes</div>
+      <div class="section-title">Tâches</div>
       <div id="accounts-container"></div>
       <div class="hint">
-        Les heures sont celles du mini PC. Chaque compte peut avoir plusieurs déclencheurs.
-        Rien n'est envoyé au veilleur tant que tu n'as pas appuyé sur « Enregistrer ». Au
-        premier enregistrement d'un compte, sa tâche Windows existante du même nom
-        (<code>PadelBot&lt;Compte&gt;</code>) est remplacée par celle décrite ici ; avant, elle n'est pas touchée.
-        Les tâches sont créées en « exécuter uniquement si l'utilisateur est connecté »
-        (le navigateur du bot doit pouvoir s'afficher).
+        Les heures sont celles du mini PC. Modifier une tâche remplace ses déclencheurs et ses
+        paramètres ; la commande lancée et le compte d'exécution ne changent jamais. Rien n'est
+        envoyé tant que tu n'as pas appuyé sur « Enregistrer ». Les tâches affichées en lecture
+        seule (veilleur, ou tâche avec un déclencheur sur événement/inactivité) se modifient
+        directement dans Windows. Pas de mode « même déconnecté » : une tâche configurée ainsi
+        ne peut pas être modifiée d'ici (Windows demande le mot de passe).
         « Lancer maintenant » demande au Planificateur de démarrer la tâche au prochain passage du veilleur.
       </div>
     </div>
@@ -269,12 +280,10 @@ const db = firebase.firestore();
 const DOC_REF = db.collection("padel").doc("tracker");
 const ADMIN_PWD = '0350'; // même mot de passe que le tracker principal
 
-const APP_VERSION = 'v2.0';
+const APP_VERSION = 'v3.0';
 const APP_VERSION_DATE = '2026-11-02';
 document.getElementById('app-version').textContent = APP_VERSION + ' — ' + APP_VERSION_DATE;
 
-const TASK_PREFIX = 'PadelBot';              // même préfixe que bot_watcher.py
-const DEFAULT_ACCOUNTS = ['Arnaud', 'Nicolas', 'Thibault'];
 const TRIGGER_TYPES = [
   ['once', 'Une seule fois'],
   ['daily', 'Quotidien'],
@@ -297,8 +306,8 @@ const MULTIPLE_OPTIONS = [
   ['stopExisting', "Arrêter l'instance existante"],
 ];
 
-let state = { bot_schedule: { accounts: {}, watcher_status: {} }, task_status: {}, task_status_updated: null };
-const drafts = {};        // brouillons non enregistrés : nom -> { triggers, settings }
+let state = { bot_schedule: { tasks: {}, watcher_status: {} }, task_defs: {}, task_status: {}, task_status_updated: null };
+const drafts = {};        // brouillons non enregistrés : clé de tâche -> { enabled, triggers, settings }
 const openDetails = {};   // état ouvert/fermé des <details> pour survivre aux rafraîchissements
 
 // ── Utilitaires ─────────────────────────────────────────────────────────
@@ -401,11 +410,11 @@ function normSettings(s) {
 }
 function normModel(m) {
   m = m || {};
-  return { triggers: (m.triggers || []).map(normTrigger), settings: normSettings(m.settings) };
+  return { enabled: m.enabled !== false, triggers: (m.triggers || []).map(normTrigger), settings: normSettings(m.settings) };
 }
 function modelKey(m) {
   // comparaison sans les identifiants aléatoires des déclencheurs
-  return JSON.stringify({ t: m.triggers.map(t => Object.assign({}, t, { id: '' })), s: m.settings });
+  return JSON.stringify({ e: m.enabled, t: m.triggers.map(t => Object.assign({}, t, { id: '' })), s: m.settings });
 }
 
 function validTriggerType(t, i) {
@@ -465,39 +474,44 @@ function seedForType(t) {
   return t;
 }
 
-function accountKey(name) { return /^[\w-]+$/.test(name); }
-function allAccountNames() {
-  const fromData = Object.keys(state.bot_schedule.accounts || {});
-  return Array.from(new Set([...DEFAULT_ACCOUNTS, ...fromData])).filter(accountKey);
+// ── Tâches : clé sûre (même règle que bot_watcher.py), définition lue dans Windows, demande enregistrée ──
+function taskKey(n) { return String(n).replace(/[^\w-]/g, '_'); }
+function defOf(key) { return (state.task_defs || {})[key] || null; }
+function cfgOf(key) { return ((state.bot_schedule || {}).tasks || {})[key] || {}; }
+function taskName(key) { const d = defOf(key); return (d && d.name) || (state.nameByKey || {})[key] || key; }
+function statusOf(key) { return (state.task_status || {})[taskName(key)] || null; }
+function hasStored(key) { const s = cfgOf(key).schedule; return !!(s && typeof s === 'object'); }
+function isApplied(key) {
+  const c = cfgOf(key);
+  return hasStored(key) && c.syncStatus === 'ok' && String(c.syncedRev || '') === String(c.schedule.rev || '');
 }
-function accountCfg(name) { return (state.bot_schedule.accounts || {})[name] || {}; }
-function hasStored(name) { const s = accountCfg(name).schedule; return !!(s && typeof s === 'object'); }
-
-// Ancien format (jour + heure) converti en un déclencheur hebdomadaire
-function legacyModel(cfg) {
-  const wd = typeof cfg.weekday === 'number' ? cfg.weekday : 0;
-  const tp = String(cfg.time || '22:00:00').split(':').map(x => parseInt(x, 10) || 0);
-  const t = normTrigger({
-    type: 'weekly', daysOfWeek: [wd],
-    start: todayStr() + 'T' + pad2(tp[0] || 0) + ':' + pad2(tp[1] || 0) + ':' + pad2(tp[2] || 0),
-  });
-  return { triggers: [t], settings: normSettings({}) };
+function isEditable(key) { const d = defOf(key); return !!(d && d.editable); }
+function taskKeys() {
+  const names = {};
+  Object.keys(state.task_defs || {}).forEach(k => { names[k] = taskName(k); });
+  Object.keys(state.task_status || {}).forEach(n => { const k = taskKey(n); if (!names[k]) names[k] = n; });
+  Object.keys((state.bot_schedule || {}).tasks || {}).forEach(k => { if (!names[k]) names[k] = k; });
+  state.nameByKey = names;
+  const rank = k => { const d = defOf(k); return d ? ({ bot: 0, other: 1, watcher: 2 }[d.kind] ?? 1) : 1; };
+  return Object.keys(names).sort((a, b) => rank(a) - rank(b) || names[a].localeCompare(names[b]));
 }
-function storedModel(name) {
-  const cfg = accountCfg(name);
-  if (hasStored(name)) return normModel(cfg.schedule);
-  return legacyModel(cfg);
+// Réglages de référence : la demande en cours (en attente / en erreur) sinon l'état réel lu dans Windows
+function baseModel(key) {
+  const d = defOf(key);
+  if (hasStored(key) && (!isApplied(key) || !d)) return normModel(Object.assign({}, cfgOf(key).schedule));
+  if (d && d.schedule) return normModel({ enabled: d.enabled, triggers: d.schedule.triggers, settings: d.schedule.settings });
+  return null;
 }
-function currentModel(name) { return drafts[name] || storedModel(name); }
-function isDirty(name) {
-  if (!hasStored(name)) return true;   // jamais enregistré : à enregistrer
-  if (!drafts[name]) return false;
-  return modelKey(drafts[name]) !== modelKey(normModel(accountCfg(name).schedule));
+function currentModel(key) { return drafts[key] || baseModel(key); }
+function isDirty(key) {
+  const b = baseModel(key);
+  return !!(drafts[key] && b && modelKey(drafts[key]) !== modelKey(b));
 }
-function edit(name, fn) {
-  if (!drafts[name]) drafts[name] = clone(currentModel(name));
-  fn(drafts[name]);
-  renderCard(name);
+function edit(key, fn) {
+  if (!isEditable(key)) return;
+  if (!drafts[key]) drafts[key] = clone(baseModel(key));
+  fn(drafts[key]);
+  renderCard(key);
 }
 
 // ── Résumé en français + aperçu des prochains lancements ───────────────
@@ -611,8 +625,8 @@ function renderWatcherStatus() {
   const last = new Date(ws.lastCheckAt);
   const diffMin = Math.max(0, Math.round((Date.now() - last.getTime()) / 60000));
   const ok = diffMin < 15;
-  // Un veilleur v1 n'écrit pas "version" : il lancerait encore les bots lui-même
-  const old = !ws.version ? ' <span style="color:var(--orange)">— ancienne version du veilleur (v1) : remplace bot_watcher.py par la v2, sinon cette page n\'a aucun effet sur Windows.</span>' : '';
+  // Avant la v3, le veilleur ne remonte pas la définition des tâches : cette page ne peut rien en faire
+  const old = !(parseFloat(ws.version) >= 3) ? ' <span style="color:var(--orange)">— ancienne version du veilleur : remplace bot_watcher.py par la v3, sinon cette page ne voit pas les vraies tâches.</span>' : '';
   el.innerHTML = '<span class="watcher-dot ' + (ok ? 'ok' : 'stale') + '"></span> Veilleur' + (ws.hostname ? ' (' + esc(ws.hostname) + ')' : '') + (ws.version ? ' v' + esc(ws.version) : '')
     + ' — dernière vérification ' + (diffMin <= 0 ? "à l'instant" : 'il y a ' + diffMin + ' min')
     + (ok ? '' : ' <span style="color:var(--danger)">— semble arrêté, vérifie le mini PC</span>') + old;
@@ -755,42 +769,50 @@ function settingsHtml(name, s) {
 }
 
 // ── Rendu : lignes d'état ──────────────────────────────────────────────
-function syncLineHtml(name) {
-  const cfg = accountCfg(name);
-  if (!hasStored(name)) return '<span class="sync-new">⚠ Planification pas encore enregistrée depuis le site : la tâche Windows existante n\'est pas modifiée. Vérifie le déclencheur proposé (converti de l\'ancien réglage) puis enregistre.</span>';
-  if (isDirty(name)) return '<span class="sync-pending">✎ Modifications non enregistrées.</span>';
-  const rev = String(cfg.schedule.rev || '');
-  if (cfg.syncStatus === 'error' && String(cfg.syncErrorRev || '') === rev) {
-    return '<span class="sync-error">✗ Le veilleur n\'a pas pu appliquer cette planification' + (cfg.syncedAt ? ' (' + formatDateTime(cfg.syncedAt) + ')' : '') + ' : ' + esc(cfg.syncMessage || 'erreur inconnue') + '</span>';
+function syncLineHtml(key) {
+  const d = defOf(key), c = cfgOf(key);
+  if (!d && !hasStored(key)) return '<span class="sync-new">⚠ Définition de la tâche pas encore lue : le veilleur la remonte à son prochain passage (v3 requise).</span>';
+  if (!hasStored(key) || isApplied(key)) {
+    const when = d && d.importedAt ? ' (lu le ' + formatDateTime(d.importedAt) + ')' : '';
+    if (isDirty(key)) return '<span class="sync-pending">✎ Modifications non enregistrées.</span>';
+    return '<span class="sync-ok">' + (isApplied(key) ? '✓ Appliqué dans le Planificateur Windows' + (c.syncedAt ? ' le ' + formatDateTime(c.syncedAt) : '') + '.' : 'Réglages lus dans Windows' + when + '.') + '</span>';
   }
-  if (cfg.syncStatus === 'ok' && String(cfg.syncedRev || '') === rev) {
-    return '<span class="sync-ok">✓ Appliqué dans le Planificateur Windows' + (cfg.syncedAt ? ' le ' + formatDateTime(cfg.syncedAt) : '') + '.</span>';
+  if (isDirty(key)) return '<span class="sync-pending">✎ Modifications non enregistrées.</span>';
+  const rev = String(c.schedule.rev || '');
+  if (c.syncStatus === 'error' && String(c.syncErrorRev || '') === rev) {
+    return '<span class="sync-error">✗ Le veilleur n\'a pas pu appliquer cette demande' + (c.syncedAt ? ' (' + formatDateTime(c.syncedAt) + ')' : '') + ' : ' + esc(c.syncMessage || 'erreur inconnue') + '</span>';
   }
   return '<span class="sync-pending">⏳ Enregistré — en attente du prochain passage du veilleur (5 min max).</span>';
 }
-function winLineHtml(name) {
-  const t = (state.task_status || {})[TASK_PREFIX + name];
-  if (!t) return 'Windows : aucun statut remonté pour la tâche ' + TASK_PREFIX + esc(name) + ' pour l\'instant.';
+function winLineHtml(key) {
+  const t = statusOf(key);
+  if (!t) return 'Windows : aucun statut remonté pour cette tâche pour l\'instant.';
   const ok = t.last_result_code === 0;
   return 'Windows : <b>' + esc(t.state || '?') + '</b> · prochaine exécution : ' + (t.next_run ? fmtFull(t.next_run) : '—')
     + ' · dernière : ' + (t.last_run ? fmtFull(t.last_run) : 'jamais') + ' <span style="color:' + (ok ? 'var(--accent2)' : 'var(--danger)') + '">(' + esc(t.last_result_label || '') + ')</span>';
 }
-function runNowLineHtml(name) {
-  const cfg = accountCfg(name);
-  if (cfg.runNow) return '<div class="win-line" style="color:var(--accent)">Lancement manuel en attente du prochain passage du veilleur…</div>';
-  if (cfg.lastRunNowAt) return '<div class="win-line">Dernier lancement manuel : ' + formatDateTime(cfg.lastRunNowAt) + (cfg.lastRunNowStatus ? ' — ' + esc(cfg.lastRunNowStatus) : '') + '</div>';
+function cmdLineHtml(key) {
+  const d = defOf(key);
+  if (!d || !(d.command || d.arguments)) return '';
+  return 'Commande : <span style="color:var(--text)">' + esc((d.command + ' ' + d.arguments).trim()) + '</span>';
+}
+function runNowLineHtml(key) {
+  const c = cfgOf(key);
+  if (c.runNow) return '<div class="win-line" style="color:var(--accent)">Lancement manuel en attente du prochain passage du veilleur…</div>';
+  if (c.lastRunNowAt) return '<div class="win-line">Dernier lancement manuel : ' + formatDateTime(c.lastRunNowAt) + (c.lastRunNowStatus ? ' — ' + esc(c.lastRunNowStatus) : '') + '</div>';
   return '';
 }
 
-function summaryBoxHtml(name, m) {
-  const cfg = accountCfg(name);
+function summaryBoxHtml(key, m) {
   const errs = validateModel(m);
   let h = '';
   if (errs.length) h += '<div class="err-list">' + errs.map(esc).join('<br>') + '</div>';
-  const warn = warnings(m, !!cfg.enabled);
+  const warn = warnings(m, m.enabled);
   const active = m.triggers.filter(t => t.enabled);
+  const d = defOf(key);
   h += '<div class="summary-box"><b>Résumé</b>'
-    + (m.triggers.length ? '<ul>' + m.triggers.map(t => '<li' + (t.enabled ? '' : ' style="opacity:.5;text-decoration:line-through"') + '>' + esc(triggerSummary(t)) + '</li>').join('') + '</ul>' : '<div>Aucun déclencheur.</div>');
+    + (m.triggers.length ? '<ul>' + m.triggers.map(t => '<li' + (t.enabled ? '' : ' style="opacity:.5;text-decoration:line-through"') + '>' + esc(triggerSummary(t)) + '</li>').join('') + '</ul>' : '<div>Aucun déclencheur géré.</div>');
+  if (d && d.otherTriggers && d.otherTriggers.length) h += '<div class="next">Autres déclencheurs (non décrits ici) : ' + esc(d.otherTriggers.join(', ')) + '</div>';
   if (!errs.length && active.length) {
     const runs = nextRuns(m, 5);
     h += '<div class="next">Prochains lancements (calcul indicatif, heure du PC) : '
@@ -802,31 +824,47 @@ function summaryBoxHtml(name, m) {
   return h;
 }
 
-// ── Rendu : carte de compte ────────────────────────────────────────────
-function cardHtml(name) {
-  const cfg = accountCfg(name);
-  const m = currentModel(name);
-  const dirty = isDirty(name);
+const KIND_LABELS = { bot: 'Bot', watcher: 'Veilleur', other: 'Autre tâche' };
+
+// ── Rendu : carte de tâche ─────────────────────────────────────────────
+function cardHtml(key) {
+  const d = defOf(key);
+  const m = currentModel(key);
+  const editable = isEditable(key);
+  const kind = d ? KIND_LABELS[d.kind] || 'Autre tâche' : '';
+  let h = '<div class="account-card' + (m && !m.enabled ? ' disabled' : '') + '" data-card="' + key + '">'
+    + '<div class="account-head">'
+    +   '<div class="account-name">' + esc(taskName(key)) + (kind ? ' <span class="kind-badge">' + kind + '</span>' : '') + '</div>'
+    +   (editable && m ? '<label class="switch" title="Activer / désactiver la tâche"><input type="checkbox" data-a="' + key + '" data-act="enabled" ' + (m.enabled ? 'checked' : '') + '><span class="switch-slider"></span></label>' : '')
+    + '</div>'
+    + '<div class="sync-line" data-slot="sync">' + syncLineHtml(key) + '</div>'
+    + '<div class="win-line" data-slot="win">' + winLineHtml(key) + '</div>'
+    + '<div class="win-line">' + cmdLineHtml(key) + '</div>'
+    + '<div data-slot="runnow">' + runNowLineHtml(key) + '</div>';
+  if (!m) return h + '</div>';
+
+  if (!editable) {
+    h += '<div class="hint" style="margin:8px 0">🔒 Lecture seule' + (d && d.readOnlyReason ? ' — ' + esc(d.readOnlyReason) : '') + '. Modifie cette tâche directement dans le Planificateur Windows.</div>'
+      + '<div data-slot="summary">' + summaryBoxHtml(key, m) + '</div></div>';
+    return h;
+  }
+
+  const dirty = isDirty(key);
   const errs = validateModel(m);
   const addOpts = '<option value="">+ Ajouter un déclencheur…</option>' + TRIGGER_TYPES.map(x => '<option value="' + x[0] + '">' + x[1] + '</option>').join('');
-  return '<div class="account-card' + (cfg.enabled ? '' : ' disabled') + '" data-card="' + name + '">'
-    + '<div class="account-head">'
-    +   '<div class="account-name">' + esc(name) + '</div>'
-    +   '<label class="switch" title="Activer / désactiver la tâche"><input type="checkbox" data-a="' + name + '" data-act="enabled" ' + (cfg.enabled ? 'checked' : '') + '><span class="switch-slider"></span></label>'
-    + '</div>'
-    + '<div class="sync-line" data-slot="sync">' + syncLineHtml(name) + '</div>'
-    + '<div class="win-line" data-slot="win">' + winLineHtml(name) + '</div>'
-    + '<div data-slot="runnow">' + runNowLineHtml(name) + '</div>'
-    + m.triggers.map((t, i) => triggerHtml(name, t, i)).join('')
-    + '<div class="trig-row"><div class="account-field" style="flex:1 1 220px"><select data-a="' + name + '" data-act="add">' + addOpts + '</select></div></div>'
-    + settingsHtml(name, m.settings)
-    + '<div data-slot="summary">' + summaryBoxHtml(name, m) + '</div>'
+  const pendingReq = hasStored(key) && !isApplied(key);
+  h += m.triggers.map((t, i) => triggerHtml(key, t, i)).join('')
+    + '<div class="trig-row"><div class="account-field" style="flex:1 1 220px"><select data-a="' + key + '" data-act="add">' + addOpts + '</select></div></div>'
+    + settingsHtml(key, m.settings)
+    + '<div data-slot="summary">' + summaryBoxHtml(key, m) + '</div>'
     + '<div class="card-actions">'
-    +   '<button class="btn" data-a="' + name + '" data-act="save"' + ((dirty && !errs.length) ? '' : ' disabled') + '>Enregistrer</button>'
-    +   '<button class="btn secondary" data-a="' + name + '" data-act="cancel"' + (drafts[name] ? '' : ' disabled') + '>Annuler les modifications</button>'
-    +   '<button class="btn secondary" data-a="' + name + '" data-act="runnow" style="margin-left:auto"' + (cfg.enabled && hasStored(name) ? '' : ' disabled title="Disponible quand la planification est enregistrée et le compte activé"') + '>▶ Lancer maintenant</button>'
+    +   '<button class="btn" data-a="' + key + '" data-act="save"' + ((dirty && !errs.length) ? '' : ' disabled') + '>Enregistrer</button>'
+    +   '<button class="btn secondary" data-a="' + key + '" data-act="cancel"' + (drafts[key] ? '' : ' disabled') + '>Annuler les modifications</button>'
+    +   (pendingReq ? '<button class="btn secondary" data-a="' + key + '" data-act="abandon" title="Supprime la demande en attente ou en erreur et revient à ce qui est dans Windows">Abandonner la demande</button>' : '')
+    +   '<button class="btn secondary" data-a="' + key + '" data-act="runnow" style="margin-left:auto"' + (m.enabled && d && d.kind !== 'watcher' ? '' : ' disabled title="Disponible quand la tâche est activée"') + '>▶ Lancer maintenant</button>'
     + '</div>'
     + '</div>';
+  return h;
 }
 
 let replacing = false;
@@ -856,7 +894,11 @@ function refreshStatusOnly(name) {
 }
 function renderAccounts(force) {
   const container = document.getElementById('accounts-container');
-  const names = allAccountNames();
+  const names = taskKeys();
+  if (!names.length) {
+    container.innerHTML = '<div class="hint">Aucune tâche remontée pour l\'instant. Le veilleur (bot_watcher.py v3) les lit à chaque passage, toutes les 5 min : vérifie qu\'il est installé et qu\'il tourne sans erreur (fichier bot_watcher.log).</div>';
+    return;
+  }
   const existing = Array.from(container.querySelectorAll('[data-card]')).map(e => e.getAttribute('data-card'));
   if (force || existing.join() !== names.join()) {
     container.innerHTML = names.map(cardHtml).join('');
@@ -864,7 +906,8 @@ function renderAccounts(force) {
   }
   names.forEach(name => {
     const el = container.querySelector('[data-card="' + name + '"]');
-    const busy = el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName);
+    const ae = document.activeElement;
+    const busy = el.contains(ae) && (ae.tagName === 'SELECT' || (ae.tagName === 'INPUT' && ae.type !== 'checkbox'));
     if (drafts[name] || busy) refreshStatusOnly(name);
     else replaceCard(el, name);
   });
@@ -885,6 +928,7 @@ function handleAction(el, ev) {
     case 'save': if (isClick) return save(name); break;
     case 'cancel': if (isClick) { delete drafts[name]; renderCard(name); } return;
     case 'runnow': if (isClick) return runNow(name); break;
+    case 'abandon': if (isClick) return abandon(name); break;
     case 'add':
       if (isChange && el.value) { const type = el.value; edit(name, m => m.triggers.push(defaultTrigger(type))); }
       return;
@@ -973,36 +1017,49 @@ document.getElementById('accounts-container').addEventListener('toggle', ev => {
   if (d.tagName === 'DETAILS' && d.dataset.key) openDetails[d.dataset.key] = d.open;
 }, true);
 
-function writeAccount(name, update) {
+function writeTask(key, update) {
   const u = {};
-  Object.keys(update).forEach(k => { u['bot_schedule.accounts.' + name + '.' + k] = update[k]; });
+  Object.keys(update).forEach(k => { u['bot_schedule.tasks.' + key + '.' + k] = update[k]; });
   return DOC_REF.set({}, { merge: true }).then(() => DOC_REF.update(u));
 }
-
-function setEnabled(name, on) {
-  const upd = { enabled: on };
-  // Si une planification existe, on change aussi sa révision : le veilleur doit réappliquer l'état activé/désactivé
-  if (hasStored(name)) upd['schedule.rev'] = String(Date.now());
-  writeAccount(name, upd).catch(e => alert('Erreur : ' + e.message));
-}
-
-function save(name) {
-  const m = currentModel(name);
-  const errs = validateModel(m);
-  if (errs.length) { toast(errs[0]); return; }
-  const schedule = {
+function scheduleOf(m) {
+  return {
     rev: String(Date.now()),
+    enabled: !!m.enabled,
     triggers: m.triggers.map(t => Object.assign({}, t)),
     settings: Object.assign({}, m.settings),
   };
-  writeAccount(name, { schedule })
-    .then(() => { delete drafts[name]; toast('Enregistré pour ' + name + ' — appliqué dans Windows au prochain passage du veilleur.'); })
+}
+
+function setEnabled(key, on) {
+  const b = baseModel(key);
+  if (!b) return;
+  const m = clone(b); m.enabled = on;       // on n'envoie pas les modifications non enregistrées du brouillon
+  if (drafts[key]) drafts[key].enabled = on;
+  writeTask(key, { schedule: scheduleOf(m) })
+    .then(() => { if (drafts[key] && !isDirty(key)) delete drafts[key]; })
     .catch(e => alert('Erreur : ' + e.message));
 }
 
-function runNow(name) {
-  writeAccount(name, { runNow: true })
-    .then(() => toast('Lancement demandé pour ' + name + ' — pris en compte au prochain passage du veilleur.'))
+function save(key) {
+  const m = currentModel(key);
+  if (!m || !isEditable(key)) return;
+  const errs = validateModel(m);
+  if (errs.length) { toast(errs[0]); return; }
+  writeTask(key, { schedule: scheduleOf(m) })
+    .then(() => { delete drafts[key]; toast('Enregistré pour ' + taskName(key) + ' — appliqué dans Windows au prochain passage du veilleur.'); })
+    .catch(e => alert('Erreur : ' + e.message));
+}
+
+function abandon(key) {
+  delete drafts[key];
+  const u = {}; u['bot_schedule.tasks.' + key] = firebase.firestore.FieldValue.delete();
+  DOC_REF.update(u).then(() => toast('Demande abandonnée : retour aux réglages lus dans Windows.')).catch(e => alert('Erreur : ' + e.message));
+}
+
+function runNow(key) {
+  writeTask(key, { runNow: true })
+    .then(() => toast('Lancement demandé pour ' + taskName(key) + ' — pris en compte au prochain passage du veilleur.'))
     .catch(e => alert('Erreur : ' + e.message));
 }
 
@@ -1065,7 +1122,8 @@ window.addEventListener('storage', (e) => { if (e.key === 'padel-admin') updateN
 // ── Connexion Firestore en direct ──────────────────────────────────────
 DOC_REF.onSnapshot(function(snap) {
   const data = snap.exists ? snap.data() : {};
-  state.bot_schedule = Object.assign({ accounts: {}, watcher_status: {} }, data.bot_schedule || {});
+  state.bot_schedule = Object.assign({ tasks: {}, watcher_status: {} }, data.bot_schedule || {});
+  state.task_defs = data.task_defs || {};
   state.task_status = data.task_status || {};
   state.task_status_updated = data.task_status_updated || null;
   render();
