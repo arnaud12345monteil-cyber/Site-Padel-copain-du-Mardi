@@ -794,7 +794,8 @@ function winLineHtml(key) {
 function cmdLineHtml(key) {
   const d = defOf(key);
   if (!d || !(d.command || d.arguments)) return '';
-  return 'Commande : <span style="color:var(--text)">' + esc((d.command + ' ' + d.arguments).trim()) + '</span>';
+  return 'Commande : <span style="color:var(--text)">' + esc((d.command + ' ' + d.arguments).trim()) + '</span>'
+    + (d.logon ? '<br>Exécution : ' + esc(d.logon) : '');
 }
 function runNowLineHtml(key) {
   const c = cfgOf(key);
