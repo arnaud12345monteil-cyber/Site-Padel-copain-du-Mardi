@@ -76,11 +76,11 @@ html{scroll-padding-top:calc(var(--hdrH,0px) + 8px)}
 header.top.top{flex-wrap:nowrap;align-items:center}
 header.top.top h1{white-space:nowrap;flex:0 0 auto}
 header.top.top p{display:none}
-header.top .top-right{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:2px 0;min-width:0;flex:0 1 auto;gap:8px}
+header.top .top-right{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:2px 0;min-width:0;flex:0 1 auto;gap:8px;justify-content:flex-start;margin-left:auto}
 header.top .top-right::-webkit-scrollbar{display:none}
 header.top .top-right>*{flex:0 0 auto}
 header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);mask-image:linear-gradient(to right,#000 82%,transparent)}
-@media (max-width:860px){ header.top.top h1{font-size:1.2rem} header.top .top-right{justify-content:flex-start} }
+@media (max-width:860px){ header.top.top h1{font-size:1.2rem} }
 .pcstat{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-mono);font-size:.78rem}
 .pcstat i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted)}
 .pcstat i.ok{background:var(--charge)} .pcstat i.bad{background:var(--bad)} .pcstat i.warn{background:var(--warn)}
@@ -94,6 +94,7 @@ header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,
 label.chk{display:block;font-weight:400;font-size:.86rem;line-height:1.4}
 label.chk input{width:auto;margin:0 6px 0 0;vertical-align:-2px}
 label.chk small{display:inline;color:var(--muted)}
+.mepin{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 1px rgb(0 0 0/.25),0 1px 5px rgb(0 0 0/.35)}
 .livectl button{font:600 12px var(--f-body);padding:6px 9px;border:0;background:#fff;color:#16202c;cursor:pointer}
 .livectl button.on{background:#c62828;color:#fff}
 .livectl button:hover:not(.on){background:#f0f3f8}
@@ -777,6 +778,11 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.31", d:"02/11/2026", c:[
+    "Ma voiture → Maintenant : les trajets et recharges sont fusionnés avec l'historique enregistré (plus de décalage entre les deux onglets)",
+    "Sans trajet calculé, la carte montre la position GPS du téléphone (point bleu, précision) et se centre dessus ; bouton « Moi » dans les boutons de cadrage",
+    "Suivi en temps réel possible sans trajet : position et trace sur la carte, sans comparaison avec un plan ; « Je suis ici » fonctionne aussi sans trajet",
+    "Correctif barre du haut : sur un écran moyen, les premiers boutons (Ma voiture…) pouvaient être coupés à gauche et inaccessibles"]},
   {v:"2.30", d:"02/11/2026", c:[
     "Fenêtre « Programmes du PC » : sous chaque programme, ses tâches planifiées Windows (déclencheurs, état, dernière et prochaine exécution, résultat, réveil du PC, arrêt forcé), relevées par trajetve_voiture.py et rafraîchies à l'ouverture de la fenêtre"]},
   {v:"2.29", d:"01/11/2026", c:[
@@ -1549,13 +1555,14 @@ function initMap(){
   // Boutons de cadrage : trajet / voiture / les deux
   const ViewCtl=L.Control.extend({ onAdd(){
       const d=L.DomUtil.create("div","leaflet-bar viewctl");
-      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
+      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="me" title="Centrer sur ma position (GPS du téléphone)">Moi</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
       L.DomEvent.disableClickPropagation(d);
       d.addEventListener("click",e=>{ const b=e.target.closest("[data-v]"); if(b) frameMap(b.dataset.v); });
       this._d=d; return d; },
-    update(){ if(!this._d) return; const hasR=!!lastLine && map.hasLayer(lastLine), hasC=!!carMarker;
+    update(){ if(!this._d) return; const hasR=!!lastLine && map.hasLayer(lastLine), hasC=!!carMarker, hasM=!!meFix;
+      const bm=this._d.querySelector('[data-v="me"]'); if(bm) bm.hidden=!hasM;
       this._d.querySelector('[data-v="route"]').hidden=!hasR; this._d.querySelector('[data-v="car"]').hidden=!hasC; this._d.querySelector('[data-v="both"]').hidden=!(hasR&&hasC);
-      this._d.hidden=!(hasR||hasC); } });
+      this._d.hidden=!(hasR||hasC||hasM); } });
   viewCtl=new ViewCtl({position:"topleft"}).addTo(map); viewCtl.update();
   // suivi en temps réel directement depuis la carte
   const LiveCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar livectl");
@@ -2111,6 +2118,31 @@ function locateOnRoute(lat,lon,line,routeKm){
 }
 let hereFix=null;
 // Référence batterie : dernière valeur saisie, avec l'écart au plan à cet endroit. En suivi, l'écart est supposé constant.
+// ---------- Position du téléphone sans trajet (point bleu) ----------
+var meLayer=null, meFix=null;
+function meShow(pos, pan){
+  if(!map) return;
+  if(!meLayer) meLayer=L.layerGroup().addTo(map);
+  meLayer.clearLayers(); meFix=pos;
+  const {latitude:lat, longitude:lon, accuracy}=pos.coords, sp=pos.coords.speed;
+  if(accuracy) L.circle([lat,lon],{radius:Math.min(accuracy,800),color:"#1a73e8",weight:1,fillOpacity:.1,interactive:false}).addTo(meLayer);
+  if(watchId!=null && trailPts.length>1) L.polyline(trailPts,{color:"#1a73e8",weight:3,opacity:.6,dashArray:"4 6"}).addTo(meLayer);
+  L.marker([lat,lon],{zIndexOffset:2100,icon:L.divIcon({className:"",iconSize:[18,18],iconAnchor:[9,9],html:'<div class="mepin"></div>'})})
+    .bindTooltip(`<b>Ma position (téléphone)</b><br>${fmtClock(new Date(pos.timestamp))} · précision ±${Math.round(accuracy||0)} m${sp!=null&&sp>0.5?`<br>${Math.round(sp*3.6)} km/h`:""}`,{direction:"top",offset:[0,-10],opacity:.97,className:"maptip"}).addTo(meLayer);
+  if(pan) map.setView([lat,lon],Math.max(map.getZoom(),14),{animate:watchId!=null});
+  viewCtl?.update();
+}
+function freeOut(pos){
+  const c=pos.coords;
+  $("hereOut").innerHTML=`<div class="here-grid"><div class="here-card"><b>${fmtClock(new Date(pos.timestamp))}</b><span>position du téléphone (±${Math.round(c.accuracy||0)} m)</span></div>`
+    +(c.speed!=null?`<div class="here-card"><b>${Math.round(c.speed*3.6)} km/h</b><span>vitesse</span></div>`:"")
+    +`</div><p class="note">Aucun trajet calculé : la position est suivie sur la carte, sans comparaison avec un plan.</p>`;
+}
+// une seule demande de position (au chargement, après « Effacer », ou bouton « Moi »)
+function locateMe(pan){
+  if(!("geolocation" in navigator)) return;
+  navigator.geolocation.getCurrentPosition(pos=>{ if(!lastRun || pan) meShow(pos, pan || (!lastRun && watchId==null)); }, ()=>{}, {enableHighAccuracy:true, timeout:20000, maximumAge:60000});
+}
 let hereRef=null, watchId=null, wakeLock=null, trailPts=[], lastCards=0, lastPos=null;
 const errMsg=err=>({1:"Accès à la position refusé : autorise la localisation pour ce site dans les réglages du navigateur.",2:"Position indisponible (pas de signal GPS ?).",3:"La position n'a pas répondu à temps, réessaie."}[err.code]||"Position impossible à obtenir.");
 // Sources : position (téléphone ou dernier rapport PSA) et batterie (rapport PSA ou saisie manuelle)
@@ -2149,7 +2181,8 @@ $("hereBtn").addEventListener("click",()=>{ const b=$("hereBox"); b.hidden=!b.hi
 $("hereSoc").addEventListener("change",()=>{ if(lastPos) hereRender(lastPos,true); });
 function hereRender(pos, force){
   const out=$("hereOut");
-  if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
+  if(!lastRun?.res?.summary){ lastPos=pos; meShow(pos, force || $("hereFollow").checked); freeOut(pos); return; }
+  meLayer?.clearLayers();
   lastPos=pos;
   const {latitude:lat, longitude:lon, accuracy}=pos.coords;
   const {res,p,R}=lastRun, S=res.summary;
@@ -2204,7 +2237,6 @@ function hereRender(pos, force){
 }
 $("hereGo").addEventListener("click",async()=>{
   const out=$("hereOut");
-  if(!lastRun?.res?.summary){ out.innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
   if(!psaState) await loadPsa(false);
   if(posSrc()==="car"){
     if(!psaState || psaState.lat==null){ out.innerHTML='<p class="status err">Pas de position dans le rapport PSA. Choisis « Téléphone (GPS) » ou relis la voiture.</p>'; return; }
@@ -2231,7 +2263,6 @@ function stopLive(){
 }
 $("hereLive").addEventListener("click",()=>{
   if(watchId!=null){ stopLive(); return; }
-  if(!lastRun?.res?.summary){ $("hereOut").innerHTML='<p class="note">Calcule d\'abord un trajet.</p>'; return; }
   if(!("geolocation" in navigator)){ $("hereOut").innerHTML='<p class="status err">Ce navigateur ne donne pas accès à la position.</p>'; return; }
   trailPts=[]; lastCards=0;
   $("hereLive").textContent="Arrêter le suivi"; $("hereLive").classList.add("on"); $("hereBtn").classList.add("live"); liveCtl?.sync(true);
@@ -2367,6 +2398,7 @@ function frameMap(v){
   if(!map) return;
   const hasR=!!lastLine && map.hasLayer(lastLine);
   if(v==="car" && carMarker){ map.setView(carMarker.getLatLng(),14); carMarker.openTooltip(); return; }
+  if(v==="me"){ if(meFix) map.setView([meFix.coords.latitude,meFix.coords.longitude],15); else locateMe(true); return; }
   if(v==="route" && hasR){ carMarker?.closeTooltip(); map.fitBounds(lastLine.getBounds(),{padding:[20,20]}); return; }
   if(v==="both"){ const b=hasR?L.latLngBounds(lastLine.getBounds().getSouthWest(),lastLine.getBounds().getNorthEast()):null;
     if(carMarker){ const ll=carMarker.getLatLng(); if(b) b.extend(ll); else return map.setView(ll,12); }
@@ -2448,12 +2480,13 @@ function carRender(r){
     html+=csec("sante","Santé de la batterie",`<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:420px">${g}</svg></div>`);
   }
   const noHist='<p class="note">Pas encore d\'historique : il faut lancer psa_car_controller avec l\'option -r (enregistrement). Les données s\'accumulent ensuite au fil des trajets et des recharges.</p>';
-  const trips=(r.trips||[]).slice().reverse();
+  const trips=(r.trips||[]).slice().sort((a,b)=>(+carDate(b.start_at)||0)-(+carDate(a.start_at)||0));
   html+=csec("trajets","Derniers trajets",(trips.length?`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th><th>Dénivelé</th></tr></thead><tbody>${trips.slice(0,30).map(t=>`<tr><td>${fmtDT(carDate(t.start_at))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td><td>${t.altitude_diff!=null?Math.round(t.altitude_diff)+" m":"—"}</td></tr>`).join("")}</tbody></table></div>`
     +(()=>{ const T=trips.filter(t=>t.distance>0 && t.consumption!=null); if(!T.length) return ""; const d=T.reduce((a,t)=>a+t.distance,0), e=T.reduce((a,t)=>a+t.consumption,0); return `<p class="note">Consommation réelle moyenne sur ${T.length} trajets : <b>${n1(e/d*100)} kWh/100 km</b> (${n1(d)} km). Compare-la à tes valeurs à 90 et 130 km/h dans Voiture.</p>`; })():noHist));
-  const ch=(r.chargings||[]).slice().reverse();
+  const ch=(r.chargings||[]).slice().sort((a,b)=>(+carDate(b.start_at)||0)-(+carDate(a.start_at)||0));
   html+=csec("recharges","Dernières recharges",(ch.length?`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${ch.slice(0,30).map(c=>`<tr><td>${fmtDT(carDate(c.start_at))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"—"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`:noHist));
   $("carBody").innerHTML=html;
+  if(!r._merged) carMergeHist(r);
   $("carOnMap")?.addEventListener("click",()=>{ if(!map) return; setCarMarker(r); map.setView([r.lat,r.lon],14); carMarker?.openTooltip(); $("map").scrollIntoView({behavior:"smooth",block:"center"}); });
 }
 // ---------- Historique de la voiture (lu directement dans Firebase, PC allumé ou non) ----------
@@ -2793,7 +2826,7 @@ function clearResults(){
   if(typeof stopLive==="function" && watchId!=null) stopLive();
   if(hereLayer) hereLayer.clearLayers();
   lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
-  if(layers){ layers.clearLayers(); lastLine=null; map.setView([46.6,2.4],6); viewCtl?.update(); }
+  if(layers){ layers.clearLayers(); lastLine=null; map.setView([46.6,2.4],6); viewCtl?.update(); locateMe(false); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
   renderSheets();
@@ -3172,8 +3205,10 @@ function pcWatch(){
   pcUnsub.forEach(f=>f()); pcUnsub=[]; pcSvc=null; pcCfg=null;
   const u=fb && fb.auth.currentUser; pcRender(); if(!u) return;
   const col=fb.db.collection("trajetve_car");
+  try{
   pcUnsub.push(col.doc("_service").onSnapshot(d=>{ pcSvc=d.exists?d.data():null; pcRender(); },()=>{}));
   pcUnsub.push(col.doc(u.uid).onSnapshot(d=>{ const x=d.exists?d.data():{}; pcCfg=x.cfg||null; try{ pcTasks=x.pcTasks?JSON.parse(x.pcTasks):null; }catch(e){ pcTasks=null; } pcRender(); },()=>{}));
+  }catch(e){ console.error(e); }
 }
 { let lastUid=null; setInterval(()=>{ const uid=fb?.auth?.currentUser?.uid||null; if(uid!==lastUid){ lastUid=uid; pcWatch(); } else pcRender(); },3000); }
 $("pcStat").addEventListener("click",()=>{
@@ -3189,6 +3224,21 @@ $("pcNoSleep").addEventListener("change",async()=>{
   try{ await fb.db.collection("trajetve_car").doc(u.uid).set({cfg:{noSleep:v}},{merge:true}); }
   catch(e){ $("pcMsg").textContent=`Réglage non envoyé (${e.code||e.message}).`; }
 });
+
+// « Maintenant » : la liste des trajets et recharges vient de la dernière lecture complète ; l'historique Firebase
+// peut être plus récent (synchronisé toutes les 10 min par le PC). On fusionne les deux, sans doublon.
+async function carMergeHist(r){
+  if(!fb || !fb.auth.currentUser) return;
+  try{
+    const [tr,ch]=await Promise.all([carColl("trajets").orderBy("t","desc").limit(40).get(), carColl("recharges").orderBy("t","desc").limit(40).get()]);
+    const key=v=>{ const d=carDate(v); return d?Math.round(+d/120000):null; };   // à 2 min près
+    const merge=(list,docs,conv)=>{ const m=new Map(); (list||[]).forEach(x=>m.set(key(x.start_at),x)); docs.forEach(d=>{ const x=conv(d.data()); let k=key(x.start_at); if(k==null) return; k=[k,k-1,k+1].find(z=>m.has(z))??k; m.set(k,{...(m.get(k)||{}),...x}); }); return [...m.values()]; };
+    const trips=merge(r.trips,tr.docs,x=>({...x,start_at:x.t}));
+    const chargings=merge(r.chargings,ch.docs,x=>({...x,start_at:x.t,stop_at:x.fin}));
+    carRender({...r,trips,chargings,_merged:true});
+  }catch(e){ console.error(e); }
+}
+setTimeout(()=>{ if(!lastRun) locateMe(false); },1200);
 </script>
 </body>
 </html>
