@@ -778,6 +778,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.31.1", d:"03/11/2026", c:["Tâches planifiées : code 0x800710E0 (et quelques autres) traduit en clair"]},
   {v:"2.31", d:"02/11/2026", c:[
     "Ma voiture → Maintenant : les trajets et recharges sont fusionnés avec l'historique enregistré (plus de décalage entre les deux onglets)",
     "Sans trajet calculé, la carte montre la position GPS du téléphone (point bleu, précision) et se centre dessus ; bouton « Moi » dans les boutons de cadrage",
@@ -3158,7 +3159,7 @@ let pcSvc=null, pcCfg=null, pcUnsub=[], pcTasks=null;
 // Tâches planifiées Windows (envoyées par trajetve_voiture.py) : description lisible
 const isoDur=d=>{ if(!d) return ""; const m=String(d).match(/P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/); if(!m) return d;
   const [,D,H,M,S]=m.map(x=>+x||0); if(!D&&!H&&!M&&!S) return ""; return [D&&D+" j",H&&H+" h",M&&M+" min",S&&!D&&!H&&!M&&S+" s"].filter(Boolean).join(" "); };
-const TASK_RES={0:"terminée sans erreur",1:"erreur (code 1)",267008:"prête",267009:"en cours",267010:"désactivée",267011:"jamais lancée",267014:"arrêtée (fin forcée ou limite de durée)",2147750687:"déjà en cours, nouvelle instance refusée",3221225786:"fermée (Ctrl+C ou fenêtre fermée)",2147942402:"fichier introuvable"};
+const TASK_RES={0:"terminée sans erreur",1:"erreur (code 1)",267008:"prête",267009:"en cours",267010:"désactivée",267011:"jamais lancée",267014:"arrêtée (fin forcée ou limite de durée)",2147750687:"déjà en cours, nouvelle instance refusée",3221225786:"fermée (Ctrl+C ou fenêtre fermée)",2147942402:"fichier introuvable",2147946720:"refusée par Windows : une condition de la tâche n'était pas remplie (session non ouverte, PC non inactif, alimentation…)",2147750687:"déjà en cours, nouvelle instance refusée",267012:"aucun déclencheur à venir",2147943515:"accès refusé (compte ou mot de passe de la tâche)"};
 const TASK_STATE={Ready:"prête",Running:"en cours",Disabled:"désactivée",Queued:"en file d'attente",Unknown:"inconnue"};
 const DOW=["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 function trigTxt(t){
