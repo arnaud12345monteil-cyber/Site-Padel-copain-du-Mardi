@@ -496,7 +496,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
           <label>Conso à 90 km/h <small>kWh/100 km</small><input id="c90" type="number" step="0.1" min="5" max="50"></label>
           <label>Conso à 130 km/h <small>kWh/100 km</small><input id="c130" type="number" step="0.1" min="5" max="60"></label>
         </div>
-        <label>Batterie utile <small>kWh</small><input id="cap" type="number" step="0.1" min="10" max="200"></label>
+        <label>Batterie utile <small>kWh, voiture neuve</small><input id="cap" type="number" step="0.1" min="10" max="200"></label>
+        <label class="chk"><input type="checkbox" id="useSoh"> Tenir compte de la santé de la batterie <small id="sohCapTxt">(valeur lue sur la voiture)</small></label>
         <div class="row">
           <label>Charge rapide max <small>kW</small><input id="dcmax" type="number" min="20" max="400"></label>
           <label>Charge AC max <small>kW</small><input id="acmax" type="number" min="3" max="22"></label>
@@ -778,6 +779,9 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.32", d:"04/11/2026", c:[
+    "Ma voiture : la capacité utile estimée indique sa base de calcul (batterie utile × santé, modèle choisi dans Voiture) et prévient si ce modèle n'est pas une Peugeot",
+    "Voiture : case « Tenir compte de la santé de la batterie » pour calculer les trajets avec la capacité réduite (ex. 48,1 kWh × 96 %)"]},
   {v:"2.31.1", d:"03/11/2026", c:["Tâches planifiées : code 0x800710E0 (et quelques autres) traduit en clair"]},
   {v:"2.31", d:"02/11/2026", c:[
     "Ma voiture → Maintenant : les trajets et recharges sont fusionnés avec l'historique enregistré (plus de décalage entre les deux onglets)",
@@ -1726,7 +1730,7 @@ function drawChart(curve,p,totalKm){
 }
 
 // ---------- Formulaire ----------
-const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw","loss","useCarSoc"];
+const FIELDS=["from","to","socStart","car","c90","c130","cap","dcmax","acmax","useTime","maxMin","useSoc","socTrig","floor","useTarget","target","useMinStop","minStop","radius","unknownKW","showAll","arrival","ocmKey","timeTol","timeTolLo","socTolLo","socTolHi","usePmax","pmax","priceDef","stayHw","loss","useCarSoc","useSoh"];
 const radioVal=name=>+(document.querySelector(`input[name="${name}"]:checked`)?.value||0);
 const pminVal=()=>radioVal("pmin");
 const RADIOS=["pmin","hw","season"];
@@ -2456,11 +2460,13 @@ function carRender(r){
   $("carAge").textContent=`donnée de la voiture ${carAt?agoTxt(Date.now()-carAt):"d'heure inconnue"} · ${r.stored?"dernier état enregistré":"lue à "+fmtClock(new Date(r.readAt||Date.now()))}`;
   const chTxt={Disconnected:"débranchée",InProgress:"en charge",Finished:"charge terminée",Stopped:"charge arrêtée",Failure:"erreur de charge"}[r.chargeStatus]||r.chargeStatus||"—";
   const capUse = r.health && $("cap").value ? (+$("cap").value)*r.health/100 : null;
+  if(r.health!=null){ carHealth=+r.health; sohCapUpd(); }
+  const carName=$("car").value!=="0" ? CARS[$("car").value]?.n : "Personnalisé";
   let etat=`<div class="car-grid">
     ${card(Math.round(r.soc)+" %","batterie")}
     ${card(r.range!=null?Math.round(r.range)+" km":"—","autonomie affichée")}
     ${card(chTxt+(r.chargeRate && r.chargeStatus==="InProgress"?` · +${r.chargeRate} km/h`:""),`recharge${r.chargeRate && r.chargeStatus==="InProgress"?" (km d'autonomie gagnés par heure)":""}${r.chargeRate && r.chargeStatus!=="InProgress"?` · vitesse de la dernière charge : ${r.chargeRate} km/h d'autonomie`:""}${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
-    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles`:""), r.health!=null&&r.health<85?"warn":"")}
+    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles (${n1(+$("cap").value)} kWh × ${r.health} %, modèle « ${esc(carName)} » de Voiture${/peugeot/i.test(carName)?"":" : ce n'est pas ta Peugeot, choisis-la pour un chiffre juste"})`:""), r.health!=null&&r.health<85?"warn":"")}
     ${card(r.km!=null?Math.round(r.km).toLocaleString("fr-FR")+" km":"—","compteur")}
     ${card(r.temp!=null?n1(r.temp)+" °C":"—","température extérieure")}
     ${card(r.v12!=null?r.v12:"—","batterie 12 V (indicateur)", r.v12!=null&&r.v12<60?"warn":"")}
@@ -2897,6 +2903,7 @@ $("f").addEventListener("submit", async e=>{
     useTarget:$("useTarget").checked,useMinStop:$("useMinStop").checked,pmin:pminVal(),radius:num("radius"),unknownKW:num("unknownKW"),
     dep:$("dep").value?new Date($("dep").value):new Date()};
   for(const [k,v] of Object.entries(p)) if(typeof v==="number" && !isFinite(v)) return setStatus("Un champ numérique est vide ou invalide.",true);
+  if($("useSoh").checked){ const h=curHealth(); if(h) p.cap=p.cap*h/100; }
   setEff();
   if(p.c130<p.c90) return setStatus("La consommation à 130 km/h doit être supérieure ou égale à celle à 90 km/h.",true);
   p.kDet=consModel(p.c90,p.c130,p.season)(50);
@@ -3240,6 +3247,22 @@ async function carMergeHist(r){
   }catch(e){ console.error(e); }
 }
 setTimeout(()=>{ if(!lastRun) locateMe(false); },1200);
+
+// ---------- Santé de la batterie appliquée à la capacité ----------
+var carHealth=null;
+function curHealth(){
+  if(carHealth) return carHealth;
+  try{ const c=JSON.parse(localStorage.getItem(CAR_KEY)||"null"); if(c && +c.health>0) return +c.health; }catch(e){}
+  return null;
+}
+function sohCapUpd(){
+  const h=curHealth(), cap=parseFloat($("cap").value);
+  $("sohCapTxt").textContent = h ? `(${h} % lus sur la voiture${isFinite(cap)?` : ${n1(cap*h/100)} kWh au lieu de ${n1(cap)}`:""})` : "(santé pas encore lue sur la voiture)";
+}
+$("cap").addEventListener("input",sohCapUpd);
+$("car").addEventListener("change",()=>setTimeout(sohCapUpd,0));
+setTimeout(async()=>{ try{ if(fb && fb.auth.currentUser){ const st=await lastStoredState(); if(st && +st.health>0) carHealth=+st.health; } }catch(e){} sohCapUpd(); },3000);
+sohCapUpd();
 </script>
 </body>
 </html>
