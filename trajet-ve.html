@@ -95,6 +95,11 @@ label.chk{display:block;font-weight:400;font-size:.86rem;line-height:1.4}
 label.chk input{width:auto;margin:0 6px 0 0;vertical-align:-2px}
 label.chk small{display:inline;color:var(--muted)}
 .mepin{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 1px rgb(0 0 0/.25),0 1px 5px rgb(0 0 0/.35)}
+.seasonctl{display:flex}
+.seasonctl button{font:600 12px var(--f-body);padding:6px 9px;border:0;border-right:1px solid #ccc;background:#fff;color:#16202c;cursor:pointer}
+.seasonctl button:last-child{border-right:0}
+.seasonctl button.on{background:#1f4fd8;color:#fff}
+.seasonctl button:hover:not(.on){background:#f0f3f8}
 .livectl button{font:600 12px var(--f-body);padding:6px 9px;border:0;background:#fff;color:#16202c;cursor:pointer}
 .livectl button.on{background:#c62828;color:#fff}
 .livectl button:hover:not(.on){background:#f0f3f8}
@@ -779,6 +784,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.33", d:"05/11/2026", c:["Carte : choix de la saison (Été, Mi-saison, Hiver) en bas à gauche, avec recalcul immédiat du trajet ; même réglage que Conduite → Saison"]},
   {v:"2.32.1", d:"05/11/2026", c:["Ma voiture : texte de la capacité utile clarifié (capacité neuve × santé), plus d'alerte « ce n'est pas ta Peugeot » avec le modèle Personnalisé",
     "La carte « santé batterie » se met à jour dès que la batterie utile ou le modèle change dans Voiture (elle gardait l'ancienne valeur jusqu'à la prochaine lecture)"]},
   {v:"2.32", d:"04/11/2026", c:[
@@ -1541,7 +1547,8 @@ function simulate(R,C,p){
 }
 
 // ---------- Carte ----------
-let liveCtl=null;
+let liveCtl=null, seasonCtl=null;
+function seasonCtlSync(){ const d=seasonCtl?._d; if(!d) return; d.querySelectorAll("[data-s]").forEach(b=>b.classList.toggle("on",$(b.dataset.s).checked)); }
 let map, layers, viewCtl=null, carLayer=null, carMarker=null, carShown=null, hereLayer, allLayer=null, altLayer=null, altOpen=null, altMarkers=[], lastLine=null, altCtl=null;
 function initMap(){
   if(typeof L==="undefined"){ $("map").innerHTML='<p class="empty">Carte indisponible (pas de connexion ?).</p>'; return; }
@@ -1579,6 +1586,14 @@ function initMap(){
       this._b=d.querySelector("button"); return d; },
     sync(on){ if(!this._b) return; this._b.classList.toggle("on",on); this._b.textContent=on?"■ Arrêter le suivi":"● Suivi"; } });
   liveCtl=new LiveCtl({position:"topleft"}).addTo(map);
+  // saison réglable sur la carte (même réglage que Conduite → Saison)
+  const SeasonCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar seasonctl");
+      d.innerHTML='<button type="button" data-s="sEte" title="Été : consommation de base">Été</button><button type="button" data-s="sMid" title="Mi-saison : +10 % de consommation">Mi-saison</button><button type="button" data-s="sHiv" title="Hiver : +25 % de consommation">Hiver</button>';
+      L.DomEvent.disableClickPropagation(d);
+      d.addEventListener("click",e=>{ const b=e.target.closest("[data-s]"); if(!b) return; const r=$(b.dataset.s); if(r.checked) return;
+        r.checked=true; r.dispatchEvent(new Event("input",{bubbles:true})); r.dispatchEvent(new Event("change",{bubbles:true})); seasonCtlSync(); });
+      this._d=d; return d; } });
+  seasonCtl=new SeasonCtl({position:"bottomleft"}).addTo(map); seasonCtlSync();
   altLayer=L.layerGroup().addTo(map);
   // bouton sur la carte pour masquer les bornes alternatives
   const AltCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar altctl"); d.innerHTML='<button type="button">Masquer les autres bornes</button>'; d.hidden=true;
@@ -2676,7 +2691,7 @@ function applyState(st){
   if(Array.isArray(st.prio) && st.prio.length===PRIO_DEFAULT.length){ prio=st.prio; try{ localStorage.setItem(PRIO_KEY,JSON.stringify(prio)); }catch(e){} renderPrio(); }
   if(Array.isArray(st.prefOps)){ prefOps=st.prefOps; try{ localStorage.setItem(PREF_KEY,JSON.stringify(prefOps)); }catch(e){} renderPrices(); }
   if(st.ops){ opsSel=st.ops; try{ localStorage.setItem(OPS_KEY,JSON.stringify(opsSel)); }catch(e){} }
-  if(st.settings){ applySettings(st.settings,["from","to"]); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
+  if(st.settings){ applySettings(st.settings,["from","to"]); seasonCtlSync(); try{ localStorage.setItem("trajetve",JSON.stringify(readSettings())); }catch(e){} showCurve(); }
   if(st.soh && typeof st.soh==="object"){ sohCfg={...sohCfg,...st.soh}; try{ localStorage.setItem(SOH_KEY,JSON.stringify(sohCfg)); }catch(e){} }
   renderFavs(); updateSums(); syncQuick(); if(lastOps.length) renderOps();
 }
@@ -3270,6 +3285,9 @@ $("cap").addEventListener("change",carCardUpd);
 $("car").addEventListener("change",()=>setTimeout(carCardUpd,0));
 setTimeout(async()=>{ try{ if(fb && fb.auth.currentUser){ const st=await lastStoredState(); if(st && +st.health>0) carHealth=+st.health; } }catch(e){} sohCapUpd(); },3000);
 sohCapUpd();
+
+document.querySelectorAll('input[name="season"]').forEach(r=>r.addEventListener("change",seasonCtlSync));
+setTimeout(seasonCtlSync,500);
 </script>
 </body>
 </html>
