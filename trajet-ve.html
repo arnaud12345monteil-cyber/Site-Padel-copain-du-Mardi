@@ -779,6 +779,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.32.1", d:"05/11/2026", c:["Ma voiture : texte de la capacité utile clarifié (capacité neuve × santé), plus d'alerte « ce n'est pas ta Peugeot » avec le modèle Personnalisé",
+    "La carte « santé batterie » se met à jour dès que la batterie utile ou le modèle change dans Voiture (elle gardait l'ancienne valeur jusqu'à la prochaine lecture)"]},
   {v:"2.32", d:"04/11/2026", c:[
     "Ma voiture : la capacité utile estimée indique sa base de calcul (batterie utile × santé, modèle choisi dans Voiture) et prévient si ce modèle n'est pas une Peugeot",
     "Voiture : case « Tenir compte de la santé de la batterie » pour calculer les trajets avec la capacité réduite (ex. 48,1 kWh × 96 %)"]},
@@ -2461,12 +2463,13 @@ function carRender(r){
   const chTxt={Disconnected:"débranchée",InProgress:"en charge",Finished:"charge terminée",Stopped:"charge arrêtée",Failure:"erreur de charge"}[r.chargeStatus]||r.chargeStatus||"—";
   const capUse = r.health && $("cap").value ? (+$("cap").value)*r.health/100 : null;
   if(r.health!=null){ carHealth=+r.health; sohCapUpd(); }
+  lastCarR=r;
   const carName=$("car").value!=="0" ? CARS[$("car").value]?.n : "Personnalisé";
   let etat=`<div class="car-grid">
     ${card(Math.round(r.soc)+" %","batterie")}
     ${card(r.range!=null?Math.round(r.range)+" km":"—","autonomie affichée")}
     ${card(chTxt+(r.chargeRate && r.chargeStatus==="InProgress"?` · +${r.chargeRate} km/h`:""),`recharge${r.chargeRate && r.chargeStatus==="InProgress"?" (km d'autonomie gagnés par heure)":""}${r.chargeRate && r.chargeStatus!=="InProgress"?` · vitesse de la dernière charge : ${r.chargeRate} km/h d'autonomie`:""}${r.chargeMode&&r.chargeMode!=="No"?" ("+r.chargeMode+")":""}${r.remaining?" · reste "+String(r.remaining).replace(/^PT/,"").toLowerCase():""}`)}
-    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles (${n1(+$("cap").value)} kWh × ${r.health} %, modèle « ${esc(carName)} » de Voiture${/peugeot/i.test(carName)?"":" : ce n'est pas ta Peugeot, choisis-la pour un chiffre juste"})`:""), r.health!=null&&r.health<85?"warn":"")}
+    ${card(r.health!=null?r.health+" %":"—","santé batterie"+(capUse?` · ≈ ${n1(capUse)} kWh utiles aujourd'hui = ${n1(+$("cap").value)} kWh (« Batterie utile » neuve, réglée dans Voiture${$("car").value!=="0"?` : ${esc(carName)}`:""}) × ${r.health} %${$("car").value!=="0" && !/peugeot/i.test(carName)?" — ce modèle n'est pas une Peugeot, vérifie ton choix dans Voiture":""}`:""), r.health!=null&&r.health<85?"warn":"")}
     ${card(r.km!=null?Math.round(r.km).toLocaleString("fr-FR")+" km":"—","compteur")}
     ${card(r.temp!=null?n1(r.temp)+" °C":"—","température extérieure")}
     ${card(r.v12!=null?r.v12:"—","batterie 12 V (indicateur)", r.v12!=null&&r.v12<60?"warn":"")}
@@ -3259,8 +3262,12 @@ function sohCapUpd(){
   const h=curHealth(), cap=parseFloat($("cap").value);
   $("sohCapTxt").textContent = h ? `(${h} % lus sur la voiture${isFinite(cap)?` : ${n1(cap*h/100)} kWh au lieu de ${n1(cap)}`:""})` : "(santé pas encore lue sur la voiture)";
 }
-$("cap").addEventListener("input",sohCapUpd);
-$("car").addEventListener("change",()=>setTimeout(sohCapUpd,0));
+var lastCarR=null;
+// la carte « santé » de Ma voiture suit la capacité saisie dans Voiture
+const carCardUpd=()=>{ sohCapUpd(); if(lastCarR && !$("carPanel").hidden) carRender(lastCarR); };
+$("cap").addEventListener("input",carCardUpd);
+$("cap").addEventListener("change",carCardUpd);
+$("car").addEventListener("change",()=>setTimeout(carCardUpd,0));
 setTimeout(async()=>{ try{ if(fb && fb.auth.currentUser){ const st=await lastStoredState(); if(st && +st.health>0) carHealth=+st.health; } }catch(e){} sohCapUpd(); },3000);
 sohCapUpd();
 </script>
