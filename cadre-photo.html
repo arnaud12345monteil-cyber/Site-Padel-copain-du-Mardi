@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>Cadre photo</title>
+<style>
+  :root { --ui: rgba(20,20,22,.82); --line: rgba(255,255,255,.12); --txt: #f2f2f2; --mute: #9a9a9f; --acc: #e8c27a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  button, input, select { font: inherit; color: inherit; }
+
+  /* ---------- scène ---------- */
+  #stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
+  .layer { position: absolute; inset: 0; overflow: hidden; }
+  .layer img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+  .kb-bg { object-fit: cover; filter: blur(40px) brightness(.55); transform: scale(1.2); }
+  .kb-fg { object-fit: contain; will-change: transform; }
+  .kb-fg.cover { object-fit: cover; }
+
+  #grid { position: absolute; inset: 0; display: grid; gap: 6px; padding: 6px; }
+  .tile { position: relative; overflow: hidden; border-radius: 3px; background: #0b0b0c; }
+  .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
+
+  #clock { position: fixed; right: max(28px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom));
+    text-align: right; text-shadow: 0 2px 14px rgba(0,0,0,.7); pointer-events: none; z-index: 5; display: none; }
+  #clock .h { font-size: 64px; font-weight: 200; letter-spacing: -1px; line-height: 1; }
+  #clock .d { font-size: 17px; opacity: .85; margin-top: 4px; text-transform: capitalize; }
+
+  #hud { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 6; opacity: 0; pointer-events: none; transition: opacity .3s; }
+  #hud.on { opacity: 1; pointer-events: auto; }
+  #hud button { background: var(--ui); border: 1px solid var(--line); border-radius: 22px; padding: 10px 16px; backdrop-filter: blur(10px); }
+
+  /* ---------- réglages ---------- */
+  #setup { position: fixed; inset: 0; z-index: 10; overflow-y: auto; background: radial-gradient(circle at 30% 0%, #26221b 0%, #0c0c0d 55%);
+    padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
+  #setup.hidden { display: none; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-weight: 300; font-size: 34px; margin: 6px 0 4px; letter-spacing: -.5px; }
+  .sub { color: var(--mute); margin: 0 0 22px; }
+  .card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--acc); margin: 0 0 12px; font-weight: 600; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; cursor: pointer; }
+  .btn.main { background: var(--acc); color: #1a1408; border: 0; font-weight: 600; padding: 15px 22px; font-size: 17px; }
+  .btn.danger { color: #ff8a80; }
+  .btn:disabled { opacity: .4; }
+  .count { font-size: 15px; color: var(--mute); margin-top: 10px; }
+  .count b { color: var(--txt); font-weight: 600; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .mode { border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; background: transparent; text-align: left; }
+  .mode.sel { border-color: var(--acc); background: rgba(232,194,122,.1); }
+  .mode small { display: block; color: var(--mute); font-size: 12px; margin-top: 3px; }
+  label.opt { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; gap: 12px; }
+  input[type=range] { width: 55%; accent-color: var(--acc); }
+  input[type=text] { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 14px; }
+  .note { color: var(--mute); font-size: 13px; line-height: 1.45; margin: 10px 0 0; }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 12px; display: none; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .2s; }
+  details summary { cursor: pointer; color: var(--mute); font-size: 14px; }
+  #msg { min-height: 20px; font-size: 14px; margin-top: 10px; color: var(--acc); }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div id="clock"><div class="h"></div><div class="d"></div></div>
+<div id="hud"><button id="bSkip">Suivante</button><button id="bSetup">Réglages</button></div>
+
+<div id="setup">
+  <div class="wrap">
+    <h1>Cadre photo</h1>
+    <p class="sub">Tes photos tirées au hasard, en fondu, en mosaïque ou en bandes.</p>
+
+    <div class="card">
+      <h2>Photos</h2>
+      <div class="row">
+        <button class="btn" id="bLocal">Ajouter depuis la tablette</button>
+        <input type="file" id="fileIn" accept="image/*" multiple hidden>
+      </div>
+      <div class="count" id="count">Chargement…</div>
+      <div class="progress" id="prog"><i></i></div>
+      <div id="msg"></div>
+
+      <details style="margin-top:14px">
+        <summary>Importer depuis Google Photos</summary>
+        <p class="note">Google n'autorise plus une appli à piocher seule dans toute ta bibliothèque. Tu choisis un lot de photos (jusqu'à 2000 par import) dans Google Photos, et elles sont copiées ici. Ça ne fonctionne que si la page est hébergée chez toi (Firebase Hosting par exemple) avec un ID client OAuth Google autorisé pour cette adresse.</p>
+        <input type="text" id="clientId" placeholder="ID client OAuth (xxxx.apps.googleusercontent.com)" style="margin-top:10px">
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="bGoogle">Se connecter et choisir</button>
+          <a class="btn" id="bPick" target="_blank" rel="noopener" style="display:none;text-decoration:none">Ouvrir Google Photos</a>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Animation</h2>
+      <div class="modes" id="modes">
+        <button class="mode" data-m="kenburns">Ken Burns<small>Une photo, zoom lent</small></button>
+        <button class="mode" data-m="mosaic">Mosaïque<small>Tuiles qui glissent</small></button>
+        <button class="mode" data-m="strips">Bandes<small>Colonnes qui défilent</small></button>
+        <button class="mode" data-m="mix">Mélange<small>Change toutes les 3 min</small></button>
+      </div>
+      <label class="opt"><span>Rythme <span id="durLbl"></span></span><input type="range" id="dur" min="4" max="30" step="1"></label>
+      <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
+    </div>
+
+    <div class="row" style="justify-content:space-between">
+      <button class="btn main" id="bStart">Lancer le cadre</button>
+      <button class="btn danger" id="bClear">Vider les photos</button>
+    </div>
+    <p class="note">Touche l'écran pendant le diaporama pour afficher les boutons. Sur iPad, « Partager → Sur l'écran d'accueil » donne un vrai plein écran. Pense à désactiver le verrouillage auto si l'écran s'éteint quand même.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* ================= stockage ================= */
+const MAX_SIDE = 2048;
+let db = null;
+let index = [];   // [{id, w, h}]
+
+function openDB() {
+  return new Promise((res) => {
+    try {
+      const rq = indexedDB.open("cadre-photo", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("photos", { keyPath: "id", autoIncrement: true });
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+const mem = new Map(); let memId = 1; // repli si IndexedDB indisponible
+function tx(mode) { return db.transaction("photos", mode).objectStore("photos"); }
+function idb(req) { return new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+
+async function loadIndex() {
+  if (!db) { index = [...mem.values()].map(p => ({ id: p.id, w: p.w, h: p.h })); return; }
+  const all = [];
+  await new Promise(res => {
+    const c = tx("readonly").openCursor();
+    c.onsuccess = () => { const cur = c.result; if (!cur) return res();
+      all.push({ id: cur.value.id, w: cur.value.w, h: cur.value.h }); cur.continue(); };
+    c.onerror = res;
+  });
+  index = all;
+}
+async function addPhoto(rec) {
+  if (!db) { rec.id = memId++; mem.set(rec.id, rec); index.push({ id: rec.id, w: rec.w, h: rec.h }); return; }
+  const id = await idb(tx("readwrite").add(rec));
+  index.push({ id, w: rec.w, h: rec.h });
+}
+async function getBlob(id) {
+  if (!db) return mem.get(id)?.blob;
+  const r = await idb(tx("readonly").get(id)); return r?.blob;
+}
+async function clearAll() { if (db) await idb(tx("readwrite").clear()); mem.clear(); index = []; }
+
+function loadImg(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+}
+// Réduit à 2048 px max (économise la place et la mémoire de la tablette)
+async function prepare(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await loadImg(url);
+    const w0 = img.naturalWidth, h0 = img.naturalHeight;
+    const k = Math.min(1, MAX_SIDE / Math.max(w0, h0));
+    const w = Math.round(w0 * k), h = Math.round(h0 * k);
+    if (k === 1 && blob.type === "image/jpeg") return { blob, w, h };
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    const out = await new Promise(r => c.toBlob(r, "image/jpeg", 0.88));
+    return { blob: out || blob, w, h };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/* ================= tirage aléatoire ================= */
+// Sac mélangé : on voit toutes les photos avant qu'une revienne
+let bag = [];
+function refill() {
+  bag = index.slice();
+  for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+}
+function draw(wantRatio) {
+  if (!index.length) return null;
+  if (!bag.length) refill();
+  if (wantRatio == null) return bag.pop();
+  // cherche, parmi les 12 prochaines, celle dont le format colle le mieux à la case
+  const n = Math.min(12, bag.length); let best = bag.length - 1, score = Infinity;
+  for (let k = 0; k < n; k++) {
+    const p = bag[bag.length - 1 - k];
+    const s = Math.abs(Math.log((p.w / p.h) / wantRatio));
+    if (s < score) { score = s; best = bag.length - 1 - k; }
+  }
+  return bag.splice(best, 1)[0];
+}
+async function urlFor(p) { const b = await getBlob(p.id); return b ? URL.createObjectURL(b) : null; }
+
+/* ================= réglages ================= */
+const S = { mode: "mix", dur: 9, clock: true };
+try { Object.assign(S, JSON.parse(localStorage.getItem("cadre-settings") || "{}")); } catch (e) {}
+const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify(S)); } catch (e) {} };
+
+function renderSettings() {
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("sel", b.dataset.m === S.mode));
+  $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
+  $("#clockOn").checked = S.clock;
+  const n = index.length;
+  $("#count").innerHTML = n ? `<b>${n}</b> photo${n > 1 ? "s" : ""} dans le cadre` : "Aucune photo pour l'instant.";
+  $("#bStart").disabled = !n;
+}
+$("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; S.mode = b.dataset.m; save(); renderSettings(); };
+$("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
+$("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
+
+const msg = t => $("#msg").textContent = t || "";
+function progress(done, total) {
+  const p = $("#prog"); p.style.display = total ? "block" : "none";
+  p.firstElementChild.style.width = total ? (100 * done / total) + "%" : "0";
+}
+
+/* ---- import local ---- */
+$("#bLocal").onclick = () => $("#fileIn").click();
+$("#fileIn").onchange = async e => {
+  const files = [...e.target.files].filter(f => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
+  e.target.value = "";
+  let ok = 0, ko = 0;
+  for (let i = 0; i < files.length; i++) {
+    progress(i, files.length); msg(`Préparation ${i + 1}/${files.length}…`);
+    try { const r = await prepare(files[i]); await addPhoto({ ...r, src: "local", name: files[i].name }); ok++; }
+    catch (err) { ko++; }
+  }
+  progress(0, 0); msg(`${ok} photo${ok > 1 ? "s" : ""} ajoutée${ok > 1 ? "s" : ""}${ko ? ` · ${ko} illisible${ko > 1 ? "s" : ""}` : ""}.`);
+  bag = []; renderSettings();
+};
+$("#bClear").onclick = async () => {
+  const b = $("#bClear");
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirmer ?"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Vider les photos"; }, 3000); return; }
+  b.dataset.armed = ""; b.textContent = "Vider les photos";
+  await clearAll(); bag = []; renderSettings(); msg("Photos supprimées.");
+};
+
+/* ---- import Google Photos (API Picker) ---- */
+const API = "https://photospicker.googleapis.com/v1";
+const SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
+try { $("#clientId").value = localStorage.getItem("cadre-client-id") || ""; } catch (e) {}
+
+function loadGIS() {
+  return new Promise((res, rej) => {
+    if (window.google?.accounts?.oauth2) return res();
+    const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client";
+    s.onload = res; s.onerror = () => rej(new Error("gis")); document.head.appendChild(s);
+    setTimeout(() => rej(new Error("gis")), 8000);
+  });
+}
+function getToken(clientId) {
+  return new Promise((res, rej) => {
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: clientId, scope: SCOPE,
+      callback: r => r.access_token ? res(r.access_token) : rej(new Error(r.error || "auth")),
+      error_callback: e => rej(new Error(e.type || "auth"))
+    });
+    tc.requestAccessToken();
+  });
+}
+async function gapi(token, method, path) {
+  const r = await fetch(API + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
+  if (!r.ok) throw new Error(`API ${r.status}`);
+  return method === "DELETE" ? null : r.json();
+}
+const secs = s => parseFloat(String(s || "5").replace("s", "")) || 5;
+
+$("#bGoogle").onclick = async () => {
+  const clientId = $("#clientId").value.trim();
+  if (!clientId) return msg("Renseigne d'abord l'ID client OAuth.");
+  try { localStorage.setItem("cadre-client-id", clientId); } catch (e) {}
+  let token, session;
+  try { await loadGIS(); }
+  catch (e) { return msg("Impossible de joindre Google depuis ici. Héberge la page (Firebase Hosting) pour utiliser cet import."); }
+  try {
+    msg("Connexion à Google…");
+    token = await getToken(clientId);
+    session = await gapi(token, "POST", "/sessions");
+  } catch (e) { return msg("Connexion refusée : " + e.message); }
+
+  // le lien doit être touché par l'utilisateur (sinon le navigateur bloque la fenêtre)
+  const a = $("#bPick"); a.href = session.pickerUri + "/autoclose"; a.style.display = "inline-block";
+  msg("Touche « Ouvrir Google Photos », choisis tes photos puis valide.");
+
+  const every = secs(session.pollingConfig?.pollInterval) * 1000;
+  const until = Date.now() + secs(session.pollingConfig?.timeoutIn || "1800s") * 1000;
+  try {
+    let s = session;
+    while (!s.mediaItemsSet) {
+      if (Date.now() > until) throw new Error("délai dépassé");
+      await sleep(every); s = await gapi(token, "GET", "/sessions/" + session.id);
+    }
+    a.style.display = "none";
+    // liste des éléments choisis
+    let items = [], pageToken = "";
+    do {
+      const q = `/mediaItems?sessionId=${session.id}&pageSize=100${pageToken ? "&pageToken=" + pageToken : ""}`;
+      const r = await gapi(token, "GET", q);
+      items.push(...(r.mediaItems || []).filter(m => m.type === "PHOTO"));
+      pageToken = r.nextPageToken || "";
+    } while (pageToken);
+
+    let ok = 0, ko = 0;
+    for (let i = 0; i < items.length; i++) {
+      progress(i, items.length); msg(`Téléchargement ${i + 1}/${items.length}…`);
+      try {
+        const f = items[i].mediaFile;
+        const r = await fetch(`${f.baseUrl}=w${MAX_SIDE}-h${MAX_SIDE}`, { headers: { Authorization: "Bearer " + token } });
+        if (!r.ok) throw 0;
+        const p = await prepare(await r.blob());
+        await addPhoto({ ...p, src: "google", name: f.filename }); ok++;
+      } catch (e) { ko++; }
+    }
+    progress(0, 0); bag = []; renderSettings();
+    msg(`${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""} depuis Google${ko ? ` · ${ko} échec${ko > 1 ? "s" : ""}` : ""}.`);
+  } catch (e) { msg("Import interrompu : " + e.message); a.style.display = "none"; }
+  finally { try { await gapi(token, "DELETE", "/sessions/" + session.id); } catch (e) {} }
+};
+
+/* ================= diaporama ================= */
+const stage = $("#stage");
+let run = 0;        // jeton de session : change à chaque arrêt/relance
+let skip = null;    // résout l'attente en cours quand on touche « Suivante »
+const wait = (ms, my) => new Promise(r => { const t = setTimeout(r, ms); skip = () => { clearTimeout(t); r(); }; });
+const alive = my => my === run;
+const landscape = () => innerWidth >= innerHeight;
+
+/* ---- Ken Burns ---- */
+async function kenBurns(my, untilT) {
+  stage.innerHTML = "";
+  while (alive(my) && Date.now() < untilT) {
+    const p = draw(); if (!p) return;
+    const url = await urlFor(p); if (!url) continue;
+    try { await loadImg(url); } catch (e) { URL.revokeObjectURL(url); continue; }
+    if (!alive(my)) { URL.revokeObjectURL(url); return; }
+
+    const screenR = innerWidth / innerHeight, photoR = p.w / p.h;
+    const sameShape = Math.abs(Math.log(photoR / screenR)) < 0.45;   // formats proches : plein cadre
+    const L = document.createElement("div"); L.className = "layer"; L.style.opacity = 0; L.dataset.url = url;
+    L.innerHTML = sameShape ? `<img class="kb-fg cover" src="${url}">`
+                            : `<img class="kb-bg" src="${url}"><img class="kb-fg" src="${url}">`;
+    stage.appendChild(L);
+
+    const total = S.dur * 1000 + 2000;
+    const zIn = Math.random() < .6;
+    const s0 = zIn ? 1.02 : rnd(1.14, 1.2), s1 = zIn ? rnd(1.14, 1.2) : 1.02;
+    const dx = rnd(-3, 3), dy = rnd(-3, 3);
+    L.querySelector(".kb-fg").animate(
+      [{ transform: `scale(${s0}) translate(${dx}%,${dy}%)` }, { transform: `scale(${s1}) translate(${-dx}%,${-dy}%)` }],
+      { duration: total + 600, easing: "linear", fill: "forwards" });
+    L.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1800, easing: "ease-in-out", fill: "forwards" });
+
+    // retire les anciennes couches une fois le fondu terminé
+    setTimeout(() => {
+      [...stage.children].filter(c => c !== L).forEach(c => { if (c.dataset.url) URL.revokeObjectURL(c.dataset.url); c.remove(); });
+    }, 2000);
+    await wait(S.dur * 1000, my);
+  }
+}
+
+/* ---- Mosaïque / Bandes ---- */
+// grilles de 6 colonnes × 4 lignes : [colonne, ligne, largeur, hauteur]
+const MOSAIC_L = [
+  [[1,1,3,2],[4,1,3,2],[1,3,2,2],[3,3,2,2],[5,3,2,2]],
+  [[1,1,4,4],[5,1,2,2],[5,3,2,2]],
+  [[1,1,2,2],[3,1,2,4],[5,1,2,2],[1,3,2,2],[5,3,2,2]],
+  [[1,1,2,4],[3,1,4,2],[3,3,2,2],[5,3,2,2]],
+  [[1,1,3,4],[4,1,3,4]],
+  [[1,1,2,2],[3,1,2,2],[5,1,2,2],[1,3,2,2],[3,3,2,2],[5,3,2,2]],
+];
+const MOSAIC_P = [ // tablette en portrait : 4 colonnes × 6 lignes
+  [[1,1,4,3],[1,4,2,3],[3,4,2,3]],
+  [[1,1,2,2],[3,1,2,2],[1,3,4,2],[1,5,2,2],[3,5,2,2]],
+  [[1,1,2,4],[3,1,2,2],[3,3,2,2],[1,5,4,2]],
+];
+const STRIPS_L = [[[1,1,2,4],[3,1,2,4],[5,1,2,4]], [[1,1,3,4],[4,1,3,4]], [[1,1,1,4],[2,1,2,4],[4,1,2,4],[6,1,1,4]]];
+const STRIPS_P = [[[1,1,4,3],[1,4,4,3]], [[1,1,4,2],[1,3,4,2],[1,5,4,2]]];
+
+function makeGrid(layout) {
+  const land = landscape();
+  const g = document.createElement("div"); g.id = "grid";
+  g.style.gridTemplateColumns = `repeat(${land ? 6 : 4}, 1fr)`;
+  g.style.gridTemplateRows = `repeat(${land ? 4 : 6}, 1fr)`;
+  layout.forEach(([c, r, w, h]) => {
+    const t = document.createElement("div"); t.className = "tile";
+    t.style.gridColumn = `${c} / span ${w}`; t.style.gridRow = `${r} / span ${h}`;
+    g.appendChild(t);
+  });
+  return g;
+}
+const ratioOf = t => { const b = t.getBoundingClientRect(); return b.width / Math.max(1, b.height); };
+
+async function putIn(tile, dir, animate) {
+  const p = draw(ratioOf(tile)); if (!p) return;
+  const url = await urlFor(p); if (!url) return;
+  try { await loadImg(url); } catch (e) { URL.revokeObjectURL(url); return; }
+  const img = document.createElement("img"); img.src = url; img.dataset.url = url;
+  const old = [...tile.querySelectorAll("img")];
+  tile.appendChild(img);
+  const drift = [{ transform: "scale(1.08)" }, { transform: "scale(1)" }];
+  if (!animate) { img.animate(drift, { duration: 20000, fill: "forwards" }); return; }
+  const off = { l: "translateX(-100%)", r: "translateX(100%)", u: "translateY(-100%)", d: "translateY(100%)" };
+  const opp = { l: "r", r: "l", u: "d", d: "u" };
+  const ease = "cubic-bezier(.65,0,.35,1)", D = 1300;
+  img.animate([{ transform: off[dir] }, { transform: "none" }], { duration: D, easing: ease, fill: "forwards" })
+     .finished.then(() => img.animate(drift, { duration: 20000, fill: "forwards" })).catch(() => {});
+  old.forEach(o => o.animate([{ transform: "none" }, { transform: off[opp[dir]] }], { duration: D, easing: ease, fill: "forwards" })
+     .finished.then(() => { URL.revokeObjectURL(o.dataset.url); o.remove(); }).catch(() => {}));
+}
+
+async function tiles(my, untilT, strips) {
+  const pool = strips ? (landscape() ? STRIPS_L : STRIPS_P) : (landscape() ? MOSAIC_L : MOSAIC_P);
+  let layout = pick(pool);
+  while (alive(my) && Date.now() < untilT) {
+    // nouvelle grille, entrée en cascade
+    const old = stage.firstElementChild;
+    const g = makeGrid(layout); g.style.opacity = 0; stage.appendChild(g);
+    const ts = [...g.children];
+    await Promise.all(ts.map(t => putIn(t, null, false)));
+    if (!alive(my)) return;
+    g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1500, fill: "forwards" });
+    ts.forEach((t, i) => t.animate([{ transform: "scale(.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 900, delay: i * 120, easing: "ease-out", fill: "backwards" }));
+    if (old) setTimeout(() => { old.querySelectorAll("img").forEach(i => URL.revokeObjectURL(i.dataset.url)); old.remove(); }, 1600);
+
+    // remplacements tuile par tuile
+    const swaps = ts.length * 2 + 2;
+    let last = -1;
+    for (let k = 0; k < swaps && alive(my) && Date.now() < untilT; k++) {
+      await wait(S.dur * 1000 * (strips ? .8 : .55), my);
+      if (!alive(my)) return;
+      let i; do { i = Math.floor(Math.random() * ts.length); } while (ts.length > 1 && i === last);
+      last = i;
+      const dir = strips ? (i % 2 ? "d" : "u") : pick(["l", "r", "u", "d"]);
+      await putIn(ts[i], dir, true);
+    }
+    let next; do { next = pick(pool); } while (pool.length > 1 && next === layout);
+    layout = next;
+  }
+}
+
+async function loop(my) {
+  const modes = ["kenburns", "mosaic", "strips"];
+  let prev = null;
+  while (alive(my)) {
+    let m = S.mode;
+    if (m === "mix") { do { m = pick(modes); } while (m === prev); }
+    prev = m;
+    const until = S.mode === "mix" ? Date.now() + 180000 : Infinity;
+    // fondu au noir entre deux modes
+    if (stage.children.length) { await stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, fill: "forwards" }).finished; }
+    stage.querySelectorAll("img").forEach(i => i.dataset.url && URL.revokeObjectURL(i.dataset.url));
+    stage.innerHTML = ""; stage.getAnimations().forEach(a => a.cancel());
+    if (m === "kenburns") await kenBurns(my, until);
+    else await tiles(my, until, m === "strips");
+  }
+}
+
+/* ---- horloge ---- */
+let clockT = null;
+function tick() {
+  const d = new Date();
+  $("#clock .h").textContent = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  $("#clock .d").textContent = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/* ---- maintien de l'écran allumé ---- */
+let lock = null;
+async function keepAwake() { try { lock = await navigator.wakeLock?.request("screen"); } catch (e) {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && run && $("#setup").classList.contains("hidden")) keepAwake(); });
+
+/* ---- démarrage / arrêt ---- */
+function start() {
+  if (!index.length) return;
+  $("#setup").classList.add("hidden");
+  $("#clock").style.display = S.clock ? "block" : "none";
+  if (S.clock) { tick(); clockT = setInterval(tick, 10000); }
+  try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch (e) {}
+  keepAwake();
+  bag = []; run++; loop(run);
+}
+function stop() {
+  run++; if (skip) skip();
+  clearInterval(clockT); $("#clock").style.display = "none";
+  try { lock?.release(); } catch (e) {} lock = null;
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  stage.querySelectorAll("img").forEach(i => i.dataset.url && URL.revokeObjectURL(i.dataset.url));
+  stage.innerHTML = ""; stage.style.opacity = 1;
+  renderSettings(); $("#setup").classList.remove("hidden");
+}
+$("#bStart").onclick = start;
+$("#bSetup").onclick = e => { e.stopPropagation(); stop(); };
+$("#bSkip").onclick = e => { e.stopPropagation(); if (skip) skip(); };
+
+let hudT = null;
+stage.addEventListener("click", () => {
+  $("#hud").classList.add("on"); clearTimeout(hudT);
+  hudT = setTimeout(() => $("#hud").classList.remove("on"), 3500);
+});
+// rotation de la tablette : on relance pour recalculer les grilles
+let rotT = null;
+addEventListener("resize", () => {
+  if (!$("#setup").classList.contains("hidden")) return;
+  clearTimeout(rotT); rotT = setTimeout(() => { run++; if (skip) skip(); setTimeout(() => { run++; loop(run); }, 50); }, 600);
+});
+
+/* ---- init ---- */
+(async () => {
+  db = await openDB();
+  try { await loadIndex(); } catch (e) { index = []; }
+  if (!db) msg("Stockage indisponible : les photos ne seront gardées que jusqu'à la fermeture.");
+  renderSettings();
+})();
+})();
+</script>
+</body>
+</html>
