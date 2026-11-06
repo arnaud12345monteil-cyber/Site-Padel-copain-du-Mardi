@@ -88,13 +88,14 @@
       <div class="progress" id="prog"><i></i></div>
       <div id="msg"></div>
 
-      <details style="margin-top:14px">
+      <details id="gDetails" style="margin-top:14px">
         <summary>Importer depuis Google Photos</summary>
         <p class="note">Google n'autorise plus une appli à piocher seule dans toute ta bibliothèque. Tu choisis un lot de photos (jusqu'à 2000 par import) dans Google Photos, et elles sont copiées ici. Ça ne fonctionne que si la page est hébergée chez toi (Firebase Hosting par exemple) avec un ID client OAuth Google autorisé pour cette adresse.</p>
         <input type="text" id="clientId" placeholder="ID client OAuth (xxxx.apps.googleusercontent.com)" style="margin-top:10px">
         <div class="row" style="margin-top:10px">
           <button class="btn" id="bGoogle">Se connecter et choisir</button>
           <a class="btn" id="bPick" target="_blank" rel="noopener" style="display:none;text-decoration:none">Ouvrir Google Photos</a>
+          <button class="btn" id="bDone" style="display:none">J'ai terminé</button>
         </div>
       </details>
     </div>
@@ -283,57 +284,96 @@ async function gapi(token, method, path) {
 }
 const secs = s => parseFloat(String(s || "5").replace("s", "")) || 5;
 
+// La session en cours est gardée dans la tablette : si la page est rechargée
+// pendant la sélection (fréquent sur tablette), l'import reprend tout seul.
+const PENDING = "cadre-pending";
+const savePending = p => { try { localStorage.setItem(PENDING, JSON.stringify(p)); } catch (e) {} };
+const readPending = () => { try { return JSON.parse(localStorage.getItem(PENDING) || "null"); } catch (e) { return null; } };
+const dropPending = () => { try { localStorage.removeItem(PENDING); } catch (e) {} };
+let importing = false, pollNow = null;
+
+function showPickLink(uri) {
+  const a = $("#bPick"); a.href = uri + "/autoclose"; a.style.display = "inline-block";
+  $("#bDone").style.display = "inline-block";
+  $("#gDetails").open = true;
+}
+function hidePickLink() { $("#bPick").style.display = "none"; $("#bDone").style.display = "none"; }
+
 $("#bGoogle").onclick = async () => {
   const clientId = $("#clientId").value.trim();
   if (!clientId) return msg("Renseigne d'abord l'ID client OAuth.");
   try { localStorage.setItem("cadre-client-id", clientId); } catch (e) {}
   let token, session;
   try { await loadGIS(); }
-  catch (e) { return msg("Impossible de joindre Google depuis ici. Héberge la page (Firebase Hosting) pour utiliser cet import."); }
+  catch (e) { return msg("Impossible de joindre Google depuis ici. Ouvre la page depuis son adresse github.io."); }
   try {
     msg("Connexion à Google…");
     token = await getToken(clientId);
     session = await gapi(token, "POST", "/sessions");
   } catch (e) { return msg("Connexion refusée : " + e.message); }
+  const p = {
+    token, id: session.id, uri: session.pickerUri,
+    every: secs(session.pollingConfig?.pollInterval) * 1000,
+    until: Date.now() + Math.min(secs(session.pollingConfig?.timeoutIn || "1800s") * 1000, 50 * 60 * 1000) // le jeton dure ~1 h
+  };
+  savePending(p);
+  showPickLink(p.uri);
+  msg("Touche « Ouvrir Google Photos », choisis tes photos et valide, puis reviens ici.");
+  runImport(p);
+};
+$("#bDone").onclick = () => { msg("Vérification…"); if (pollNow) pollNow(); };
 
-  // le lien doit être touché par l'utilisateur (sinon le navigateur bloque la fenêtre)
-  const a = $("#bPick"); a.href = session.pickerUri + "/autoclose"; a.style.display = "inline-block";
-  msg("Touche « Ouvrir Google Photos », choisis tes photos puis valide.");
-
-  const every = secs(session.pollingConfig?.pollInterval) * 1000;
-  const until = Date.now() + secs(session.pollingConfig?.timeoutIn || "1800s") * 1000;
+async function runImport(p) {
+  if (importing) return; importing = true;
   try {
-    let s = session;
+    let s = { mediaItemsSet: false };
     while (!s.mediaItemsSet) {
-      if (Date.now() > until) throw new Error("délai dépassé");
-      await sleep(every); s = await gapi(token, "GET", "/sessions/" + session.id);
+      if (Date.now() > p.until) throw new Error("délai dépassé, relance l'import");
+      await new Promise(r => { const t = setTimeout(r, p.every); pollNow = () => { clearTimeout(t); r(); }; });
+      s = await gapi(p.token, "GET", "/sessions/" + p.id);
     }
-    a.style.display = "none";
-    // liste des éléments choisis
+    pollNow = null; hidePickLink();
+    msg("Sélection reçue, récupération de la liste…");
+
     let items = [], pageToken = "";
     do {
-      const q = `/mediaItems?sessionId=${session.id}&pageSize=100${pageToken ? "&pageToken=" + pageToken : ""}`;
-      const r = await gapi(token, "GET", q);
+      const q = `/mediaItems?sessionId=${p.id}&pageSize=100${pageToken ? "&pageToken=" + pageToken : ""}`;
+      const r = await gapi(p.token, "GET", q);
       items.push(...(r.mediaItems || []).filter(m => m.type === "PHOTO"));
       pageToken = r.nextPageToken || "";
     } while (pageToken);
+    if (!items.length) { msg("Aucune photo dans la sélection (les vidéos sont ignorées)."); return; }
 
-    let ok = 0, ko = 0;
+    let ok = 0, ko = 0, firstErr = "";
     for (let i = 0; i < items.length; i++) {
       progress(i, items.length); msg(`Téléchargement ${i + 1}/${items.length}…`);
       try {
         const f = items[i].mediaFile;
-        const r = await fetch(`${f.baseUrl}=w${MAX_SIDE}-h${MAX_SIDE}`, { headers: { Authorization: "Bearer " + token } });
-        if (!r.ok) throw 0;
-        const p = await prepare(await r.blob());
-        await addPhoto({ ...p, src: "google", name: f.filename }); ok++;
-      } catch (e) { ko++; }
+        let r;
+        try { r = await fetch(`${f.baseUrl}=w${MAX_SIDE}-h${MAX_SIDE}`, { headers: { Authorization: "Bearer " + p.token } }); }
+        catch (e) { throw new Error("CORS"); }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const ph = await prepare(await r.blob());
+        await addPhoto({ ...ph, src: "google", name: f.filename }); ok++;
+      } catch (e) {
+        ko++; firstErr = firstErr || e.message || "inconnue";
+        // si les 3 premières échouent toutes pareil, inutile d'insister
+        if (ok === 0 && ko >= 3) { items.length = i + 1; break; }
+      }
     }
     progress(0, 0); bag = []; renderSettings();
-    msg(`${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""} depuis Google${ko ? ` · ${ko} échec${ko > 1 ? "s" : ""}` : ""}.`);
-  } catch (e) { msg("Import interrompu : " + e.message); a.style.display = "none"; }
-  finally { try { await gapi(token, "DELETE", "/sessions/" + session.id); } catch (e) {} }
-};
+    let t = `${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""} depuis Google`;
+    if (ko) t += ` · ${ko} échec${ko > 1 ? "s" : ""} (erreur : ${firstErr})`;
+    if (ok === 0 && firstErr === "CORS") t += ". Google bloque le téléchargement direct depuis le navigateur : il faut un relais.";
+    msg(t + ".");
+  } catch (e) { msg("Import interrompu : " + e.message); hidePickLink(); }
+  finally {
+    importing = false; pollNow = null; dropPending();
+    try { await gapi(p.token, "DELETE", "/sessions/" + p.id); } catch (e) {}
+  }
+}
+// retour sur l'onglet : on vérifie tout de suite au lieu d'attendre le prochain tour
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && pollNow) pollNow(); });
 
 /* ================= diaporama ================= */
 const stage = $("#stage");
@@ -528,6 +568,12 @@ addEventListener("resize", () => {
   try { await loadIndex(); } catch (e) { index = []; }
   if (!db) msg("Stockage indisponible : les photos ne seront gardées que jusqu'à la fermeture.");
   renderSettings();
+  const p = readPending();
+  if (p && Date.now() < p.until) {
+    showPickLink(p.uri);
+    msg("Import Google en cours : reprise…");
+    runImport(p);
+  } else if (p) dropPending();
 })();
 })();
 </script>
