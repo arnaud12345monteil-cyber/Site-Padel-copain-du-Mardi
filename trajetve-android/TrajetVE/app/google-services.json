@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "524164609254",
+    "project_id": "trajet-ve",
+    "storage_bucket": "trajet-ve.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:524164609254:android:1110f7d28fb94e4fb9f727",
+        "android_client_info": {
+          "package_name": "fr.trajetve.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "524164609254-o8d9qdi3glbb0as9ghl0hb56b6ml7ou6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-jrFmOCrl9oK8hog07Xb_yTPCt1VQZEI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "524164609254-o8d9qdi3glbb0as9ghl0hb56b6ml7ou6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
