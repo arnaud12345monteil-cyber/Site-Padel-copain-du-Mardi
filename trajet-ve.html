@@ -90,6 +90,21 @@ header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,
 .pc-row b{min-width:170px}
 .pc-task{margin:2px 0 10px 18px;padding:8px 10px;border-left:3px solid var(--line);background:var(--field);border-radius:0 6px 6px 0;font-size:.86rem}
 .pc-task ul{margin:4px 0;padding-left:18px}
+.pc-warn{margin:6px 0 0;padding:6px 8px;border-radius:6px;font-size:.8rem;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--ink)}
+.pc-warn.bad{background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.mini.danger{color:var(--bad);border-color:var(--bad)}
+.pc-journal{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.pc-journal summary{cursor:pointer;font-weight:600}
+.pc-jbar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.pc-jbar select{width:auto}
+#pcJBody{max-height:45vh;overflow:auto}
+#pcJBody table{width:100%;border-collapse:collapse;font-size:.8rem}
+#pcJBody td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+#pcJBody td:first-child{white-space:nowrap;font-family:var(--f-mono);font-size:.74rem}
+.jt{display:inline-block;font:600 .68rem var(--f-mono);padding:1px 6px;border-radius:999px;border:1px solid var(--line);margin-right:4px}
+.jt.programme{border-color:var(--charge);color:var(--charge)} .jt.veille{border-color:var(--accent);color:var(--accent)}
+.jt.systeme{border-color:var(--warn);color:var(--warn)} .jt.tache{color:var(--muted)}
+.jd{color:var(--muted);font-size:.74rem;display:block;margin-top:2px;overflow-wrap:anywhere}
 .pc-task .chip{font-size:.72rem}
 label.chk{display:block;font-weight:400;font-size:.86rem;line-height:1.4}
 label.chk input{width:auto;margin:0 6px 0 0;vertical-align:-2px}
@@ -765,6 +780,16 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <div id="pcBody"></div>
   <label class="chk" style="margin-top:10px"><input type="checkbox" id="pcNoSleep"> Empêcher la mise en veille du PC <small>(trajetve_voiture.py ; l'écran peut toujours s'éteindre)</small></label>
   <p class="note" id="pcMsg" role="status"></p>
+  <details class="pc-journal" id="pcJournal">
+    <summary>Journal : démarrages, veille, tâches</summary>
+    <div class="pc-jbar">
+      <select id="pcJFilter" aria-label="Filtrer le journal"><option value="">Tout</option><option value="programme">Programmes</option><option value="veille">Veille et réveils</option><option value="systeme">Démarrages de Windows</option><option value="tache">Tâches planifiées</option></select>
+      <button type="button" class="mini" id="pcJCsv">Exporter CSV</button>
+      <button type="button" class="mini" id="pcJJson">Exporter JSON</button>
+      <button type="button" class="mini" id="pcJClear">Effacer</button>
+    </div>
+    <div id="pcJBody"><p class="note">Ouvre cette partie pour charger le journal.</p></div>
+  </details>
   <p class="note">L'état est envoyé par trajetve_voiture.py toutes les 2 minutes, les tâches planifiées toutes les 10 minutes et à chaque ouverture de cette fenêtre. S'il ne tourne pas, rien ne remonte.</p>
 </dialog>
 
@@ -784,6 +809,10 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.35", d:"06/11/2026", c:[
+    "Programmes du PC : journal des démarrages des programmes, des mises en veille et réveils du PC (avec la cause du réveil), des démarrages de Windows et des déclenchements des tâches ; filtre, export CSV ou JSON, effacement",
+    "Tâches planifiées : « refusée par Windows » sur une tâche déjà en cours est affiché comme un déclenchement ignoré (normal) ; alertes si Windows doit arrêter le programme au bout d'un délai, ou si la tâche empêche la mise en veille"]},
+  {v:"2.34", d:"05/11/2026", c:["Le trajet calculé (ou la feuille de route ouverte) est partagé avec l'appli Android Trajet VE pour l'écran Android Auto : arrêts, heures, % prévus, arrivée"]},
   {v:"2.33", d:"05/11/2026", c:["Carte : choix de la saison (Été, Mi-saison, Hiver) en bas à gauche, avec recalcul immédiat du trajet ; même réglage que Conduite → Saison"]},
   {v:"2.32.1", d:"05/11/2026", c:["Ma voiture : texte de la capacité utile clarifié (capacité neuve × santé), plus d'alerte « ce n'est pas ta Peugeot » avec le modèle Personnalisé",
     "La carte « santé batterie » se met à jour dès que la batterie utile ou le modèle change dans Voiture (elle gardait l'ancienne valeur jusqu'à la prochaine lecture)"]},
@@ -2850,7 +2879,7 @@ $("f").addEventListener("input",e=>{ if(e.target.closest("#opsList") || NO_AUTO.
 function clearResults(){
   if(typeof stopLive==="function" && watchId!=null) stopLive();
   if(hereLayer) hereLayer.clearLayers();
-  lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip="";
+  lastRun=null; lastCalcOk=false; curSheet=null; stopOv={}; stopForce={}; ovTrip=""; pushActif();
   if(layers){ layers.clearLayers(); lastLine=null; map.setView([46.6,2.4],6); viewCtl?.update(); locateMe(false); }
   $("resbar").hidden=true; $("chartPanel").hidden=true; $("exportBar").hidden=true; $("hereBox").hidden=true; $("hereOut").innerHTML="";
   $("road").innerHTML='<p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l\'heure, la borne et le temps de charge.</p>';
@@ -2903,6 +2932,7 @@ function openSheet(sh){
   drawMap(R,[],sh.res,sh.a,sh.b,false,new Date(sh.p.dep));
   render(sh.res,p,sh.a,sh.b);
   lastRun={res:sh.res,p,a:sh.a,b:sh.b,R,fq:sh.fq,tq:sh.tq,vq:sh.vq||[]};
+  pushActif();
   viewingSheet=true; stopOv={}; stopForce={}; ovTrip=""; $("exportBar").hidden=false; $("exportNote").textContent="";
   lastCalcOk=true; curSheet=sh.id; renderSheets(); renderFavs(); updateSums();
   setStatus(`Feuille de route enregistrée le ${fmtDate(sh.savedAt)}, affichée telle quelle. Modifie un réglage ou clique sur Calculer pour la recalculer.`);
@@ -2980,6 +3010,7 @@ $("f").addEventListener("submit", async e=>{
     render(res,p,a,b);
     curSheet=null; renderSheets();
     lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause,min})=>({q,pause,...(min!=null?{min}:{})}))} : null;
+    pushActif();
     if(lastPos && watchId!=null && lastRun) setTimeout(()=>hereRender(lastPos,true),0); $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
@@ -3198,6 +3229,11 @@ function trigTxt(t){
   if(t.enabled===false) x+=" — désactivé";
   return x;
 }
+// résultat lisible ; 0x800710E0 sur une tâche en cours = déclenchement ignoré car le programme tournait déjà
+function taskRes(t){
+  if(t.state==="Running" && (+t.result===2147946720 || +t.result===2147750687)) return "déclenchement ignoré : le programme tournait déjà (normal)";
+  return TASK_RES[t.result]??("code 0x"+(+t.result>>>0).toString(16));
+}
 function tasksHtml(prog){
   if(!pcTasks) return `<p class="note">Tâches planifiées : pas encore reçues (trajetve_voiture.py à mettre à jour, ou envoi en cours).</p>`;
   if(pcTasks.tasks?.error) return `<p class="note">Tâches planifiées illisibles : ${esc(pcTasks.tasks.error)}</p>`;
@@ -3206,7 +3242,9 @@ function tasksHtml(prog){
   const d=v=>{ const x=v?new Date(v):null; return x&&!isNaN(x)?x.toLocaleString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"; };
   return L.map(t=>`<div class="pc-task"><b>${esc(t.name)}</b> <span class="chip">${esc(TASK_STATE[t.state]||t.state||"?")}</span>
     <ul>${(t.triggers||[]).map(x=>`<li>${esc(trigTxt(x))}</li>`).join("")||"<li>aucun déclencheur</li>"}</ul>
-    <span class="note">Dernière exécution : ${d(t.last)}${t.last?` · ${esc(TASK_RES[t.result]??("code 0x"+(+t.result>>>0).toString(16)))}`:""} · prochaine : ${d(t.next)}${isoDur(t.limit)?` · arrêt forcé après ${isoDur(t.limit)}`:t.limit?"":""}${t.wake?" · réveille le PC":""}${t.battery?" · pas sur batterie":""}</span></div>`).join("");
+    <span class="note">Dernière exécution : ${d(t.last)}${t.last?` · ${esc(taskRes(t))}`:""} · prochaine : ${d(t.next)}${t.battery?" · pas sur batterie":""}</span>
+    ${isoDur(t.limit)?`<p class="pc-warn bad">Windows arrêtera le programme au bout de ${isoDur(t.limit)} : dans la tâche, onglet Paramètres, décoche « Arrêter la tâche si elle s'exécute plus de ».</p>`:""}
+    ${t.wake?`<p class="pc-warn">« Sortir l'ordinateur du mode veille » est coché : tant que ce programme tourne (donc toujours), Windows garde le PC éveillé. Décoche-le si tu veux que le PC puisse se mettre en veille, et confie le réveil à une tâche courte.</p>`:""}</div>`).join("");
 }
 function pcRender(){
   const b=$("pcStat"), d1=$("pcDot1"), d2=$("pcDot2"), u=fb && fb.auth.currentUser;
@@ -3288,6 +3326,68 @@ sohCapUpd();
 
 document.querySelectorAll('input[name="season"]').forEach(r=>r.addEventListener("change",seasonCtlSync));
 setTimeout(seasonCtlSync,500);
+
+// ---------- Trajet en cours partagé avec l'appli Android (écran Android Auto) ----------
+// Résumé compact du dernier trajet calculé ou de la feuille de route ouverte, dans trajetve_car/<compte>.actif
+var actifT=0;
+function pushActif(){
+  clearTimeout(actifT);
+  actifT=setTimeout(()=>{
+    const u=fb && fb.auth.currentUser; if(!u) return;
+    let v=null;
+    try{
+      if(lastRun?.res?.steps){
+        const {res,p,a,b}=lastRun, dep=+new Date(p.dep), at=s=>dep+Math.round((s.t||0)*1000), r1=x=>x==null?null:Math.round(x);
+        const stops=res.steps.filter(s=>s.type==="stop").map(s=>({n:s.c.name||"Borne", lat:s.c.lat, lon:s.c.lon, eta:at(s), d:r1(s.dur), si:r1(s.socIn), so:r1(s.socOut), kw:s.c.kw||null, op:(s.c.operator||"").trim(), p:!!s.pause}));
+        const vias=res.steps.filter(s=>s.type==="via").map(s=>({n:s.name||"Étape", lat:s.lat, lon:s.lon, eta:at(s), d:s.pause||0, soc:r1(s.soc)}));
+        const e=res.steps.find(s=>s.type==="end");
+        v={v:1, at:Date.now(), from:lastRun.fq||a?.label||"", to:lastRun.tq||b?.label||"", dep, stops, vias,
+           end:e?{n:lastRun.tq||b?.label||"Arrivée", lat:b?.lat??null, lon:b?.lon??null, eta:at(e), soc:r1(e.soc)}:null};
+      }
+    }catch(e){ console.error(e); return; }
+    fb.db.collection("trajetve_car").doc(u.uid).set({actif:v?JSON.stringify(v):null},{merge:true}).catch(e=>console.error(e));
+  },2000);
+}
+
+// ---------- Journal du PC (trajetve_car/<compte>/journal, écrit par trajetve_voiture.py) ----------
+let pcJ=[], pcJClearArm=0;
+const JT={programme:"programme",veille:"veille",systeme:"Windows",tache:"tâche"};
+async function pcJLoad(all){
+  const u=fb && fb.auth.currentUser; if(!u) return [];
+  let q=carColl("journal").orderBy("ts","desc"); if(!all) q=q.limit(300);
+  const sn=await q.get(); return sn.docs.map(d=>d.data());
+}
+function pcJRender(){
+  const f=$("pcJFilter").value, L=pcJ.filter(x=>!f||x.type===f);
+  $("pcJBody").innerHTML=L.length?`<table>${L.map(x=>`<tr><td>${new Date(x.ts).toLocaleString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})}</td><td><span class="jt ${esc(x.type)}">${esc(JT[x.type]||x.type)}</span>${esc(x.label)}${x.detail?`<span class="jd">${esc(x.detail)}</span>`:""}</td></tr>`).join("")}</table>${pcJ.length>=300?'<p class="note">300 dernières entrées affichées ; l\'export contient tout.</p>':""}`
+    :`<p class="note">${pcJ.length?"Rien pour ce filtre.":"Journal vide : il se remplit dès que la nouvelle version de trajetve_voiture.py tourne (démarrages, veille et réveils lus dans Windows, tâches planifiées)."}</p>`;
+}
+async function pcJRefresh(){
+  $("pcJBody").innerHTML='<p class="note">Chargement…</p>';
+  try{ pcJ=await pcJLoad(false); pcJRender(); }
+  catch(e){ $("pcJBody").innerHTML=`<p class="note">Lecture impossible (${esc(e.code||e.message)}).</p>`; }
+}
+$("pcJournal").addEventListener("toggle",()=>{ if($("pcJournal").open) pcJRefresh(); });
+$("pcJFilter").addEventListener("change",pcJRender);
+function pcJDownload(name,txt,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([txt],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
+$("pcJJson").addEventListener("click",async()=>{ try{ const L=await pcJLoad(true); pcJDownload(`trajetve-journal-pc-${isoDay(new Date())}.json`,JSON.stringify(L.slice().reverse(),null,1),"application/json"); }catch(e){ $("pcMsg").textContent=`Export impossible (${e.code||e.message}).`; } });
+$("pcJCsv").addEventListener("click",async()=>{
+  try{
+    const L=(await pcJLoad(true)).slice().reverse(), q=v=>{ const s=String(v??""); return /[;"\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; };
+    pcJDownload(`trajetve-journal-pc-${isoDay(new Date())}.csv`,"﻿"+["Date;Type;Événement;Détail",...L.map(x=>[new Date(x.ts).toLocaleString("fr-FR"),JT[x.type]||x.type,x.label,x.detail].map(q).join(";"))].join("\r\n"),"text/csv");
+  }catch(e){ $("pcMsg").textContent=`Export impossible (${e.code||e.message}).`; }
+});
+// effacement : demandé au PC (le site n'a pas le droit d'écrire dans l'historique), en deux clics
+$("pcJClear").addEventListener("click",async()=>{
+  const b=$("pcJClear"), u=fb && fb.auth.currentUser; if(!u) return;
+  if(Date.now()-pcJClearArm>5000){ pcJClearArm=Date.now(); b.textContent="Confirmer l'effacement"; b.classList.add("danger"); setTimeout(()=>{ b.textContent="Effacer"; b.classList.remove("danger"); },5000); return; }
+  pcJClearArm=0; b.textContent="Effacer"; b.classList.remove("danger");
+  try{
+    await fb.db.collection("trajetve_car").doc(u.uid).set({cfg:{journalClear:Date.now()}},{merge:true});
+    $("pcJBody").innerHTML='<p class="note">Effacement demandé au PC… (quelques secondes s\'il est allumé)</p>';
+    setTimeout(pcJRefresh,6000);
+  }catch(e){ $("pcMsg").textContent=`Effacement impossible (${e.code||e.message}).`; }
+});
 </script>
 </body>
 </html>
