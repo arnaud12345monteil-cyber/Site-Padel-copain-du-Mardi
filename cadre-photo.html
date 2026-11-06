@@ -75,7 +75,7 @@
 
 <div id="setup">
   <div class="wrap">
-    <h1>Cadre photo</h1>
+    <h1>Cadre photo <span id="ver" style="font-size:14px;color:var(--mute);font-weight:400"></span></h1>
     <p class="sub">Tes photos tirées au hasard, en fondu, en mosaïque ou en bandes.</p>
 
     <div class="card">
@@ -117,12 +117,14 @@
       <button class="btn danger" id="bClear">Vider les photos</button>
     </div>
     <p class="note">Touche l'écran pendant le diaporama pour afficher les boutons. Sur iPad, « Partager → Sur l'écran d'accueil » donne un vrai plein écran. Pense à désactiver le verrouillage auto si l'écran s'éteint quand même.</p>
+    <p class="note" id="verFoot" style="text-align:center;margin-top:18px"></p>
   </div>
 </div>
 
 <script>
 (() => {
 "use strict";
+const VERSION = "1.2";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -279,7 +281,10 @@ function getToken(clientId) {
 }
 async function gapi(token, method, path) {
   const r = await fetch(API + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: method === "POST" ? "{}" : undefined });
-  if (!r.ok) throw new Error(`API ${r.status}`);
+  if (!r.ok) {
+    let detail = ""; try { detail = (await r.json())?.error?.message || ""; } catch (e) {}
+    throw new Error(`API ${r.status}${detail ? " – " + detail : ""}`);
+  }
   return method === "DELETE" ? null : r.json();
 }
 const secs = s => parseFloat(String(s || "5").replace("s", "")) || 5;
@@ -321,7 +326,12 @@ $("#bGoogle").onclick = async () => {
   msg("Touche « Ouvrir Google Photos », choisis tes photos et valide, puis reviens ici.");
   runImport(p);
 };
-$("#bDone").onclick = () => { msg("Vérification…"); if (pollNow) pollNow(); };
+let forceCheck = false;
+$("#bDone").onclick = () => {
+  if (!importing) return msg("Aucun import en cours : touche « Se connecter et choisir ».");
+  forceCheck = true; msg("Vérification auprès de Google…"); if (pollNow) pollNow();
+};
+const hhmmss = () => new Date().toLocaleTimeString("fr-FR");
 
 async function runImport(p) {
   if (importing) return; importing = true;
@@ -331,6 +341,18 @@ async function runImport(p) {
       if (Date.now() > p.until) throw new Error("délai dépassé, relance l'import");
       await new Promise(r => { const t = setTimeout(r, p.every); pollNow = () => { clearTimeout(t); r(); }; });
       s = await gapi(p.token, "GET", "/sessions/" + p.id);
+      if (s.mediaItemsSet) break;
+      if (forceCheck) {
+        forceCheck = false;
+        // Google n'a pas signalé la fin : on tente quand même de lire la sélection
+        try {
+          const t = await gapi(p.token, "GET", `/mediaItems?sessionId=${p.id}&pageSize=1`);
+          if (t.mediaItems?.length) break;
+        } catch (e) {}
+        msg(`Google n'a reçu aucune sélection pour cette session (vérifié à ${hhmmss()}). Dans Google Photos, il faut appuyer sur « OK » ou « Terminé » en haut à droite après avoir coché les photos, avec le même compte Google que celui de la connexion.`);
+      } else if (!$("#msg").textContent.startsWith("Google n'a reçu")) {
+        msg(`En attente de ta sélection dans Google Photos… (dernière vérification ${hhmmss()})`);
+      }
     }
     pollNow = null; hidePickLink();
     msg("Sélection reçue, récupération de la liste…");
@@ -568,6 +590,7 @@ addEventListener("resize", () => {
   try { await loadIndex(); } catch (e) { index = []; }
   if (!db) msg("Stockage indisponible : les photos ne seront gardées que jusqu'à la fermeture.");
   renderSettings();
+  $("#ver").textContent = "v" + VERSION; $("#verFoot").textContent = "Cadre photo · version " + VERSION;
   const p = readPending();
   if (p && Date.now() < p.until) {
     showPickLink(p.uri);
