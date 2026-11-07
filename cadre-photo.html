@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cadre photo">
 <meta name="theme-color" content="#000000">
+<link rel="manifest" href="cadre-photo.webmanifest">
+<link rel="apple-touch-icon" href="cadre-photo-icon-192.png">
+<link rel="icon" href="cadre-photo-icon-192.png">
 <title>Cadre photo</title>
 <style>
   :root { --ui: rgba(20,20,22,.82); --line: rgba(255,255,255,.12); --txt: #f2f2f2; --mute: #9a9a9f; --acc: #e8c27a; }
@@ -15,14 +19,12 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
   button, input, select { font: inherit; color: inherit; }
 
-  /* ---------- scène ---------- */
   #stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
   .layer { position: absolute; inset: 0; overflow: hidden; }
   .layer img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
   .kb-bg { object-fit: cover; filter: blur(40px) brightness(.55); transform: scale(1.2); }
   .kb-fg { object-fit: contain; will-change: transform; }
   .kb-fg.cover { object-fit: cover; }
-
   #grid { position: absolute; inset: 0; display: grid; gap: 6px; padding: 6px; }
   .tile { position: relative; overflow: hidden; border-radius: 3px; background: #0b0b0c; }
   .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
@@ -31,40 +33,49 @@
     text-align: right; text-shadow: 0 2px 14px rgba(0,0,0,.7); pointer-events: none; z-index: 5; display: none; }
   #clock .h { font-size: 64px; font-weight: 200; letter-spacing: -1px; line-height: 1; }
   #clock .d { font-size: 17px; opacity: .85; margin-top: 4px; text-transform: capitalize; }
-
   #hud { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     display: flex; gap: 8px; z-index: 6; opacity: 0; pointer-events: none; transition: opacity .3s; }
   #hud.on { opacity: 1; pointer-events: auto; }
   #hud button { background: var(--ui); border: 1px solid var(--line); border-radius: 22px; padding: 10px 16px; backdrop-filter: blur(10px); }
 
-  /* ---------- réglages ---------- */
-  #setup { position: fixed; inset: 0; z-index: 10; overflow-y: auto; background: radial-gradient(circle at 30% 0%, #26221b 0%, #0c0c0d 55%);
+  #setup { position: fixed; inset: 0; z-index: 10; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: radial-gradient(circle at 30% 0%, #26221b 0%, #0c0c0d 55%);
     padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
   #setup.hidden { display: none; }
-  .wrap { max-width: 640px; margin: 0 auto; }
+  .wrap { max-width: 680px; margin: 0 auto; }
   h1 { font-weight: 300; font-size: 34px; margin: 6px 0 4px; letter-spacing: -.5px; }
+  h1 small { font-size: 14px; color: var(--mute); font-weight: 400; }
   .sub { color: var(--mute); margin: 0 0 22px; }
   .card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
   .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--acc); margin: 0 0 12px; font-weight: 600; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .btn { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; cursor: pointer; }
+  .btn { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.sm { padding: 8px 12px; font-size: 14px; border-radius: 10px; }
   .btn.main { background: var(--acc); color: #1a1408; border: 0; font-weight: 600; padding: 15px 22px; font-size: 17px; }
   .btn.danger { color: #ff8a80; }
   .btn:disabled { opacity: .4; }
-  .count { font-size: 15px; color: var(--mute); margin-top: 10px; }
-  .count b { color: var(--txt); font-weight: 600; }
   .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
   .mode { border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; background: transparent; text-align: left; }
   .mode.sel { border-color: var(--acc); background: rgba(232,194,122,.1); }
   .mode small { display: block; color: var(--mute); font-size: 12px; margin-top: 3px; }
   label.opt { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; gap: 12px; }
   input[type=range] { width: 55%; accent-color: var(--acc); }
-  input[type=text] { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 14px; }
+  input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--acc); flex: none; }
+  input[type=text] { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 15px; }
   .note { color: var(--mute); font-size: 13px; line-height: 1.45; margin: 10px 0 0; }
   .progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 12px; display: none; }
   .progress i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .2s; }
   details summary { cursor: pointer; color: var(--mute); font-size: 14px; }
-  #msg { min-height: 20px; font-size: 14px; margin-top: 10px; color: var(--acc); }
+  #msg { min-height: 20px; font-size: 14px; margin-top: 10px; color: var(--acc); line-height: 1.4; }
+  .album { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .album:first-child { border-top: 0; padding-top: 2px; }
+  .album .nm { flex: 1; min-width: 0; }
+  .album .nm b { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .album .nm span { color: var(--mute); font-size: 13px; }
+  .album .act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .album.off .nm { opacity: .45; }
+  #summary { font-size: 15px; color: var(--mute); margin: 4px 0 12px; }
+  #summary b { color: var(--txt); }
 </style>
 </head>
 <body>
@@ -75,29 +86,31 @@
 
 <div id="setup">
   <div class="wrap">
-    <h1>Cadre photo <span id="ver" style="font-size:14px;color:var(--mute);font-weight:400"></span></h1>
-    <p class="sub">Tes photos tirées au hasard, en fondu, en mosaïque ou en bandes.</p>
+    <h1>Cadre photo <small id="ver"></small></h1>
+    <p class="sub">Tes albums tirés au hasard, en fondu, en mosaïque ou en bandes.</p>
 
     <div class="card">
-      <h2>Photos</h2>
-      <div class="row">
-        <button class="btn" id="bLocal">Ajouter depuis la tablette</button>
+      <h2>Importer</h2>
+      <input type="text" id="albumName" list="albumList" placeholder="Nom de l'album (ex. Sri Lanka 2026)">
+      <datalist id="albumList"></datalist>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="bLocal">Depuis la tablette</button>
+        <button class="btn" id="bGoogle">Depuis Google Photos</button>
         <input type="file" id="fileIn" accept="image/*" multiple hidden>
       </div>
-      <div class="count" id="count">Chargement…</div>
+      <div class="row" style="margin-top:10px">
+        <a class="btn" id="bPick" target="_blank" rel="noopener" style="display:none">Ouvrir Google Photos</a>
+        <button class="btn" id="bDone" style="display:none">J'ai terminé</button>
+      </div>
       <div class="progress" id="prog"><i></i></div>
       <div id="msg"></div>
+      <p class="note">Les photos vont dans l'album indiqué. Réimporter dans un album existant n'ajoute que les nouvelles photos. Dans Google Photos, cherche le nom de ton album puis appuie longuement sur une photo et fais glisser pour en cocher beaucoup d'un coup.</p>
+    </div>
 
-      <details id="gDetails" style="margin-top:14px">
-        <summary>Importer depuis Google Photos</summary>
-        <p class="note">Google n'autorise plus une appli à piocher seule dans toute ta bibliothèque. Tu choisis un lot de photos (jusqu'à 2000 par import) dans Google Photos, et elles sont copiées ici. Ça ne fonctionne que si la page est hébergée chez toi (Firebase Hosting par exemple) avec un ID client OAuth Google autorisé pour cette adresse.</p>
-        <input type="text" id="clientId" placeholder="ID client OAuth (xxxx.apps.googleusercontent.com)" style="margin-top:10px">
-        <div class="row" style="margin-top:10px">
-          <button class="btn" id="bGoogle">Se connecter et choisir</button>
-          <a class="btn" id="bPick" target="_blank" rel="noopener" style="display:none;text-decoration:none">Ouvrir Google Photos</a>
-          <button class="btn" id="bDone" style="display:none">J'ai terminé</button>
-        </div>
-      </details>
+    <div class="card">
+      <h2>Albums</h2>
+      <div id="summary"></div>
+      <div id="albums"></div>
     </div>
 
     <div class="card">
@@ -112,70 +125,92 @@
       <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
     </div>
 
-    <div class="row" style="justify-content:space-between">
+    <div class="row" style="justify-content:space-between;margin-bottom:14px">
       <button class="btn main" id="bStart">Lancer le cadre</button>
-      <button class="btn danger" id="bClear">Vider les photos</button>
     </div>
-    <p class="note">Touche l'écran pendant le diaporama pour afficher les boutons. Sur iPad, « Partager → Sur l'écran d'accueil » donne un vrai plein écran. Pense à désactiver le verrouillage auto si l'écran s'éteint quand même.</p>
-    <p class="note" id="verFoot" style="text-align:center;margin-top:18px"></p>
+
+    <div class="card">
+      <h2>Réglages avancés</h2>
+      <details>
+        <summary>Connexion Google Photos</summary>
+        <p class="note">ID client OAuth créé dans Google Cloud (type « Application Web », origine autorisée : l'adresse github.io sans chemin).</p>
+        <input type="text" id="clientId" placeholder="xxxx.apps.googleusercontent.com" style="margin-top:8px">
+      </details>
+      <div class="row" style="margin-top:14px;justify-content:space-between">
+        <span class="note" id="storage" style="margin:0"></span>
+        <button class="btn sm danger" id="bClear">Tout supprimer</button>
+      </div>
+      <p class="note">Installer l'app : sur iPad, Partager → « Sur l'écran d'accueil ». Sur Android, menu ⋮ → « Installer l'application ». Pense à désactiver la mise en veille auto si l'écran s'éteint pendant le diaporama.</p>
+      <p class="note" id="verFoot" style="text-align:center;margin-top:14px"></p>
+    </div>
   </div>
 </div>
 
 <script>
 (() => {
 "use strict";
-const VERSION = "1.2";
+const VERSION = "2.1";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const DEFAULT_ALBUM = "Mes photos";
 
 /* ================= stockage ================= */
 const MAX_SIDE = 2048;
 let db = null;
-let index = [];   // [{id, w, h}]
+let index = [];   // [{id, w, h, album, gid, key}]
 
 function openDB() {
-  return new Promise((res) => {
+  return new Promise(res => {
     try {
-      const rq = indexedDB.open("cadre-photo", 1);
-      rq.onupgradeneeded = () => rq.result.createObjectStore("photos", { keyPath: "id", autoIncrement: true });
+      const rq = indexedDB.open("cadre-photo", 2);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains("photos")) rq.result.createObjectStore("photos", { keyPath: "id", autoIncrement: true }); };
       rq.onsuccess = () => res(rq.result);
       rq.onerror = () => res(null);
     } catch (e) { res(null); }
   });
 }
-const mem = new Map(); let memId = 1; // repli si IndexedDB indisponible
-function tx(mode) { return db.transaction("photos", mode).objectStore("photos"); }
-function idb(req) { return new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
+const mem = new Map(); let memId = 1;   // repli si IndexedDB indisponible
+const store = mode => db.transaction("photos", mode).objectStore("photos");
+const idb = req => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+const meta = v => ({ id: v.id, w: v.w, h: v.h, album: v.album || DEFAULT_ALBUM, gid: v.gid || "", key: v.key || "" });
 
 async function loadIndex() {
-  if (!db) { index = [...mem.values()].map(p => ({ id: p.id, w: p.w, h: p.h })); return; }
+  if (!db) { index = [...mem.values()].map(meta); return; }
   const all = [];
   await new Promise(res => {
-    const c = tx("readonly").openCursor();
-    c.onsuccess = () => { const cur = c.result; if (!cur) return res();
-      all.push({ id: cur.value.id, w: cur.value.w, h: cur.value.h }); cur.continue(); };
+    const c = store("readonly").openCursor();
+    c.onsuccess = () => { const cur = c.result; if (!cur) return res(); all.push(meta(cur.value)); cur.continue(); };
     c.onerror = res;
   });
   index = all;
 }
 async function addPhoto(rec) {
-  if (!db) { rec.id = memId++; mem.set(rec.id, rec); index.push({ id: rec.id, w: rec.w, h: rec.h }); return; }
-  const id = await idb(tx("readwrite").add(rec));
-  index.push({ id, w: rec.w, h: rec.h });
+  rec.addedAt = Date.now();
+  if (!db) { rec.id = memId++; mem.set(rec.id, rec); index.push(meta(rec)); return; }
+  rec.id = await idb(store("readwrite").add(rec));
+  index.push(meta(rec));
 }
 async function getBlob(id) {
   if (!db) return mem.get(id)?.blob;
-  const r = await idb(tx("readonly").get(id)); return r?.blob;
+  const r = await idb(store("readonly").get(id)); return r?.blob;
 }
-async function clearAll() { if (db) await idb(tx("readwrite").clear()); mem.clear(); index = []; }
+async function deleteIds(ids) {
+  if (!ids.length) return;
+  if (db) await new Promise((res, rej) => {
+    const t = db.transaction("photos", "readwrite"); const s = t.objectStore("photos");
+    ids.forEach(id => s.delete(id)); t.oncomplete = res; t.onerror = () => rej(t.error);
+  });
+  ids.forEach(id => mem.delete(id));
+  const set = new Set(ids); index = index.filter(p => !set.has(p.id));
+}
+async function clearAll() { if (db) await idb(store("readwrite").clear()); mem.clear(); index = []; }
+async function askPersist() { try { await navigator.storage?.persist?.(); } catch (e) {} }
 
-function loadImg(src) {
-  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
-}
-// Réduit à 2048 px max (économise la place et la mémoire de la tablette)
-async function prepare(blob) {
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+async function prepare(blob) {   // réduit à 2048 px max
   const url = URL.createObjectURL(blob);
   try {
     const img = await loadImg(url);
@@ -190,18 +225,23 @@ async function prepare(blob) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+/* ================= réglages ================= */
+const S = { mode: "mix", dur: 9, clock: true, off: [] };
+try { Object.assign(S, JSON.parse(localStorage.getItem("cadre-settings") || "{}")); } catch (e) {}
+if (!Array.isArray(S.off)) S.off = [];
+const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify(S)); } catch (e) {} };
+
 /* ================= tirage aléatoire ================= */
-// Sac mélangé : on voit toutes les photos avant qu'une revienne
+const active = () => index.filter(p => !S.off.includes(p.album));
 let bag = [];
 function refill() {
-  bag = index.slice();
+  bag = active();
   for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
 }
 function draw(wantRatio) {
-  if (!index.length) return null;
   if (!bag.length) refill();
+  if (!bag.length) return null;
   if (wantRatio == null) return bag.pop();
-  // cherche, parmi les 12 prochaines, celle dont le format colle le mieux à la case
   const n = Math.min(12, bag.length); let best = bag.length - 1, score = Infinity;
   for (let k = 0; k < n; k++) {
     const p = bag[bag.length - 1 - k];
@@ -212,54 +252,102 @@ function draw(wantRatio) {
 }
 async function urlFor(p) { const b = await getBlob(p.id); return b ? URL.createObjectURL(b) : null; }
 
-/* ================= réglages ================= */
-const S = { mode: "mix", dur: 9, clock: true };
-try { Object.assign(S, JSON.parse(localStorage.getItem("cadre-settings") || "{}")); } catch (e) {}
-const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify(S)); } catch (e) {} };
-
-function renderSettings() {
-  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("sel", b.dataset.m === S.mode));
-  $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
-  $("#clockOn").checked = S.clock;
-  const n = index.length;
-  $("#count").innerHTML = n ? `<b>${n}</b> photo${n > 1 ? "s" : ""} dans le cadre` : "Aucune photo pour l'instant.";
-  $("#bStart").disabled = !n;
-}
-$("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; S.mode = b.dataset.m; save(); renderSettings(); };
-$("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
-$("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
-
+/* ================= interface ================= */
 const msg = t => $("#msg").textContent = t || "";
 function progress(done, total) {
   const p = $("#prog"); p.style.display = total ? "block" : "none";
   p.firstElementChild.style.width = total ? (100 * done / total) + "%" : "0";
 }
+function albumStats() {
+  const m = new Map();
+  index.forEach(p => m.set(p.album, (m.get(p.album) || 0) + 1));
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "fr"));
+}
+const targetAlbum = () => ($("#albumName").value.trim() || DEFAULT_ALBUM).slice(0, 60);
 
-/* ---- import local ---- */
+function renderSettings() {
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("sel", b.dataset.m === S.mode));
+  $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
+  $("#clockOn").checked = S.clock;
+
+  const stats = albumStats();
+  const nAct = active().length;
+  $("#albumList").innerHTML = stats.map(([n]) => `<option value="${esc(n)}">`).join("");
+  $("#summary").innerHTML = stats.length
+    ? `<b>${nAct}</b> photo${nAct > 1 ? "s" : ""} au tirage sur ${index.length}, dans ${stats.length} album${stats.length > 1 ? "s" : ""}. Coche les albums à afficher.`
+    : "Aucun album pour l'instant. Importe des photos ci-dessus.";
+  $("#albums").innerHTML = stats.map(([n, c]) => {
+    const on = !S.off.includes(n);
+    return `<div class="album${on ? "" : " off"}" data-a="${esc(n)}">
+      <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">
+      <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
+      <div class="act">
+        <button class="btn sm" data-act="google">Compléter (Google)</button>
+        <button class="btn sm" data-act="local">+ Tablette</button>
+        <button class="btn sm danger" data-act="del">Supprimer</button>
+      </div></div>`;
+  }).join("");
+  $("#bStart").disabled = !nAct;
+  showStorage();
+}
+async function showStorage() {
+  try {
+    const e = await navigator.storage?.estimate?.(); if (!e) return;
+    $("#storage").textContent = `${(e.usage / 1048576).toFixed(0)} Mo utilisés`;
+  } catch (e) {}
+}
+
+$("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; S.mode = b.dataset.m; save(); renderSettings(); };
+$("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
+$("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
+
+$("#albums").addEventListener("click", async e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const name = el.closest(".album").dataset.a, act = el.dataset.act;
+  if (act === "toggle") {
+    S.off = el.checked ? S.off.filter(a => a !== name) : [...new Set([...S.off, name])];
+    save(); bag = []; renderSettings();
+  } else if (act === "google") { $("#albumName").value = name; startGoogle(); }
+  else if (act === "local") { $("#albumName").value = name; $("#fileIn").click(); }
+  else if (act === "del") {
+    if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = "Supprimer"; } }, 3000); return; }
+    await deleteIds(index.filter(p => p.album === name).map(p => p.id));
+    S.off = S.off.filter(a => a !== name); save(); bag = []; renderSettings(); msg(`Album « ${name} » supprimé.`);
+  }
+});
+
+/* ---- import depuis la tablette ---- */
 $("#bLocal").onclick = () => $("#fileIn").click();
 $("#fileIn").onchange = async e => {
+  const album = targetAlbum();
   const files = [...e.target.files].filter(f => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
   e.target.value = "";
-  let ok = 0, ko = 0;
+  if (!files.length) return;
+  askPersist();
+  const known = new Set(index.filter(p => p.album === album).map(p => p.key));
+  let ok = 0, dup = 0, ko = 0;
   for (let i = 0; i < files.length; i++) {
-    progress(i, files.length); msg(`Préparation ${i + 1}/${files.length}…`);
-    try { const r = await prepare(files[i]); await addPhoto({ ...r, src: "local", name: files[i].name }); ok++; }
+    const f = files[i], key = `${f.name}|${f.size}|${f.lastModified}`;
+    progress(i, files.length); msg(`« ${album} » : préparation ${i + 1}/${files.length}…`);
+    if (known.has(key)) { dup++; continue; }
+    try { const r = await prepare(f); await addPhoto({ ...r, album, key, name: f.name }); known.add(key); ok++; }
     catch (err) { ko++; }
   }
-  progress(0, 0); msg(`${ok} photo${ok > 1 ? "s" : ""} ajoutée${ok > 1 ? "s" : ""}${ko ? ` · ${ko} illisible${ko > 1 ? "s" : ""}` : ""}.`);
-  bag = []; renderSettings();
+  progress(0, 0); bag = []; renderSettings();
+  msg(`« ${album} » : ${ok} ajoutée${ok > 1 ? "s" : ""}${dup ? ` · ${dup} déjà présente${dup > 1 ? "s" : ""}` : ""}${ko ? ` · ${ko} illisible${ko > 1 ? "s" : ""}` : ""}.`);
 };
 $("#bClear").onclick = async () => {
   const b = $("#bClear");
-  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirmer ?"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Vider les photos"; }, 3000); return; }
-  b.dataset.armed = ""; b.textContent = "Vider les photos";
-  await clearAll(); bag = []; renderSettings(); msg("Photos supprimées.");
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Vraiment tout ?"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Tout supprimer"; }, 3000); return; }
+  b.dataset.armed = ""; b.textContent = "Tout supprimer";
+  await clearAll(); S.off = []; save(); bag = []; renderSettings(); msg("Toutes les photos ont été supprimées.");
 };
 
 /* ---- import Google Photos (API Picker) ---- */
 const API = "https://photospicker.googleapis.com/v1";
 const SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
 try { $("#clientId").value = localStorage.getItem("cadre-client-id") || ""; } catch (e) {}
+$("#clientId").onchange = e => { try { localStorage.setItem("cadre-client-id", e.target.value.trim()); } catch (x) {} };
 
 function loadGIS() {
   return new Promise((res, rej) => {
@@ -288,50 +376,46 @@ async function gapi(token, method, path) {
   return method === "DELETE" ? null : r.json();
 }
 const secs = s => parseFloat(String(s || "5").replace("s", "")) || 5;
+const hhmmss = () => new Date().toLocaleTimeString("fr-FR");
 
-// La session en cours est gardée dans la tablette : si la page est rechargée
-// pendant la sélection (fréquent sur tablette), l'import reprend tout seul.
+// session gardée sur la tablette : si la page se recharge pendant la sélection, l'import reprend
 const PENDING = "cadre-pending";
 const savePending = p => { try { localStorage.setItem(PENDING, JSON.stringify(p)); } catch (e) {} };
 const readPending = () => { try { return JSON.parse(localStorage.getItem(PENDING) || "null"); } catch (e) { return null; } };
 const dropPending = () => { try { localStorage.removeItem(PENDING); } catch (e) {} };
-let importing = false, pollNow = null;
+let importing = false, pollNow = null, forceCheck = false;
 
-function showPickLink(uri) {
-  const a = $("#bPick"); a.href = uri + "/autoclose"; a.style.display = "inline-block";
-  $("#bDone").style.display = "inline-block";
-  $("#gDetails").open = true;
-}
+function showPickLink(uri) { const a = $("#bPick"); a.href = uri + "/autoclose"; a.style.display = "inline-block"; $("#bDone").style.display = "inline-block"; }
 function hidePickLink() { $("#bPick").style.display = "none"; $("#bDone").style.display = "none"; }
 
-$("#bGoogle").onclick = async () => {
+$("#bGoogle").onclick = () => startGoogle();
+async function startGoogle() {
+  if (importing) return msg("Un import Google est déjà en cours.");
   const clientId = $("#clientId").value.trim();
-  if (!clientId) return msg("Renseigne d'abord l'ID client OAuth.");
+  if (!clientId) { document.querySelector("details").open = true; return msg("Renseigne d'abord l'ID client OAuth dans « Réglages avancés »."); }
   try { localStorage.setItem("cadre-client-id", clientId); } catch (e) {}
+  const album = targetAlbum();
   let token, session;
   try { await loadGIS(); }
-  catch (e) { return msg("Impossible de joindre Google depuis ici. Ouvre la page depuis son adresse github.io."); }
+  catch (e) { return msg("Impossible de joindre Google depuis ici. Ouvre l'app depuis son adresse github.io."); }
   try {
     msg("Connexion à Google…");
     token = await getToken(clientId);
     session = await gapi(token, "POST", "/sessions");
   } catch (e) { return msg("Connexion refusée : " + e.message); }
   const p = {
-    token, id: session.id, uri: session.pickerUri,
+    token, album, id: session.id, uri: session.pickerUri,
     every: secs(session.pollingConfig?.pollInterval) * 1000,
-    until: Date.now() + Math.min(secs(session.pollingConfig?.timeoutIn || "1800s") * 1000, 50 * 60 * 1000) // le jeton dure ~1 h
+    until: Date.now() + Math.min(secs(session.pollingConfig?.timeoutIn || "1800s") * 1000, 50 * 60 * 1000)
   };
-  savePending(p);
-  showPickLink(p.uri);
-  msg("Touche « Ouvrir Google Photos », choisis tes photos et valide, puis reviens ici.");
+  savePending(p); showPickLink(p.uri);
+  msg(`Album « ${album} » : touche « Ouvrir Google Photos », choisis tes photos, valide avec « OK », puis reviens ici.`);
   runImport(p);
-};
-let forceCheck = false;
+}
 $("#bDone").onclick = () => {
-  if (!importing) return msg("Aucun import en cours : touche « Se connecter et choisir ».");
+  if (!importing) return msg("Aucun import en cours.");
   forceCheck = true; msg("Vérification auprès de Google…"); if (pollNow) pollNow();
 };
-const hhmmss = () => new Date().toLocaleTimeString("fr-FR");
 
 async function runImport(p) {
   if (importing) return; importing = true;
@@ -344,14 +428,10 @@ async function runImport(p) {
       if (s.mediaItemsSet) break;
       if (forceCheck) {
         forceCheck = false;
-        // Google n'a pas signalé la fin : on tente quand même de lire la sélection
-        try {
-          const t = await gapi(p.token, "GET", `/mediaItems?sessionId=${p.id}&pageSize=1`);
-          if (t.mediaItems?.length) break;
-        } catch (e) {}
-        msg(`Google n'a reçu aucune sélection pour cette session (vérifié à ${hhmmss()}). Dans Google Photos, il faut appuyer sur « OK » ou « Terminé » en haut à droite après avoir coché les photos, avec le même compte Google que celui de la connexion.`);
+        try { const t = await gapi(p.token, "GET", `/mediaItems?sessionId=${p.id}&pageSize=1`); if (t.mediaItems?.length) break; } catch (e) {}
+        msg(`Google n'a reçu aucune sélection pour cette session (vérifié à ${hhmmss()}). Dans Google Photos, appuie sur « OK » / « Terminé » en haut à droite après avoir coché les photos, avec le même compte que celui de la connexion.`);
       } else if (!$("#msg").textContent.startsWith("Google n'a reçu")) {
-        msg(`En attente de ta sélection dans Google Photos… (dernière vérification ${hhmmss()})`);
+        msg(`Album « ${p.album} » : en attente de ta sélection dans Google Photos… (vérifié à ${hhmmss()})`);
       }
     }
     pollNow = null; hidePickLink();
@@ -359,34 +439,36 @@ async function runImport(p) {
 
     let items = [], pageToken = "";
     do {
-      const q = `/mediaItems?sessionId=${p.id}&pageSize=100${pageToken ? "&pageToken=" + pageToken : ""}`;
-      const r = await gapi(p.token, "GET", q);
+      const r = await gapi(p.token, "GET", `/mediaItems?sessionId=${p.id}&pageSize=100${pageToken ? "&pageToken=" + pageToken : ""}`);
       items.push(...(r.mediaItems || []).filter(m => m.type === "PHOTO"));
       pageToken = r.nextPageToken || "";
     } while (pageToken);
     if (!items.length) { msg("Aucune photo dans la sélection (les vidéos sont ignorées)."); return; }
 
+    askPersist();
+    const known = new Set(index.filter(x => x.album === p.album).map(x => x.gid));
+    const todo = items.filter(m => !known.has(m.id));
+    const dup = items.length - todo.length;
     let ok = 0, ko = 0, firstErr = "";
-    for (let i = 0; i < items.length; i++) {
-      progress(i, items.length); msg(`Téléchargement ${i + 1}/${items.length}…`);
+    for (let i = 0; i < todo.length; i++) {
+      progress(i, todo.length); msg(`« ${p.album} » : téléchargement ${i + 1}/${todo.length}…`);
       try {
-        const f = items[i].mediaFile;
-        let r;
+        const f = todo[i].mediaFile; let r;
         try { r = await fetch(`${f.baseUrl}=w${MAX_SIDE}-h${MAX_SIDE}`, { headers: { Authorization: "Bearer " + p.token } }); }
         catch (e) { throw new Error("CORS"); }
         if (!r.ok) throw new Error("HTTP " + r.status);
         const ph = await prepare(await r.blob());
-        await addPhoto({ ...ph, src: "google", name: f.filename }); ok++;
+        await addPhoto({ ...ph, album: p.album, gid: todo[i].id, name: f.filename }); ok++;
       } catch (e) {
         ko++; firstErr = firstErr || e.message || "inconnue";
-        // si les 3 premières échouent toutes pareil, inutile d'insister
-        if (ok === 0 && ko >= 3) { items.length = i + 1; break; }
+        if (ok === 0 && ko >= 3) break;   // tout échoue de la même façon : inutile d'insister
       }
     }
     progress(0, 0); bag = []; renderSettings();
-    let t = `${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""} depuis Google`;
+    let t = `« ${p.album} » : ${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""}`;
+    if (dup) t += ` · ${dup} déjà présente${dup > 1 ? "s" : ""}`;
     if (ko) t += ` · ${ko} échec${ko > 1 ? "s" : ""} (erreur : ${firstErr})`;
-    if (ok === 0 && firstErr === "CORS") t += ". Google bloque le téléchargement direct depuis le navigateur : il faut un relais.";
+    if (ok === 0 && firstErr === "CORS") t += ". Google bloque le téléchargement direct depuis le navigateur : il faut un relais";
     msg(t + ".");
   } catch (e) { msg("Import interrompu : " + e.message); hidePickLink(); }
   finally {
@@ -394,13 +476,10 @@ async function runImport(p) {
     try { await gapi(p.token, "DELETE", "/sessions/" + p.id); } catch (e) {}
   }
 }
-// retour sur l'onglet : on vérifie tout de suite au lieu d'attendre le prochain tour
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && pollNow) pollNow(); });
 
 /* ================= diaporama ================= */
 const stage = $("#stage");
-let run = 0;        // jeton de session : change à chaque arrêt/relance
-let skip = null;    // résout l'attente en cours quand on touche « Suivante »
+let run = 0, skip = null;
 const wait = (ms, my) => new Promise(r => { const t = setTimeout(r, ms); skip = () => { clearTimeout(t); r(); }; });
 const alive = my => my === run;
 const landscape = () => innerWidth >= innerHeight;
@@ -432,7 +511,8 @@ async function kenBurns(my, untilT) {
 
     // retire les anciennes couches une fois le fondu terminé
     setTimeout(() => {
-      [...stage.children].filter(c => c !== L).forEach(c => { if (c.dataset.url) URL.revokeObjectURL(c.dataset.url); c.remove(); });
+      if (!alive(my)) return;   // le mode a changé entre-temps : ne touche pas à la nouvelle scène
+      [...stage.querySelectorAll(":scope > .layer")].filter(c => c !== L).forEach(c => { if (c.dataset.url) URL.revokeObjectURL(c.dataset.url); c.remove(); });
     }, 2000);
     await wait(S.dur * 1000, my);
   }
@@ -501,7 +581,7 @@ async function tiles(my, untilT, strips) {
     g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1500, fill: "forwards" });
     ts.forEach((t, i) => t.animate([{ transform: "scale(.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: 900, delay: i * 120, easing: "ease-out", fill: "backwards" }));
-    if (old) setTimeout(() => { old.querySelectorAll("img").forEach(i => URL.revokeObjectURL(i.dataset.url)); old.remove(); }, 1600);
+    if (old && old !== g) setTimeout(() => { if (!alive(my)) return; old.querySelectorAll("img").forEach(i => URL.revokeObjectURL(i.dataset.url)); old.remove(); }, 1600);
 
     // remplacements tuile par tuile
     const swaps = ts.length * 2 + 2;
@@ -536,22 +616,24 @@ async function loop(my) {
   }
 }
 
-/* ---- horloge ---- */
 let clockT = null;
 function tick() {
   const d = new Date();
   $("#clock .h").textContent = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   $("#clock .d").textContent = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 }
-
-/* ---- maintien de l'écran allumé ---- */
 let lock = null;
 async function keepAwake() { try { lock = await navigator.wakeLock?.request("screen"); } catch (e) {} }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && run && $("#setup").classList.contains("hidden")) keepAwake(); });
+const showing = () => $("#setup").classList.contains("hidden");
 
-/* ---- démarrage / arrêt ---- */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (showing()) keepAwake();
+  if (pollNow) pollNow();   // retour depuis Google Photos : on vérifie tout de suite
+});
+
 function start() {
-  if (!index.length) return;
+  if (!active().length) return;
   $("#setup").classList.add("hidden");
   $("#clock").style.display = S.clock ? "block" : "none";
   if (S.clock) { tick(); clockT = setInterval(tick, 10000); }
@@ -565,38 +647,37 @@ function stop() {
   try { lock?.release(); } catch (e) {} lock = null;
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
   stage.querySelectorAll("img").forEach(i => i.dataset.url && URL.revokeObjectURL(i.dataset.url));
-  stage.innerHTML = ""; stage.style.opacity = 1;
+  stage.innerHTML = ""; stage.getAnimations().forEach(a => a.cancel());
   renderSettings(); $("#setup").classList.remove("hidden");
 }
 $("#bStart").onclick = start;
 $("#bSetup").onclick = e => { e.stopPropagation(); stop(); };
 $("#bSkip").onclick = e => { e.stopPropagation(); if (skip) skip(); };
-
 let hudT = null;
 stage.addEventListener("click", () => {
   $("#hud").classList.add("on"); clearTimeout(hudT);
   hudT = setTimeout(() => $("#hud").classList.remove("on"), 3500);
 });
-// rotation de la tablette : on relance pour recalculer les grilles
 let rotT = null;
 addEventListener("resize", () => {
-  if (!$("#setup").classList.contains("hidden")) return;
+  if (!showing()) return;
   clearTimeout(rotT); rotT = setTimeout(() => { run++; if (skip) skip(); setTimeout(() => { run++; loop(run); }, 50); }, 600);
 });
 
-/* ---- init ---- */
+/* ================= démarrage ================= */
 (async () => {
+  $("#ver").textContent = "v" + VERSION; $("#verFoot").textContent = "Cadre photo · version " + VERSION;
   db = await openDB();
   try { await loadIndex(); } catch (e) { index = []; }
   if (!db) msg("Stockage indisponible : les photos ne seront gardées que jusqu'à la fermeture.");
   renderSettings();
-  $("#ver").textContent = "v" + VERSION; $("#verFoot").textContent = "Cadre photo · version " + VERSION;
   const p = readPending();
   if (p && Date.now() < p.until) {
-    showPickLink(p.uri);
-    msg("Import Google en cours : reprise…");
-    runImport(p);
+    $("#albumName").value = p.album || "";
+    showPickLink(p.uri); msg("Import Google en cours : reprise…"); runImport(p);
   } else if (p) dropPending();
+  // webapp : mise en cache pour fonctionner hors ligne (ignoré là où ce n'est pas permis)
+  try { if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("cadre-photo-sw.js", { scope: "./cadre-photo" }).catch(() => {}); } catch (e) {}
 })();
 })();
 </script>
