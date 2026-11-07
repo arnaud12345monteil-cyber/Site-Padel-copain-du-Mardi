@@ -28,6 +28,8 @@
   #grid { position: absolute; inset: 0; display: grid; gap: 6px; padding: 6px; }
   .tile { position: relative; overflow: hidden; border-radius: 3px; background: #0b0b0c; }
   .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
+  .tile .tt { position: absolute; left: 12px; bottom: 9px; z-index: 2; max-width: calc(100% - 24px); font-size: 12px; letter-spacing: .4px;
+    opacity: .75; text-shadow: 0 1px 8px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 
   #corner { position: fixed; right: max(28px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom));
     text-align: right; text-shadow: 0 2px 14px rgba(0,0,0,.75); pointer-events: none; z-index: 5; }
@@ -141,7 +143,7 @@
       <label class="opt" id="everyRow"><span>Changer d'effet toutes les <span id="everyLbl"></span></span><input type="range" id="every" min="0" max="19" step="1"></label>
       <label class="opt"><span>Effet de zoom<small style="display:block;color:var(--mute);font-size:12px">Zoom lent pendant l'affichage (Ken Burns, mosaïque…)</small></span><input type="checkbox" id="zoomOn"></label>
       <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
-      <label class="opt"><span>Afficher le nom de l'album<small style="display:block;color:var(--mute);font-size:12px">En bas à droite, discret. En tirage « tous albums », masqué pendant la mosaïque, les bandes et le diptyque, qui mélangent plusieurs albums.</small></span><input type="checkbox" id="tagOn"></label>
+      <label class="opt"><span>Afficher le nom de l'album<small style="display:block;color:var(--mute);font-size:12px">En bas à droite, discret. Avec la mosaïque, les bandes et le diptyque, le nom s'affiche sur chaque photo.</small></span><input type="checkbox" id="tagOn"></label>
     </div>
 
     <div class="row" style="justify-content:space-between;margin-bottom:14px">
@@ -168,7 +170,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.3";
+const VERSION = "3.4";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -793,7 +795,22 @@ async function putIn(tile, dir, animate) {
   if (!tile.isConnected) { URL.revokeObjectURL(ph.url); return; }
   const img = document.createElement("img"); img.src = ph.url; img.dataset.url = ph.url;
   const old = [...tile.querySelectorAll("img")];
-  tile.appendChild(img); setTag(S.order === "album" ? ph.p.album : null);
+  tile.appendChild(img);
+  // plusieurs photos à l'écran : le nom de l'album va sur chaque tuile, pas dans le coin
+  setTag(null);
+  if (S.showTag) {
+    let tt = tile.querySelector(".tt");
+    if (!tt) {
+      tt = document.createElement("div"); tt.className = "tt"; tile.appendChild(tt);
+      // si l'horloge recouvre le bas de cette tuile, l'étiquette passe en haut
+      const c = $("#corner").getBoundingClientRect(), r = tile.getBoundingClientRect();
+      if (c.height > 4 && r.right > c.left - 8 && r.bottom > c.top - 8) { tt.style.bottom = "auto"; tt.style.top = "9px"; }
+    }
+    if (tt.textContent !== ph.p.album) {
+      tt.textContent = ph.p.album;
+      tt.animate([{ opacity: 0 }, { opacity: .75 }], { duration: 900, delay: animate ? 600 : 0, fill: "backwards" });
+    }
+  }
   const drift = [{ transform: "scale(1.08)" }, { transform: "scale(1)" }];
   if (!animate) { if (S.zoom) img.animate(drift, { duration: 20000, fill: "forwards" }); return; }
   const off = { l: "translateX(-100%)", r: "translateX(100%)", u: "translateY(-100%)", d: "translateY(100%)" };
