@@ -129,7 +129,8 @@
       <div class="modes" id="fx"></div>
       <p class="note" id="fxNote"></p>
       <label class="opt"><span>Rythme des photos <span id="durLbl"></span></span><input type="range" id="dur" min="4" max="30" step="1"></label>
-      <label class="opt" id="everyRow"><span>Changer d'effet toutes les <span id="everyLbl"></span></span><input type="range" id="every" min="1" max="15" step="1"></label>
+      <label class="opt" id="everyRow"><span>Changer d'effet toutes les <span id="everyLbl"></span></span><input type="range" id="every" min="0" max="19" step="1"></label>
+      <label class="opt"><span>Effet de zoom<small style="display:block;color:var(--mute);font-size:12px">Zoom lent pendant l'affichage (Ken Burns, mosaïque…)</small></span><input type="checkbox" id="zoomOn"></label>
       <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
     </div>
 
@@ -157,7 +158,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.0";
+const VERSION = "3.1";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -250,6 +251,13 @@ const S = { fx: FX.map(x => x.id), every: 3, dur: 9, clock: true, off: [], sortB
 try { Object.assign(S, JSON.parse(localStorage.getItem("cadre-settings") || "{}")); } catch (e) {}
 if (!Array.isArray(S.off)) S.off = [];
 if (!Array.isArray(S.fx)) S.fx = FX.map(x => x.id);
+// délai entre deux effets, en secondes (ancien réglage en minutes converti)
+const STEPS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 420, 600, 720, 840, 900];
+if (S.everySec == null) S.everySec = (S.every || 3) * 60;
+delete S.every;
+if (S.zoom == null) S.zoom = true;
+const fmtSec = s => s < 60 ? `${s} s` : (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
+const stepOf = s => STEPS.reduce((b, v, i) => Math.abs(v - s) < Math.abs(STEPS[b] - s) ? i : b, 0);
 S.fx = S.fx.filter(id => FX.some(x => x.id === id)); if (!S.fx.length) S.fx = ["kenburns"];
 delete S.mode;
 const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify(S)); } catch (e) {} };
@@ -315,7 +323,8 @@ function renderSettings() {
   $("#fx").innerHTML = FX.map(x => `<button class="mode${S.fx.includes(x.id) ? " sel" : ""}" data-fx="${x.id}">${x.name}<small>${x.d}</small></button>`).join("");
   $("#fxNote").textContent = S.fx.length > 1 ? `${S.fx.length} effets cochés : ils alternent au hasard.` : "Un seul effet coché : il tourne en continu.";
   $("#everyRow").style.display = S.fx.length > 1 ? "" : "none";
-  $("#every").value = S.every; $("#everyLbl").textContent = `${S.every} min`;
+  $("#every").value = stepOf(S.everySec); $("#everyLbl").textContent = fmtSec(S.everySec);
+  $("#zoomOn").checked = S.zoom;
   $("#sortBy").value = S.sortBy; $("#albumName").style.display = S.sortBy === "month" ? "none" : "";
   $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
   $("#clockOn").checked = S.clock;
@@ -356,7 +365,8 @@ $("#fx").onclick = e => {
   save(); renderSettings();
 };
 $("#bFxAll").onclick = () => { S.fx = FX.map(x => x.id); save(); renderSettings(); };
-$("#every").oninput = e => { S.every = +e.target.value; save(); renderSettings(); };
+$("#every").oninput = e => { S.everySec = STEPS[+e.target.value]; save(); renderSettings(); };
+$("#zoomOn").onchange = e => { S.zoom = e.target.checked; save(); };
 $("#sortBy").onchange = e => { S.sortBy = e.target.value; save(); renderSettings(); };
 $("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
 $("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
@@ -619,11 +629,14 @@ function makeLayer(ph) {
 function dropLayer(L) { if (!L) return; if (L.dataset.url) URL.revokeObjectURL(L.dataset.url); L.remove(); }
 const anim = (el, kf, o) => el.animate(kf, { fill: "forwards", ...o }).finished.catch(() => {});
 const EASE = "cubic-bezier(.65,0,.35,1)";
+// attente bornée par la fin prévue de l'effet (pour les changements d'effet rapides)
+const waitUntil = (ms, until, my) => wait(Math.min(ms, Math.max(0, until - Date.now())), my);
 
 /* ---- effets « une photo à la fois » ---- */
 async function transitionIn(kind, L, old) {
   const fg = L.querySelector(".kb-fg");
-  if (kind === "kenburns") {
+  if (!S.zoom) { /* zoom désactivé : photo fixe */ }
+  else if (kind === "kenburns") {
     const zIn = Math.random() < .6, s0 = zIn ? 1.02 : rnd(1.14, 1.2), s1 = zIn ? rnd(1.14, 1.2) : 1.02;
     const dx = rnd(-3, 3), dy = rnd(-3, 3);
     fg.animate([{ transform: `scale(${s0}) translate(${dx}%,${dy}%)` }, { transform: `scale(${s1}) translate(${-dx}%,${-dy}%)` }],
@@ -686,7 +699,7 @@ async function single(my, until, kind) {
     await transitionIn(kind, L, old);
     if (!alive(my)) return;
     dropLayer(old);
-    await wait(Math.max(1500, S.dur * 1000 - (Date.now() - t0)), my);
+    await waitUntil(Math.max(1500, S.dur * 1000 - (Date.now() - t0)), until, my);
   }
 }
 
@@ -729,12 +742,12 @@ async function putIn(tile, dir, animate) {
   const old = [...tile.querySelectorAll("img")];
   tile.appendChild(img);
   const drift = [{ transform: "scale(1.08)" }, { transform: "scale(1)" }];
-  if (!animate) { img.animate(drift, { duration: 20000, fill: "forwards" }); return; }
+  if (!animate) { if (S.zoom) img.animate(drift, { duration: 20000, fill: "forwards" }); return; }
   const off = { l: "translateX(-100%)", r: "translateX(100%)", u: "translateY(-100%)", d: "translateY(100%)" };
   const opp = { l: "r", r: "l", u: "d", d: "u" };
   const D = 1300;
   img.animate([{ transform: off[dir] }, { transform: "none" }], { duration: D, easing: EASE, fill: "forwards" })
-     .finished.then(() => img.animate(drift, { duration: 20000, fill: "forwards" })).catch(() => {});
+     .finished.then(() => { if (S.zoom) img.animate(drift, { duration: 20000, fill: "forwards" }); }).catch(() => {});
   old.forEach(o => o.animate([{ transform: "none" }, { transform: off[opp[dir]] }], { duration: D, easing: EASE, fill: "forwards" })
      .finished.then(() => { URL.revokeObjectURL(o.dataset.url); o.remove(); }).catch(() => {}));
 }
@@ -759,7 +772,7 @@ async function tiles(my, until, strips) {
     const ts = await showGrid(my, layout); if (!ts) return;
     const swaps = ts.length * 2 + 2; let last = -1;
     for (let k = 0; k < swaps && alive(my) && Date.now() < until; k++) {
-      await wait(S.dur * 1000 * (strips ? .8 : .55), my);
+      await waitUntil(S.dur * 1000 * (strips ? .8 : .55), until, my);
       if (!alive(my)) return;
       let i; do { i = Math.floor(Math.random() * ts.length); } while (ts.length > 1 && i === last);
       last = i;
@@ -775,7 +788,7 @@ async function diptych(my, until) {
   const ts = await showGrid(my, land ? DIPTYCH_L : DIPTYCH_P); if (!ts) return;
   let k = 0;
   while (alive(my) && Date.now() < until) {
-    await wait(S.dur * 1000, my); if (!alive(my)) return;
+    await waitUntil(S.dur * 1000, until, my); if (!alive(my) || Date.now() >= until) return;
     const dirs = land ? (k % 2 ? ["u", "d"] : ["d", "u"]) : (k % 2 ? ["l", "r"] : ["r", "l"]);
     putIn(ts[0], dirs[0], true); await sleep(280);
     await putIn(ts[1], dirs[1], true); k++;
@@ -803,7 +816,7 @@ async function polaroid(my, until) {
                { transform: `rotate(${rot}deg) scale(1)`, opacity: 1 }], { duration: 1200, easing: "cubic-bezier(.2,.8,.2,1)" });
     cards.push(c);
     if (cards.length > 9) { const o = cards.shift(); anim(o, [{ opacity: 1 }, { opacity: 0 }], { duration: 900 }).then(() => dropLayer(o)); }
-    await wait(S.dur * 1000 * .6, my);
+    await waitUntil(S.dur * 1000 * .6, until, my);
   }
 }
 
@@ -825,10 +838,10 @@ async function loop(my) {
     const en = S.fx.length ? S.fx : ["kenburns"];
     let id = pick(en); if (en.length > 1) while (id === prev) id = pick(en);
     prev = id;
-    const until = en.length > 1 ? Date.now() + S.every * 60000 : Infinity;
-    if (stage.children.length) await anim(stage, [{ opacity: 1 }, { opacity: 0 }], { duration: 900 });
+    if (stage.children.length) await anim(stage, [{ opacity: 1 }, { opacity: 0 }], { duration: S.everySec < 10 ? 350 : 900 });
     if (!alive(my)) return;
     cleanStage();
+    const until = en.length > 1 ? Date.now() + S.everySec * 1000 : Infinity;
     await RUN[id](my, until);
     await sleep(60);   // garde-fou : jamais de boucle à vide
   }
