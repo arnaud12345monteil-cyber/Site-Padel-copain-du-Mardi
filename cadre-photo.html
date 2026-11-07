@@ -33,6 +33,10 @@
     text-align: right; text-shadow: 0 2px 14px rgba(0,0,0,.7); pointer-events: none; z-index: 5; display: none; }
   #clock .h { font-size: 64px; font-weight: 200; letter-spacing: -1px; line-height: 1; }
   #clock .d { font-size: 17px; opacity: .85; margin-top: 4px; text-transform: capitalize; }
+  #albumTag { position: fixed; left: max(28px, env(safe-area-inset-left)); bottom: max(26px, env(safe-area-inset-bottom));
+    font-size: 22px; font-weight: 300; letter-spacing: .3px; text-shadow: 0 2px 14px rgba(0,0,0,.8); pointer-events: none; z-index: 5; opacity: 0; }
+  .album .ord { display: flex; flex-direction: column; gap: 4px; }
+  .album .ord button { padding: 2px 10px; font-size: 13px; line-height: 1.3; }
   #hud { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     display: flex; gap: 8px; z-index: 6; opacity: 0; pointer-events: none; transition: opacity .3s; }
   #hud.on { opacity: 1; pointer-events: auto; }
@@ -89,6 +93,7 @@
 
 <div id="stage"></div>
 <div id="clock"><div class="h"></div><div class="d"></div></div>
+<div id="albumTag"></div>
 <div id="hud"><button id="bSkip">Suivante</button><button id="bSetup">Réglages</button></div>
 
 <div id="setup">
@@ -120,6 +125,11 @@
 
     <div class="card">
       <h2>Albums</h2>
+      <select id="order" style="margin-bottom:8px">
+        <option value="mix">Tirage au hasard dans tous les albums cochés</option>
+        <option value="album">Album par album, dans l'ordre ci-dessous</option>
+      </select>
+      <label class="opt" id="tagRow"><span>Afficher le nom de l'album quand on change d'album</span><input type="checkbox" id="tagOn"></label>
       <div id="summary"></div>
       <div id="albums"></div>
     </div>
@@ -158,7 +168,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.1";
+const VERSION = "3.2";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -256,6 +266,9 @@ const STEPS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 420, 60
 if (S.everySec == null) S.everySec = (S.every || 3) * 60;
 delete S.every;
 if (S.zoom == null) S.zoom = true;
+if (S.order !== "album") S.order = "mix";
+if (!Array.isArray(S.albumOrder)) S.albumOrder = [];
+if (S.showTag == null) S.showTag = true;
 const fmtSec = s => s < 60 ? `${s} s` : (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
 const stepOf = s => STEPS.reduce((b, v, i) => Math.abs(v - s) < Math.abs(STEPS[b] - s) ? i : b, 0);
 S.fx = S.fx.filter(id => FX.some(x => x.id === id)); if (!S.fx.length) S.fx = ["kenburns"];
@@ -265,9 +278,34 @@ const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify
 /* ================= tirage aléatoire ================= */
 const active = () => index.filter(p => !S.off.includes(p.album));
 let bag = [];
+// ordre personnalisé des albums ; les nouveaux albums se placent à la fin
+function albumOrder() {
+  const all = albumStats().map(x => x[0]);
+  const o = S.albumOrder.filter(a => all.includes(a));
+  all.slice().reverse().forEach(a => { if (!o.includes(a)) o.push(a); });
+  return o;
+}
+let curAlbum = null;   // album en cours en mode « album par album »
 function refill() {
-  bag = active();
+  if (S.order === "album") {
+    const has = new Set(active().map(p => p.album));
+    const list = albumOrder().filter(a => has.has(a));
+    if (!list.length) { bag = []; return; }
+    // au démarrage on reprend là où on s'était arrêté, sinon album suivant (et retour au premier à la fin)
+    let i = curAlbum == null ? Math.max(0, list.indexOf(S.lastAlbum)) : list.indexOf(curAlbum) + 1;
+    if (i >= list.length) i = 0;
+    curAlbum = list[i]; S.lastAlbum = curAlbum; save();
+    bag = index.filter(p => p.album === curAlbum);
+    announce(curAlbum);
+  } else bag = active();
   for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+}
+function announce(name) {
+  if (!S.showTag || !$("#setup").classList.contains("hidden")) return;
+  const t = $("#albumTag"); t.textContent = name;
+  t.getAnimations().forEach(a => a.cancel());
+  t.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none", offset: .12 }, { opacity: 1, offset: .85 }, { opacity: 0 }],
+    { duration: 6000, easing: "ease-out" });
 }
 function draw(wantRatio) {
   if (!bag.length) refill();
@@ -314,6 +352,7 @@ async function renameAlbum(a, b) {
   });
   mem.forEach(v => { if ((v.album || DEFAULT_ALBUM) === a) v.album = b; });
   index.forEach(p => { if (p.album === a) p.album = b; });
+  S.albumOrder = S.albumOrder.includes(b) ? S.albumOrder.filter(x => x !== a) : S.albumOrder.map(x => x === a ? b : x);
   const wasOff = S.off.includes(a), targetOff = S.off.includes(b);
   S.off = S.off.filter(x => x !== a && x !== b); if (wasOff && targetOff) S.off.push(b);
   save(); bag = [];
@@ -329,15 +368,19 @@ function renderSettings() {
   $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
   $("#clockOn").checked = S.clock;
 
-  const stats = albumStats();
+  let stats = albumStats();
+  const byAlbum = S.order === "album";
+  $("#order").value = S.order; $("#tagOn").checked = S.showTag; $("#tagRow").style.display = byAlbum ? "" : "none";
+  if (byAlbum) { const m = new Map(stats), o = albumOrder(); stats = o.map(a => [a, m.get(a)]); }
   const nAct = active().length;
   $("#albumList").innerHTML = stats.map(([n]) => `<option value="${esc(n)}">`).join("");
   $("#summary").innerHTML = stats.length
-    ? `<b>${nAct}</b> photo${nAct > 1 ? "s" : ""} au tirage sur ${index.length}, dans ${stats.length} album${stats.length > 1 ? "s" : ""}. Coche les albums à afficher.`
+    ? `<b>${nAct}</b> photo${nAct > 1 ? "s" : ""} au tirage sur ${index.length}, dans ${stats.length} album${stats.length > 1 ? "s" : ""}. ${byAlbum ? "Chaque album est montré en entier, au hasard, avant de passer au suivant. Les flèches changent l'ordre." : "Coche les albums à afficher."}`
     : "Aucun album pour l'instant. Importe des photos ci-dessus.";
-  $("#albums").innerHTML = stats.map(([n, c]) => {
+  $("#albums").innerHTML = stats.map(([n, c], i) => {
     const on = !S.off.includes(n);
-    return `<div class="album${on ? "" : " off"}" data-a="${esc(n)}">
+    const ord = byAlbum ? `<div class="ord"><button class="btn sm" data-act="up" ${i ? "" : "disabled"} aria-label="Monter">▲</button><button class="btn sm" data-act="down" ${i < stats.length - 1 ? "" : "disabled"} aria-label="Descendre">▼</button></div>` : "";
+    return `<div class="album${on ? "" : " off"}" data-a="${esc(n)}">${ord}
       <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">
       <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
       <div class="act">
@@ -367,6 +410,8 @@ $("#fx").onclick = e => {
 $("#bFxAll").onclick = () => { S.fx = FX.map(x => x.id); save(); renderSettings(); };
 $("#every").oninput = e => { S.everySec = STEPS[+e.target.value]; save(); renderSettings(); };
 $("#zoomOn").onchange = e => { S.zoom = e.target.checked; save(); };
+$("#order").onchange = e => { S.order = e.target.value; if (S.order === "album") S.albumOrder = albumOrder(); save(); bag = []; renderSettings(); };
+$("#tagOn").onchange = e => { S.showTag = e.target.checked; save(); };
 $("#sortBy").onchange = e => { S.sortBy = e.target.value; save(); renderSettings(); };
 $("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
 $("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
@@ -391,10 +436,16 @@ $("#albums").addEventListener("click", async e => {
   } else if (act === "rename-no") { renderSettings(); }
   else if (act === "google") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; startGoogle(); }
   else if (act === "local") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; pendingResolver = albumResolver(); $("#fileIn").click(); }
+  else if (act === "up" || act === "down") {
+    const o = albumOrder(), i = o.indexOf(name), j = act === "up" ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]]; S.albumOrder = o; save(); renderSettings();
+  }
   else if (act === "del") {
     if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = "Supprimer"; } }, 3000); return; }
     await deleteIds(index.filter(p => p.album === name).map(p => p.id));
-    S.off = S.off.filter(a => a !== name); save(); bag = []; renderSettings(); msg(`Album « ${name} » supprimé.`);
+    S.off = S.off.filter(a => a !== name); S.albumOrder = S.albumOrder.filter(a => a !== name);
+    save(); bag = []; renderSettings(); msg(`Album « ${name} » supprimé.`);
   }
 });
 
@@ -870,7 +921,7 @@ function start() {
   if (S.clock) { tick(); clockT = setInterval(tick, 10000); }
   try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch (e) {}
   keepAwake();
-  bag = []; run++; loop(run);
+  bag = []; curAlbum = null; run++; loop(run);
 }
 function stop() {
   run++; if (skip) skip();
