@@ -75,6 +75,13 @@
   .album .act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .album.off .nm { opacity: .45; }
   #summary { font-size: 15px; color: var(--mute); margin: 4px 0 12px; }
+  select { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 15px; }
+  .album input[type=text] { padding: 8px; font-size: 15px; }
+  .fxhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .table { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 35%, #3b3026 0%, #1b1510 60%, #0b0907 100%); }
+  .pola { position: absolute; background: #f3efe6; padding: 10px 10px 36px; border-radius: 2px;
+    box-shadow: 0 14px 34px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.35); will-change: transform; }
+  .pola img { display: block; object-fit: cover; }
   #summary b { color: var(--txt); }
 </style>
 </head>
@@ -91,6 +98,10 @@
 
     <div class="card">
       <h2>Importer</h2>
+      <select id="sortBy" style="margin-bottom:10px">
+        <option value="name">Ranger dans l'album que je nomme</option>
+        <option value="month">Ranger automatiquement par mois de prise de vue</option>
+      </select>
       <input type="text" id="albumName" list="albumList" placeholder="Nom de l'album (ex. Sri Lanka 2026)">
       <datalist id="albumList"></datalist>
       <div class="row" style="margin-top:10px">
@@ -104,7 +115,7 @@
       </div>
       <div class="progress" id="prog"><i></i></div>
       <div id="msg"></div>
-      <p class="note">Les photos vont dans l'album indiqué. Réimporter dans un album existant n'ajoute que les nouvelles photos. Dans Google Photos, cherche le nom de ton album puis appuie longuement sur une photo et fais glisser pour en cocher beaucoup d'un coup.</p>
+      <p class="note">Google ne transmet pas le nom de l'album d'origine : donne-lui le même nom ici. Un import = un album. Réimporter dans un album existant n'ajoute que les nouvelles photos. Dans Google Photos, cherche ton album par son nom, puis appuie longuement sur une photo et fais glisser pour en cocher beaucoup d'un coup.</p>
     </div>
 
     <div class="card">
@@ -114,14 +125,11 @@
     </div>
 
     <div class="card">
-      <h2>Animation</h2>
-      <div class="modes" id="modes">
-        <button class="mode" data-m="kenburns">Ken Burns<small>Une photo, zoom lent</small></button>
-        <button class="mode" data-m="mosaic">Mosaïque<small>Tuiles qui glissent</small></button>
-        <button class="mode" data-m="strips">Bandes<small>Colonnes qui défilent</small></button>
-        <button class="mode" data-m="mix">Mélange<small>Change toutes les 3 min</small></button>
-      </div>
-      <label class="opt"><span>Rythme <span id="durLbl"></span></span><input type="range" id="dur" min="4" max="30" step="1"></label>
+      <div class="fxhead"><h2 style="margin:0">Effets</h2><button class="btn sm" id="bFxAll">Tout cocher</button></div>
+      <div class="modes" id="fx"></div>
+      <p class="note" id="fxNote"></p>
+      <label class="opt"><span>Rythme des photos <span id="durLbl"></span></span><input type="range" id="dur" min="4" max="30" step="1"></label>
+      <label class="opt" id="everyRow"><span>Changer d'effet toutes les <span id="everyLbl"></span></span><input type="range" id="every" min="1" max="15" step="1"></label>
       <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
     </div>
 
@@ -149,7 +157,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "2.1";
+const VERSION = "3.0";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -175,7 +183,7 @@ function openDB() {
 const mem = new Map(); let memId = 1;   // repli si IndexedDB indisponible
 const store = mode => db.transaction("photos", mode).objectStore("photos");
 const idb = req => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
-const meta = v => ({ id: v.id, w: v.w, h: v.h, album: v.album || DEFAULT_ALBUM, gid: v.gid || "", key: v.key || "" });
+const meta = v => ({ id: v.id, w: v.w, h: v.h, album: v.album || DEFAULT_ALBUM, gid: v.gid || "", key: v.key || "", added: v.addedAt || 0 });
 
 async function loadIndex() {
   if (!db) { index = [...mem.values()].map(meta); return; }
@@ -226,9 +234,24 @@ async function prepare(blob) {   // réduit à 2048 px max
 }
 
 /* ================= réglages ================= */
-const S = { mode: "mix", dur: 9, clock: true, off: [] };
+const FX = [
+  { id: "kenburns", name: "Ken Burns",  d: "Zoom lent et fondu" },
+  { id: "fade",     name: "Fondu",      d: "Enchaîné tout simple" },
+  { id: "slide",    name: "Glissement", d: "La photo pousse la précédente" },
+  { id: "flip",     name: "Pliage 3D",  d: "Rotation sur l'axe vertical" },
+  { id: "cube",     name: "Cube",       d: "Rotation d'un cube" },
+  { id: "blinds",   name: "Volets",     d: "Révélée en lamelles" },
+  { id: "mosaic",   name: "Mosaïque",   d: "Tuiles qui glissent" },
+  { id: "strips",   name: "Bandes",     d: "Colonnes qui défilent" },
+  { id: "polaroid", name: "Tirages",    d: "Polaroïds posés sur une table" },
+  { id: "diptych",  name: "Diptyque",   d: "Deux photos côte à côte" },
+];
+const S = { fx: FX.map(x => x.id), every: 3, dur: 9, clock: true, off: [], sortBy: "name" };
 try { Object.assign(S, JSON.parse(localStorage.getItem("cadre-settings") || "{}")); } catch (e) {}
 if (!Array.isArray(S.off)) S.off = [];
+if (!Array.isArray(S.fx)) S.fx = FX.map(x => x.id);
+S.fx = S.fx.filter(id => FX.some(x => x.id === id)); if (!S.fx.length) S.fx = ["kenburns"];
+delete S.mode;
 const save = () => { try { localStorage.setItem("cadre-settings", JSON.stringify(S)); } catch (e) {} };
 
 /* ================= tirage aléatoire ================= */
@@ -258,15 +281,42 @@ function progress(done, total) {
   const p = $("#prog"); p.style.display = total ? "block" : "none";
   p.firstElementChild.style.width = total ? (100 * done / total) + "%" : "0";
 }
+// albums triés du plus récemment importé au plus ancien
 function albumStats() {
   const m = new Map();
-  index.forEach(p => m.set(p.album, (m.get(p.album) || 0) + 1));
-  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "fr"));
+  index.forEach(p => { const a = m.get(p.album) || { n: 0, t: 0 }; a.n++; a.t = Math.max(a.t, p.added); m.set(p.album, a); });
+  return [...m.entries()].sort((a, b) => b[1].t - a[1].t || a[0].localeCompare(b[0], "fr")).map(([k, v]) => [k, v.n]);
 }
-const targetAlbum = () => ($("#albumName").value.trim() || DEFAULT_ALBUM).slice(0, 60);
+const cleanName = s => String(s || "").trim().replace(/\s+/g, " ").slice(0, 60);
+const monthAlbum = d => { if (!d || isNaN(d)) return "Sans date"; const s = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }); return s.charAt(0).toUpperCase() + s.slice(1); };
+// renvoie une fonction qui donne l'album d'une photo selon sa date, ou null si le nom manque
+function albumResolver() {
+  if ($("#sortBy").value === "month") return d => monthAlbum(d);
+  const n = cleanName($("#albumName").value);
+  if (!n) { msg("Donne un nom à l'album avant d'importer (ou choisis le rangement par mois)."); $("#albumName").focus(); return null; }
+  return () => n;
+}
+async function renameAlbum(a, b) {
+  b = cleanName(b); if (!b || a === b) return;
+  if (db) await new Promise((res, rej) => {
+    const t = db.transaction("photos", "readwrite"), c = t.objectStore("photos").openCursor();
+    c.onsuccess = () => { const cur = c.result; if (!cur) return; const v = cur.value;
+      if ((v.album || DEFAULT_ALBUM) === a) { v.album = b; cur.update(v); } cur.continue(); };
+    t.oncomplete = res; t.onerror = () => rej(t.error);
+  });
+  mem.forEach(v => { if ((v.album || DEFAULT_ALBUM) === a) v.album = b; });
+  index.forEach(p => { if (p.album === a) p.album = b; });
+  const wasOff = S.off.includes(a), targetOff = S.off.includes(b);
+  S.off = S.off.filter(x => x !== a && x !== b); if (wasOff && targetOff) S.off.push(b);
+  save(); bag = [];
+}
 
 function renderSettings() {
-  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("sel", b.dataset.m === S.mode));
+  $("#fx").innerHTML = FX.map(x => `<button class="mode${S.fx.includes(x.id) ? " sel" : ""}" data-fx="${x.id}">${x.name}<small>${x.d}</small></button>`).join("");
+  $("#fxNote").textContent = S.fx.length > 1 ? `${S.fx.length} effets cochés : ils alternent au hasard.` : "Un seul effet coché : il tourne en continu.";
+  $("#everyRow").style.display = S.fx.length > 1 ? "" : "none";
+  $("#every").value = S.every; $("#everyLbl").textContent = `${S.every} min`;
+  $("#sortBy").value = S.sortBy; $("#albumName").style.display = S.sortBy === "month" ? "none" : "";
   $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
   $("#clockOn").checked = S.clock;
 
@@ -282,6 +332,7 @@ function renderSettings() {
       <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">
       <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
       <div class="act">
+        <button class="btn sm" data-act="rename">Renommer</button>
         <button class="btn sm" data-act="google">Compléter (Google)</button>
         <button class="btn sm" data-act="local">+ Tablette</button>
         <button class="btn sm danger" data-act="del">Supprimer</button>
@@ -297,7 +348,16 @@ async function showStorage() {
   } catch (e) {}
 }
 
-$("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; S.mode = b.dataset.m; save(); renderSettings(); };
+$("#fx").onclick = e => {
+  const b = e.target.closest("[data-fx]"); if (!b) return;
+  const id = b.dataset.fx;
+  if (S.fx.includes(id)) { if (S.fx.length === 1) return msg("Garde au moins un effet coché."); S.fx = S.fx.filter(x => x !== id); }
+  else S.fx = FX.map(x => x.id).filter(x => x === id || S.fx.includes(x));
+  save(); renderSettings();
+};
+$("#bFxAll").onclick = () => { S.fx = FX.map(x => x.id); save(); renderSettings(); };
+$("#every").oninput = e => { S.every = +e.target.value; save(); renderSettings(); };
+$("#sortBy").onchange = e => { S.sortBy = e.target.value; save(); renderSettings(); };
 $("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
 $("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
 
@@ -307,8 +367,20 @@ $("#albums").addEventListener("click", async e => {
   if (act === "toggle") {
     S.off = el.checked ? S.off.filter(a => a !== name) : [...new Set([...S.off, name])];
     save(); bag = []; renderSettings();
-  } else if (act === "google") { $("#albumName").value = name; startGoogle(); }
-  else if (act === "local") { $("#albumName").value = name; $("#fileIn").click(); }
+  } else if (act === "rename") {
+    const nm = el.closest(".album").querySelector(".nm");
+    nm.innerHTML = `<input type="text" value="${esc(name)}" maxlength="60"><div class="row" style="margin-top:6px"><button class="btn sm" data-act="rename-ok">OK</button><button class="btn sm" data-act="rename-no">Annuler</button></div>`;
+    const inp = nm.querySelector("input"); inp.focus(); inp.select();
+    inp.onkeydown = ev => { if (ev.key === "Enter") nm.querySelector('[data-act="rename-ok"]').click(); };
+  } else if (act === "rename-ok") {
+    const nv = cleanName(el.closest(".album").querySelector(".nm input").value);
+    if (!nv) return msg("Le nom ne peut pas être vide.");
+    const merge = nv !== name && index.some(p => p.album === nv);
+    await renameAlbum(name, nv); renderSettings();
+    msg(merge ? `« ${name} » fusionné dans « ${nv} ».` : `Album renommé en « ${nv} ».`);
+  } else if (act === "rename-no") { renderSettings(); }
+  else if (act === "google") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; startGoogle(); }
+  else if (act === "local") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; pendingResolver = albumResolver(); $("#fileIn").click(); }
   else if (act === "del") {
     if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = "Supprimer"; } }, 3000); return; }
     await deleteIds(index.filter(p => p.album === name).map(p => p.id));
@@ -317,24 +389,66 @@ $("#albums").addEventListener("click", async e => {
 });
 
 /* ---- import depuis la tablette ---- */
-$("#bLocal").onclick = () => $("#fileIn").click();
+// date de prise de vue lue dans l'EXIF d'un JPEG (null si absente)
+async function exifDate(file) {
+  try {
+    if (!/jpe?g/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) return null;
+    const v = new DataView(await file.slice(0, 262144).arrayBuffer());
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o < v.byteLength - 10) {
+      const m = v.getUint16(o), len = v.getUint16(o + 2);
+      if ((m & 0xFF00) !== 0xFF00) break;
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = p => v.getUint16(p, le), u32 = p => v.getUint32(p, le);
+        const ifd = s => { const n = u16(s), out = {}; for (let i = 0; i < n; i++) { const e = s + 2 + i * 12; out[u16(e)] = { count: u32(e + 4), at: e + 8 }; } return out; };
+        const str = en => { const off = en.count > 4 ? t + u32(en.at) : en.at; let s = ""; for (let k = 0; k < Math.min(en.count, 32) - 1; k++) s += String.fromCharCode(v.getUint8(off + k)); return s; };
+        const i0 = ifd(t + u32(t + 4)); let s = null;
+        if (i0[0x8769]) { const ex = ifd(t + u32(i0[0x8769].at)); if (ex[0x9003]) s = str(ex[0x9003]); }
+        if (!s && i0[0x0132]) s = str(i0[0x0132]);
+        const d = s && s.match(/^(\d{4}):(\d{2}):(\d{2})/);
+        return d ? new Date(+d[1], +d[2] - 1, +d[3]) : null;
+      }
+      o += 2 + len;
+    }
+  } catch (e) {}
+  return null;
+}
+const keysOf = field => { const m = new Map(); index.forEach(p => { if (!m.has(p.album)) m.set(p.album, new Set()); m.get(p.album).add(p[field]); }); return m; };
+function report(where, c, extra) {
+  let t = `${where} : ${c.ok} photo${c.ok > 1 ? "s" : ""} ajoutée${c.ok > 1 ? "s" : ""}`;
+  if (c.albums.size) t += ` dans ${c.albums.size > 1 ? c.albums.size + " albums" : "« " + [...c.albums][0] + " »"}`;
+  if (c.dup) t += ` · ${c.dup} déjà présente${c.dup > 1 ? "s" : ""}`;
+  if (c.ko) t += ` · ${c.ko} échec${c.ko > 1 ? "s" : ""}${extra ? " (" + extra + ")" : ""}`;
+  return t;
+}
+
+let pendingResolver = null;
+$("#bLocal").onclick = () => { pendingResolver = albumResolver(); if (pendingResolver) $("#fileIn").click(); };
 $("#fileIn").onchange = async e => {
-  const album = targetAlbum();
+  const resolve = pendingResolver || albumResolver(); pendingResolver = null;
   const files = [...e.target.files].filter(f => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name));
   e.target.value = "";
-  if (!files.length) return;
+  if (!files.length || !resolve) return;
   askPersist();
-  const known = new Set(index.filter(p => p.album === album).map(p => p.key));
-  let ok = 0, dup = 0, ko = 0;
+  const known = keysOf("key");
+  const c = { ok: 0, dup: 0, ko: 0, albums: new Set() };
   for (let i = 0; i < files.length; i++) {
     const f = files[i], key = `${f.name}|${f.size}|${f.lastModified}`;
-    progress(i, files.length); msg(`« ${album} » : préparation ${i + 1}/${files.length}…`);
-    if (known.has(key)) { dup++; continue; }
-    try { const r = await prepare(f); await addPhoto({ ...r, album, key, name: f.name }); known.add(key); ok++; }
-    catch (err) { ko++; }
+    progress(i, files.length); msg(`Préparation ${i + 1}/${files.length}…`);
+    try {
+      const taken = (await exifDate(f)) || new Date(f.lastModified);
+      const album = resolve(taken);
+      if (known.get(album)?.has(key)) { c.dup++; continue; }
+      const r = await prepare(f);
+      await addPhoto({ ...r, album, key, name: f.name, taken: +taken });
+      if (!known.has(album)) known.set(album, new Set()); known.get(album).add(key);
+      c.ok++; c.albums.add(album);
+    } catch (err) { c.ko++; }
   }
   progress(0, 0); bag = []; renderSettings();
-  msg(`« ${album} » : ${ok} ajoutée${ok > 1 ? "s" : ""}${dup ? ` · ${dup} déjà présente${dup > 1 ? "s" : ""}` : ""}${ko ? ` · ${ko} illisible${ko > 1 ? "s" : ""}` : ""}.`);
+  msg(report("Tablette", c) + ".");
 };
 $("#bClear").onclick = async () => {
   const b = $("#bClear");
@@ -394,7 +508,8 @@ async function startGoogle() {
   const clientId = $("#clientId").value.trim();
   if (!clientId) { document.querySelector("details").open = true; return msg("Renseigne d'abord l'ID client OAuth dans « Réglages avancés »."); }
   try { localStorage.setItem("cadre-client-id", clientId); } catch (e) {}
-  const album = targetAlbum();
+  const resolve = albumResolver(); if (!resolve) return;
+  const sortBy = $("#sortBy").value, album = sortBy === "month" ? "" : cleanName($("#albumName").value);
   let token, session;
   try { await loadGIS(); }
   catch (e) { return msg("Impossible de joindre Google depuis ici. Ouvre l'app depuis son adresse github.io."); }
@@ -404,12 +519,12 @@ async function startGoogle() {
     session = await gapi(token, "POST", "/sessions");
   } catch (e) { return msg("Connexion refusée : " + e.message); }
   const p = {
-    token, album, id: session.id, uri: session.pickerUri,
+    token, album, sortBy, id: session.id, uri: session.pickerUri,
     every: secs(session.pollingConfig?.pollInterval) * 1000,
     until: Date.now() + Math.min(secs(session.pollingConfig?.timeoutIn || "1800s") * 1000, 50 * 60 * 1000)
   };
   savePending(p); showPickLink(p.uri);
-  msg(`Album « ${album} » : touche « Ouvrir Google Photos », choisis tes photos, valide avec « OK », puis reviens ici.`);
+  msg(`${album ? "Album « " + album + " »" : "Rangement par mois"} : touche « Ouvrir Google Photos », choisis tes photos, valide avec « OK », puis reviens ici.`);
   runImport(p);
 }
 $("#bDone").onclick = () => {
@@ -431,7 +546,7 @@ async function runImport(p) {
         try { const t = await gapi(p.token, "GET", `/mediaItems?sessionId=${p.id}&pageSize=1`); if (t.mediaItems?.length) break; } catch (e) {}
         msg(`Google n'a reçu aucune sélection pour cette session (vérifié à ${hhmmss()}). Dans Google Photos, appuie sur « OK » / « Terminé » en haut à droite après avoir coché les photos, avec le même compte que celui de la connexion.`);
       } else if (!$("#msg").textContent.startsWith("Google n'a reçu")) {
-        msg(`Album « ${p.album} » : en attente de ta sélection dans Google Photos… (vérifié à ${hhmmss()})`);
+        msg(`En attente de ta sélection dans Google Photos… (vérifié à ${hhmmss()})`);
       }
     }
     pollNow = null; hidePickLink();
@@ -446,29 +561,30 @@ async function runImport(p) {
     if (!items.length) { msg("Aucune photo dans la sélection (les vidéos sont ignorées)."); return; }
 
     askPersist();
-    const known = new Set(index.filter(x => x.album === p.album).map(x => x.gid));
-    const todo = items.filter(m => !known.has(m.id));
-    const dup = items.length - todo.length;
-    let ok = 0, ko = 0, firstErr = "";
-    for (let i = 0; i < todo.length; i++) {
-      progress(i, todo.length); msg(`« ${p.album} » : téléchargement ${i + 1}/${todo.length}…`);
+    const resolve = p.sortBy === "month" ? d => monthAlbum(d) : () => p.album || DEFAULT_ALBUM;
+    const known = keysOf("gid");
+    const c = { ok: 0, dup: 0, ko: 0, albums: new Set() }; let firstErr = "";
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i], album = resolve(it.createTime ? new Date(it.createTime) : null);
+      if (known.get(album)?.has(it.id)) { c.dup++; continue; }
+      progress(i, items.length); msg(`Téléchargement ${i + 1}/${items.length}…`);
       try {
-        const f = todo[i].mediaFile; let r;
+        const f = it.mediaFile; let r;
         try { r = await fetch(`${f.baseUrl}=w${MAX_SIDE}-h${MAX_SIDE}`, { headers: { Authorization: "Bearer " + p.token } }); }
         catch (e) { throw new Error("CORS"); }
         if (!r.ok) throw new Error("HTTP " + r.status);
         const ph = await prepare(await r.blob());
-        await addPhoto({ ...ph, album: p.album, gid: todo[i].id, name: f.filename }); ok++;
+        await addPhoto({ ...ph, album, gid: it.id, name: f.filename, taken: it.createTime ? Date.parse(it.createTime) : 0 });
+        if (!known.has(album)) known.set(album, new Set()); known.get(album).add(it.id);
+        c.ok++; c.albums.add(album);
       } catch (e) {
-        ko++; firstErr = firstErr || e.message || "inconnue";
-        if (ok === 0 && ko >= 3) break;   // tout échoue de la même façon : inutile d'insister
+        c.ko++; firstErr = firstErr || e.message || "inconnue";
+        if (c.ok === 0 && c.ko >= 3) break;   // tout échoue de la même façon : inutile d'insister
       }
     }
     progress(0, 0); bag = []; renderSettings();
-    let t = `« ${p.album} » : ${ok} photo${ok > 1 ? "s" : ""} importée${ok > 1 ? "s" : ""}`;
-    if (dup) t += ` · ${dup} déjà présente${dup > 1 ? "s" : ""}`;
-    if (ko) t += ` · ${ko} échec${ko > 1 ? "s" : ""} (erreur : ${firstErr})`;
-    if (ok === 0 && firstErr === "CORS") t += ". Google bloque le téléchargement direct depuis le navigateur : il faut un relais";
+    let t = report("Google Photos", c, firstErr && "erreur : " + firstErr);
+    if (c.ok === 0 && firstErr === "CORS") t += ". Google bloque le téléchargement direct depuis le navigateur : il faut un relais";
     msg(t + ".");
   } catch (e) { msg("Import interrompu : " + e.message); hidePickLink(); }
   finally {
@@ -484,57 +600,113 @@ const wait = (ms, my) => new Promise(r => { const t = setTimeout(r, ms); skip = 
 const alive = my => my === run;
 const landscape = () => innerWidth >= innerHeight;
 
-/* ---- Ken Burns ---- */
-async function kenBurns(my, untilT) {
-  stage.innerHTML = "";
-  while (alive(my) && Date.now() < untilT) {
-    const p = draw(); if (!p) return;
+/* ---- outils communs ---- */
+async function nextPhoto(ratio) {
+  for (let t = 0; t < 5; t++) {
+    const p = draw(ratio); if (!p) return null;
     const url = await urlFor(p); if (!url) continue;
-    try { await loadImg(url); } catch (e) { URL.revokeObjectURL(url); continue; }
-    if (!alive(my)) { URL.revokeObjectURL(url); return; }
+    try { await loadImg(url); return { p, url }; } catch (e) { URL.revokeObjectURL(url); }
+  }
+  return null;
+}
+// une couche plein écran : photo en plein cadre si son format est proche de l'écran, sinon fond flouté
+function makeLayer(ph) {
+  const L = document.createElement("div"); L.className = "layer"; L.dataset.url = ph.url;
+  const same = Math.abs(Math.log((ph.p.w / ph.p.h) / (innerWidth / innerHeight))) < 0.45;
+  L.innerHTML = same ? `<img class="kb-fg cover" src="${ph.url}">` : `<img class="kb-bg" src="${ph.url}"><img class="kb-fg" src="${ph.url}">`;
+  return L;
+}
+function dropLayer(L) { if (!L) return; if (L.dataset.url) URL.revokeObjectURL(L.dataset.url); L.remove(); }
+const anim = (el, kf, o) => el.animate(kf, { fill: "forwards", ...o }).finished.catch(() => {});
+const EASE = "cubic-bezier(.65,0,.35,1)";
 
-    const screenR = innerWidth / innerHeight, photoR = p.w / p.h;
-    const sameShape = Math.abs(Math.log(photoR / screenR)) < 0.45;   // formats proches : plein cadre
-    const L = document.createElement("div"); L.className = "layer"; L.style.opacity = 0; L.dataset.url = url;
-    L.innerHTML = sameShape ? `<img class="kb-fg cover" src="${url}">`
-                            : `<img class="kb-bg" src="${url}"><img class="kb-fg" src="${url}">`;
-    stage.appendChild(L);
-
-    const total = S.dur * 1000 + 2000;
-    const zIn = Math.random() < .6;
-    const s0 = zIn ? 1.02 : rnd(1.14, 1.2), s1 = zIn ? rnd(1.14, 1.2) : 1.02;
+/* ---- effets « une photo à la fois » ---- */
+async function transitionIn(kind, L, old) {
+  const fg = L.querySelector(".kb-fg");
+  if (kind === "kenburns") {
+    const zIn = Math.random() < .6, s0 = zIn ? 1.02 : rnd(1.14, 1.2), s1 = zIn ? rnd(1.14, 1.2) : 1.02;
     const dx = rnd(-3, 3), dy = rnd(-3, 3);
-    L.querySelector(".kb-fg").animate(
-      [{ transform: `scale(${s0}) translate(${dx}%,${dy}%)` }, { transform: `scale(${s1}) translate(${-dx}%,${-dy}%)` }],
-      { duration: total + 600, easing: "linear", fill: "forwards" });
-    L.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1800, easing: "ease-in-out", fill: "forwards" });
+    fg.animate([{ transform: `scale(${s0}) translate(${dx}%,${dy}%)` }, { transform: `scale(${s1}) translate(${-dx}%,${-dy}%)` }],
+      { duration: S.dur * 1000 + 2600, easing: "linear", fill: "forwards" });
+  } else {
+    fg.animate([{ transform: "scale(1)" }, { transform: "scale(1.05)" }], { duration: S.dur * 1000 + 2000, easing: "linear", fill: "forwards" });
+  }
+  if (!old || kind === "kenburns" || kind === "fade") return anim(L, [{ opacity: 0 }, { opacity: 1 }], { duration: kind === "fade" ? 1400 : 1800, easing: "ease-in-out" });
 
-    // retire les anciennes couches une fois le fondu terminé
-    setTimeout(() => {
-      if (!alive(my)) return;   // le mode a changé entre-temps : ne touche pas à la nouvelle scène
-      [...stage.querySelectorAll(":scope > .layer")].filter(c => c !== L).forEach(c => { if (c.dataset.url) URL.revokeObjectURL(c.dataset.url); c.remove(); });
-    }, 2000);
-    await wait(S.dur * 1000, my);
+  if (kind === "slide") {
+    const s = Math.random() < .5 ? 1 : -1;
+    return Promise.all([
+      anim(L, [{ transform: `translateX(${100 * s}%)` }, { transform: "none" }], { duration: 1300, easing: EASE }),
+      anim(old, [{ transform: "none", opacity: 1 }, { transform: `translateX(${-35 * s}%)`, opacity: .3 }], { duration: 1300, easing: EASE })
+    ]);
+  }
+  if (kind === "flip") {
+    L.style.transform = "rotateY(-90deg)"; L.style.backfaceVisibility = "hidden";
+    await anim(old, [{ transform: "rotateY(0)" }, { transform: "rotateY(90deg)", filter: "brightness(.5)" }], { duration: 650, easing: "ease-in" });
+    return anim(L, [{ transform: "rotateY(-90deg)", filter: "brightness(.5)" }, { transform: "rotateY(0)", filter: "brightness(1)" }], { duration: 650, easing: "ease-out" });
+  }
+  if (kind === "cube") {
+    const s = Math.random() < .5 ? 1 : -1;   // 1 : la nouvelle face arrive par la droite
+    L.style.transformOrigin = s > 0 ? "left center" : "right center";
+    old.style.transformOrigin = s > 0 ? "right center" : "left center";
+    return Promise.all([
+      anim(L, [{ transform: `translateX(${100 * s}%) rotateY(${90 * s}deg)`, filter: "brightness(.45)" }, { transform: "none", filter: "brightness(1)" }], { duration: 1600, easing: "ease-in-out" }),
+      anim(old, [{ transform: "none", filter: "brightness(1)" }, { transform: `translateX(${-100 * s}%) rotateY(${-90 * s}deg)`, filter: "brightness(.45)" }], { duration: 1600, easing: "ease-in-out" })
+    ]);
+  }
+  if (kind === "blinds") {
+    // la nouvelle photo apparaît lamelle par lamelle, verticales ou horizontales
+    const vert = Math.random() < .6, n = vert ? 10 : 7, w = 100 / n;
+    L.style.opacity = 0;
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const c = L.cloneNode(true); delete c.dataset.url; c.classList.add("slice"); c.style.opacity = 1;
+      const a = i * w, b0 = 100 - a, b1 = 100 - (i + 1) * w;
+      const from = vert ? `inset(0% ${b0}% 0% ${a}%)` : `inset(${a}% 0% ${b0}% 0%)`;
+      const to = vert ? `inset(0% ${b1}% 0% ${a}%)` : `inset(${a}% 0% ${b1}% 0%)`;
+      c.style.clipPath = from; stage.appendChild(c);
+      parts.push(c); await null;
+      c.animate([{ clipPath: from }, { clipPath: to }], { duration: 650, delay: i * 75, easing: "ease-out", fill: "forwards" });
+    }
+    await sleep(650 + n * 75 + 30);
+    L.style.opacity = 1; parts.forEach(c => c.remove());
+    return;
   }
 }
 
-/* ---- Mosaïque / Bandes ---- */
-// grilles de 6 colonnes × 4 lignes : [colonne, ligne, largeur, hauteur]
+async function single(my, until, kind) {
+  stage.style.perspective = (kind === "flip" || kind === "cube") ? "2000px" : "";
+  let cur = null;
+  while (alive(my) && Date.now() < until) {
+    const ph = await nextPhoto(); if (!ph) return;
+    if (!alive(my)) { URL.revokeObjectURL(ph.url); return; }
+    const L = makeLayer(ph), old = cur; cur = L;
+    stage.appendChild(L);
+    const t0 = Date.now();
+    await transitionIn(kind, L, old);
+    if (!alive(my)) return;
+    dropLayer(old);
+    await wait(Math.max(1500, S.dur * 1000 - (Date.now() - t0)), my);
+  }
+}
+
+/* ---- Mosaïque / Bandes / Diptyque ---- */
+// grilles de 6 colonnes × 4 lignes (paysage) ou 4 × 6 (portrait) : [colonne, ligne, largeur, hauteur]
 const MOSAIC_L = [
   [[1,1,3,2],[4,1,3,2],[1,3,2,2],[3,3,2,2],[5,3,2,2]],
   [[1,1,4,4],[5,1,2,2],[5,3,2,2]],
   [[1,1,2,2],[3,1,2,4],[5,1,2,2],[1,3,2,2],[5,3,2,2]],
   [[1,1,2,4],[3,1,4,2],[3,3,2,2],[5,3,2,2]],
-  [[1,1,3,4],[4,1,3,4]],
   [[1,1,2,2],[3,1,2,2],[5,1,2,2],[1,3,2,2],[3,3,2,2],[5,3,2,2]],
 ];
-const MOSAIC_P = [ // tablette en portrait : 4 colonnes × 6 lignes
+const MOSAIC_P = [
   [[1,1,4,3],[1,4,2,3],[3,4,2,3]],
   [[1,1,2,2],[3,1,2,2],[1,3,4,2],[1,5,2,2],[3,5,2,2]],
   [[1,1,2,4],[3,1,2,2],[3,3,2,2],[1,5,4,2]],
 ];
-const STRIPS_L = [[[1,1,2,4],[3,1,2,4],[5,1,2,4]], [[1,1,3,4],[4,1,3,4]], [[1,1,1,4],[2,1,2,4],[4,1,2,4],[6,1,1,4]]];
-const STRIPS_P = [[[1,1,4,3],[1,4,4,3]], [[1,1,4,2],[1,3,4,2],[1,5,4,2]]];
+const STRIPS_L = [[[1,1,2,4],[3,1,2,4],[5,1,2,4]], [[1,1,1,4],[2,1,2,4],[4,1,2,4],[6,1,1,4]]];
+const STRIPS_P = [[[1,1,4,2],[1,3,4,2],[1,5,4,2]]];
+const DIPTYCH_L = [[1,1,3,4],[4,1,3,4]], DIPTYCH_P = [[1,1,4,3],[1,4,4,3]];
 
 function makeGrid(layout) {
   const land = landscape();
@@ -551,68 +723,114 @@ function makeGrid(layout) {
 const ratioOf = t => { const b = t.getBoundingClientRect(); return b.width / Math.max(1, b.height); };
 
 async function putIn(tile, dir, animate) {
-  const p = draw(ratioOf(tile)); if (!p) return;
-  const url = await urlFor(p); if (!url) return;
-  try { await loadImg(url); } catch (e) { URL.revokeObjectURL(url); return; }
-  const img = document.createElement("img"); img.src = url; img.dataset.url = url;
+  const ph = await nextPhoto(ratioOf(tile)); if (!ph) return;
+  if (!tile.isConnected) { URL.revokeObjectURL(ph.url); return; }
+  const img = document.createElement("img"); img.src = ph.url; img.dataset.url = ph.url;
   const old = [...tile.querySelectorAll("img")];
   tile.appendChild(img);
   const drift = [{ transform: "scale(1.08)" }, { transform: "scale(1)" }];
   if (!animate) { img.animate(drift, { duration: 20000, fill: "forwards" }); return; }
   const off = { l: "translateX(-100%)", r: "translateX(100%)", u: "translateY(-100%)", d: "translateY(100%)" };
   const opp = { l: "r", r: "l", u: "d", d: "u" };
-  const ease = "cubic-bezier(.65,0,.35,1)", D = 1300;
-  img.animate([{ transform: off[dir] }, { transform: "none" }], { duration: D, easing: ease, fill: "forwards" })
+  const D = 1300;
+  img.animate([{ transform: off[dir] }, { transform: "none" }], { duration: D, easing: EASE, fill: "forwards" })
      .finished.then(() => img.animate(drift, { duration: 20000, fill: "forwards" })).catch(() => {});
-  old.forEach(o => o.animate([{ transform: "none" }, { transform: off[opp[dir]] }], { duration: D, easing: ease, fill: "forwards" })
+  old.forEach(o => o.animate([{ transform: "none" }, { transform: off[opp[dir]] }], { duration: D, easing: EASE, fill: "forwards" })
      .finished.then(() => { URL.revokeObjectURL(o.dataset.url); o.remove(); }).catch(() => {}));
 }
 
-async function tiles(my, untilT, strips) {
+async function showGrid(my, layout) {
+  const old = stage.querySelector("#grid");
+  const g = makeGrid(layout); g.style.opacity = 0; stage.appendChild(g);
+  const ts = [...g.children];
+  await Promise.all(ts.map(t => putIn(t, null, false)));
+  if (!alive(my)) return null;
+  g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1500, fill: "forwards" });
+  ts.forEach((t, i) => t.animate([{ transform: "scale(.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
+    { duration: 900, delay: i * 120, easing: "ease-out", fill: "backwards" }));
+  if (old) setTimeout(() => { if (!alive(my)) return; old.querySelectorAll("img").forEach(i => URL.revokeObjectURL(i.dataset.url)); old.remove(); }, 1600);
+  return ts;
+}
+
+async function tiles(my, until, strips) {
   const pool = strips ? (landscape() ? STRIPS_L : STRIPS_P) : (landscape() ? MOSAIC_L : MOSAIC_P);
   let layout = pick(pool);
-  while (alive(my) && Date.now() < untilT) {
-    // nouvelle grille, entrée en cascade
-    const old = stage.firstElementChild;
-    const g = makeGrid(layout); g.style.opacity = 0; stage.appendChild(g);
-    const ts = [...g.children];
-    await Promise.all(ts.map(t => putIn(t, null, false)));
-    if (!alive(my)) return;
-    g.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1500, fill: "forwards" });
-    ts.forEach((t, i) => t.animate([{ transform: "scale(.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 900, delay: i * 120, easing: "ease-out", fill: "backwards" }));
-    if (old && old !== g) setTimeout(() => { if (!alive(my)) return; old.querySelectorAll("img").forEach(i => URL.revokeObjectURL(i.dataset.url)); old.remove(); }, 1600);
-
-    // remplacements tuile par tuile
-    const swaps = ts.length * 2 + 2;
-    let last = -1;
-    for (let k = 0; k < swaps && alive(my) && Date.now() < untilT; k++) {
+  while (alive(my) && Date.now() < until) {
+    const ts = await showGrid(my, layout); if (!ts) return;
+    const swaps = ts.length * 2 + 2; let last = -1;
+    for (let k = 0; k < swaps && alive(my) && Date.now() < until; k++) {
       await wait(S.dur * 1000 * (strips ? .8 : .55), my);
       if (!alive(my)) return;
       let i; do { i = Math.floor(Math.random() * ts.length); } while (ts.length > 1 && i === last);
       last = i;
-      const dir = strips ? (i % 2 ? "d" : "u") : pick(["l", "r", "u", "d"]);
-      await putIn(ts[i], dir, true);
+      await putIn(ts[i], strips ? (i % 2 ? "d" : "u") : pick(["l", "r", "u", "d"]), true);
     }
     let next; do { next = pick(pool); } while (pool.length > 1 && next === layout);
     layout = next;
   }
 }
 
+async function diptych(my, until) {
+  const land = landscape();
+  const ts = await showGrid(my, land ? DIPTYCH_L : DIPTYCH_P); if (!ts) return;
+  let k = 0;
+  while (alive(my) && Date.now() < until) {
+    await wait(S.dur * 1000, my); if (!alive(my)) return;
+    const dirs = land ? (k % 2 ? ["u", "d"] : ["d", "u"]) : (k % 2 ? ["l", "r"] : ["r", "l"]);
+    putIn(ts[0], dirs[0], true); await sleep(280);
+    await putIn(ts[1], dirs[1], true); k++;
+  }
+}
+
+/* ---- Tirages : polaroïds posés sur une table ---- */
+async function polaroid(my, until) {
+  const table = document.createElement("div"); table.className = "table"; stage.appendChild(table);
+  const cards = [];
+  while (alive(my) && Date.now() < until) {
+    const ph = await nextPhoto(); if (!ph) return;
+    if (!alive(my)) { URL.revokeObjectURL(ph.url); return; }
+    const W = innerWidth, H = innerHeight, box = Math.min(H * .55, W * .42), r = ph.p.w / ph.p.h;
+    const w = Math.round(r >= 1 ? box : box * r), h = Math.round(r >= 1 ? box / r : box);
+    const cw = w + 20, chh = h + 46;
+    const x = rnd(W * .03, Math.max(W * .03, W * .97 - cw)), y = rnd(H * .04, Math.max(H * .04, H * .96 - chh));
+    const rot = rnd(-11, 11);
+    const c = document.createElement("div"); c.className = "pola"; c.dataset.url = ph.url;
+    c.style.left = x + "px"; c.style.top = y + "px"; c.style.transform = `rotate(${rot}deg)`;
+    c.innerHTML = `<img src="${ph.url}" style="width:${w}px;height:${h}px">`;
+    table.appendChild(c);
+    c.animate([{ transform: `translate(${rnd(-80, 80)}px,${rnd(-60, -20)}px) rotate(${rot + rnd(-25, 25)}deg) scale(1.4)`, opacity: 0 },
+               { opacity: 1, offset: .35 },
+               { transform: `rotate(${rot}deg) scale(1)`, opacity: 1 }], { duration: 1200, easing: "cubic-bezier(.2,.8,.2,1)" });
+    cards.push(c);
+    if (cards.length > 9) { const o = cards.shift(); anim(o, [{ opacity: 1 }, { opacity: 0 }], { duration: 900 }).then(() => dropLayer(o)); }
+    await wait(S.dur * 1000 * .6, my);
+  }
+}
+
+/* ---- chef d'orchestre ---- */
+const RUN = {
+  kenburns: (m, u) => single(m, u, "kenburns"), fade: (m, u) => single(m, u, "fade"),
+  slide: (m, u) => single(m, u, "slide"), flip: (m, u) => single(m, u, "flip"),
+  cube: (m, u) => single(m, u, "cube"), blinds: (m, u) => single(m, u, "blinds"),
+  mosaic: (m, u) => tiles(m, u, false), strips: (m, u) => tiles(m, u, true),
+  diptych, polaroid
+};
+function cleanStage() {
+  stage.querySelectorAll("[data-url]").forEach(e => URL.revokeObjectURL(e.dataset.url));
+  stage.innerHTML = ""; stage.getAnimations().forEach(a => a.cancel()); stage.style.perspective = "";
+}
 async function loop(my) {
-  const modes = ["kenburns", "mosaic", "strips"];
   let prev = null;
   while (alive(my)) {
-    let m = S.mode;
-    if (m === "mix") { do { m = pick(modes); } while (m === prev); }
-    prev = m;
-    const until = S.mode === "mix" ? Date.now() + 180000 : Infinity;
-    // fondu au noir entre deux modes
-    if (stage.children.length) { await stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, fill: "forwards" }).finished; }
-    stage.querySelectorAll("img").forEach(i => i.dataset.url && URL.revokeObjectURL(i.dataset.url));
-    stage.innerHTML = ""; stage.getAnimations().forEach(a => a.cancel());
-    if (m === "kenburns") await kenBurns(my, until);
-    else await tiles(my, until, m === "strips");
+    const en = S.fx.length ? S.fx : ["kenburns"];
+    let id = pick(en); if (en.length > 1) while (id === prev) id = pick(en);
+    prev = id;
+    const until = en.length > 1 ? Date.now() + S.every * 60000 : Infinity;
+    if (stage.children.length) await anim(stage, [{ opacity: 1 }, { opacity: 0 }], { duration: 900 });
+    if (!alive(my)) return;
+    cleanStage();
+    await RUN[id](my, until);
+    await sleep(60);   // garde-fou : jamais de boucle à vide
   }
 }
 
@@ -646,8 +864,7 @@ function stop() {
   clearInterval(clockT); $("#clock").style.display = "none";
   try { lock?.release(); } catch (e) {} lock = null;
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
-  stage.querySelectorAll("img").forEach(i => i.dataset.url && URL.revokeObjectURL(i.dataset.url));
-  stage.innerHTML = ""; stage.getAnimations().forEach(a => a.cancel());
+  cleanStage();
   renderSettings(); $("#setup").classList.remove("hidden");
 }
 $("#bStart").onclick = start;
@@ -673,7 +890,7 @@ addEventListener("resize", () => {
   renderSettings();
   const p = readPending();
   if (p && Date.now() < p.until) {
-    $("#albumName").value = p.album || "";
+    $("#albumName").value = p.album || ""; if (p.sortBy) { S.sortBy = p.sortBy; renderSettings(); }
     showPickLink(p.uri); msg("Import Google en cours : reprise…"); runImport(p);
   } else if (p) dropPending();
   // webapp : mise en cache pour fonctionner hors ligne (ignoré là où ce n'est pas permis)
