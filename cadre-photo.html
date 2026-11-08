@@ -43,7 +43,12 @@
   #hud { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     display: flex; gap: 8px; z-index: 6; opacity: 0; pointer-events: none; transition: opacity .3s; }
   #hud.on { opacity: 1; pointer-events: auto; }
-  #hud button { background: var(--ui); border: 1px solid var(--line); border-radius: 22px; padding: 10px 16px; backdrop-filter: blur(10px); }
+  #hud button { background: var(--ui); border: 1px solid var(--line); border-radius: 22px; padding: 10px 16px; backdrop-filter: blur(10px); white-space: nowrap; }
+  #hud button:disabled { opacity: .35; }
+  #hud #bPause { min-width: 112px; }
+  #pausedMark { position: fixed; top: max(18px, env(safe-area-inset-top)); right: max(22px, env(safe-area-inset-right)); z-index: 5;
+    font-size: 13px; letter-spacing: .5px; opacity: .75; text-shadow: 0 1px 8px rgba(0,0,0,.9); pointer-events: none; display: none; }
+  body.paused #pausedMark { display: block; }
 
   #setup { position: fixed; inset: 0; z-index: 10; overflow-y: auto; -webkit-overflow-scrolling: touch;
     background: radial-gradient(circle at 30% 0%, #26221b 0%, #0c0c0d 55%);
@@ -128,7 +133,8 @@
 
 <div id="stage"></div>
 <div id="corner"><div id="clock"><div class="h"></div><div class="d"></div></div><div id="albumNow"></div></div>
-<div id="hud"><button id="bSkip">Suivante</button><button id="bSetup">Réglages</button></div>
+<div id="hud"><button id="bPrev">‹ Précédente</button><button id="bPause">❚❚ Pause</button><button id="bSkip">Suivante ›</button><button id="bSetup">Réglages</button></div>
+<div id="pausedMark">❚❚ EN PAUSE</div>
 
 <div id="setup">
   <div class="wrap">
@@ -225,7 +231,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.5";
+const VERSION = "3.6";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -838,14 +844,58 @@ $("#lightbox").addEventListener("touchend", e => { if (lbX == null) return; cons
 /* ================= diaporama ================= */
 const stage = $("#stage");
 let run = 0, skip = null;
-const wait = (ms, my) => new Promise(r => { const t = setTimeout(r, ms); skip = () => { clearTimeout(t); r(); }; });
+/* ---- pause / précédente / suivante ---- */
+let userPaused = false;   // l'utilisateur a mis en pause
+let animPaused = false;   // les animations de la scène sont figées
+let wantSkip = false;     // « Suivante » touché pendant une transition : on enchaîne dès qu'elle finit
+let curWait = null;
+const _animate = Element.prototype.animate;
+// toute animation lancée dans la scène pendant la pause démarre figée
+Element.prototype.animate = function (...a) {
+  const x = _animate.apply(this, a);
+  try { if (animPaused && this.closest && (this.closest("#stage") || this.id === "stage")) x.pause(); } catch (e) {}
+  return x;
+};
+const stageAnims = () => stage.getAnimations({ subtree: true });
+function freeze() { animPaused = true; stageAnims().forEach(a => { try { a.pause(); } catch (e) {} }); }
+function unfreeze() { animPaused = false; stageAnims().forEach(a => { try { if (a.playState === "paused") a.play(); } catch (e) {} }); }
+const wait = (ms, my) => new Promise(r => {
+  let left = ms, t0 = 0, t = null;
+  const done = () => { clearTimeout(t); if (curWait === w) curWait = null; r(); };
+  const w = {
+    go() { if (t0) return; t0 = Date.now(); t = setTimeout(done, left); },
+    hold() { if (!t0) return; clearTimeout(t); left -= Date.now() - t0; t0 = 0; }
+  };
+  curWait = w; skip = done;
+  if (wantSkip) { wantSkip = false; return done(); }
+  if (userPaused) freeze(); else w.go();
+});
+function next() { if (curWait) skip(); else wantSkip = true; if (userPaused) unfreeze(); }
+function setPaused(p) {
+  userPaused = p; document.body.classList.toggle("paused", p);
+  $("#bPause").textContent = p ? "▶ Lecture" : "❚❚ Pause";
+  if (p) { freeze(); curWait?.hold(); } else { unfreeze(); curWait?.go(); }
+}
+// photos déjà montrées (effets à une photo), pour revenir en arrière
+let shown = [], fwd = [], forced = null, curFx = "";
+function prev() {
+  if (shown.length < 2) return;
+  fwd.push(shown.pop()); forced = shown.pop();
+  next();
+}
 const alive = my => my === run;
 const landscape = () => innerWidth >= innerHeight;
 
 /* ---- outils communs ---- */
-async function nextPhoto(ratio) {
+function remember(p) { shown.push(p); if (shown.length > 200) shown.shift(); }
+async function nextPhoto(ratio, hist) {
   for (let t = 0; t < 5; t++) {
-    const p = draw(ratio); if (!p) return null;
+    let p = null;
+    if (hist && forced) { p = forced; forced = null; }
+    else if (hist && fwd.length) p = fwd.pop();
+    if (p && !index.some(x => x.id === p.id)) p = null;   // photo supprimée entre-temps
+    if (!p) p = draw(ratio);
+    if (!p) return null;
     const url = await urlFor(p); if (!url) continue;
     try { await loadImg(url); return { p, url }; } catch (e) { URL.revokeObjectURL(url); }
   }
@@ -923,10 +973,10 @@ async function single(my, until, kind) {
   stage.style.perspective = (kind === "flip" || kind === "cube") ? "2000px" : "";
   let cur = null;
   while (alive(my) && Date.now() < until) {
-    const ph = await nextPhoto(); if (!ph) return;
+    const ph = await nextPhoto(undefined, true); if (!ph) return;
     if (!alive(my)) { URL.revokeObjectURL(ph.url); return; }
     const L = makeLayer(ph), old = cur; cur = L;
-    stage.appendChild(L); setTag(ph.p.album);
+    stage.appendChild(L); setTag(ph.p.album); remember(ph.p);
     const t0 = Date.now();
     await transitionIn(kind, L, old);
     if (!alive(my)) return;
@@ -1047,8 +1097,9 @@ async function polaroid(my, until) {
   const table = document.createElement("div"); table.className = "table"; stage.appendChild(table);
   const cards = [];
   while (alive(my) && Date.now() < until) {
-    const ph = await nextPhoto(); if (!ph) return;
+    const ph = await nextPhoto(undefined, true); if (!ph) return;
     if (!alive(my)) { URL.revokeObjectURL(ph.url); return; }
+    remember(ph.p);
     const W = innerWidth, H = innerHeight, box = Math.min(H * .55, W * .42), r = ph.p.w / ph.p.h;
     const w = Math.round(r >= 1 ? box : box * r), h = Math.round(r >= 1 ? box / r : box);
     const cw = w + 20, chh = h + 46;
@@ -1089,6 +1140,7 @@ async function loop(my) {
     if (!alive(my)) return;
     cleanStage();
     const until = en.length > 1 ? Date.now() + S.everySec * 1000 : Infinity;
+    curFx = id; $("#bPrev").disabled = ["mosaic", "strips", "diptych"].includes(id);
     await RUN[id](my, until);
     await sleep(60);   // garde-fou : jamais de boucle à vide
   }
@@ -1117,10 +1169,11 @@ function start() {
   if (S.clock) { tick(); clockT = setInterval(tick, 10000); }
   try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch (e) {}
   keepAwake();
-  bag = []; curAlbum = null; tagName = ""; run++; loop(run);
+  bag = []; curAlbum = null; tagName = ""; shown = []; fwd = []; forced = null; wantSkip = false;
+  setPaused(false); run++; loop(run);
 }
 function stop() {
-  run++; if (skip) skip();
+  run++; setPaused(false); wantSkip = false; if (skip) skip(); $("#hud").classList.remove("on");
   clearInterval(clockT); $("#clock").style.display = "none"; setTag(null);
   try { lock?.release(); } catch (e) {} lock = null;
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
@@ -1129,11 +1182,21 @@ function stop() {
 }
 $("#bStart").onclick = start;
 $("#bSetup").onclick = e => { e.stopPropagation(); stop(); };
-$("#bSkip").onclick = e => { e.stopPropagation(); if (skip) skip(); };
 let hudT = null;
-stage.addEventListener("click", () => {
+function showHud() {
   $("#hud").classList.add("on"); clearTimeout(hudT);
-  hudT = setTimeout(() => $("#hud").classList.remove("on"), 3500);
+  hudT = setTimeout(() => $("#hud").classList.remove("on"), userPaused ? 8000 : 3500);
+}
+$("#bSkip").onclick = e => { e.stopPropagation(); next(); showHud(); };
+$("#bPrev").onclick = e => { e.stopPropagation(); prev(); showHud(); };
+$("#bPause").onclick = e => { e.stopPropagation(); setPaused(!userPaused); showHud(); };
+stage.addEventListener("click", showHud);
+// clavier (écran branché sur un ordinateur) : espace = pause, flèches = précédente / suivante
+addEventListener("keydown", e => {
+  if (!showing() || !$("#setup").classList.contains("hidden")) return;
+  if (e.key === " ") { e.preventDefault(); setPaused(!userPaused); showHud(); }
+  else if (e.key === "ArrowRight") { next(); showHud(); }
+  else if (e.key === "ArrowLeft") { prev(); showHud(); }
 });
 let rotT = null;
 addEventListener("resize", () => {
