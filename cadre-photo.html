@@ -88,6 +88,11 @@
   #lbInfo { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: var(--mute); font-size: 14px; text-shadow: 0 1px 6px #000; }
   .wrap { max-width: 680px; margin: 0 auto; }
   h1 { font-weight: 300; font-size: 34px; margin: 6px 0 4px; letter-spacing: -.5px; }
+  .titlebar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  #quitScreen { position: fixed; inset: 0; z-index: 40; background: #000; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+  #quitScreen .box { max-width: 460px; transition: opacity 1.5s; }
+  #quitScreen.dim .box { opacity: 0; }
+  #quitScreen p { color: var(--mute); line-height: 1.5; font-size: 15px; }
   h1 small { font-size: 14px; color: var(--mute); font-weight: 400; }
   .sub { color: var(--mute); margin: 0 0 22px; }
   .card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
@@ -133,12 +138,18 @@
 
 <div id="stage"></div>
 <div id="corner"><div id="clock"><div class="h"></div><div class="d"></div></div><div id="albumNow"></div></div>
-<div id="hud"><button id="bPrev">‹ Précédente</button><button id="bPause">❚❚ Pause</button><button id="bSkip">Suivante ›</button><button id="bSetup">Réglages</button></div>
+<div id="hud"><button id="bPrev">‹ Précédente</button><button id="bPause">❚❚ Pause</button><button id="bSkip">Suivante ›</button><button id="bSetup">Réglages</button><button id="bQuit">✕ Quitter</button></div>
+<div id="quitScreen" class="hidden"><div class="box">
+  <h1 style="font-size:26px">Cadre arrêté</h1>
+  <p>L'écran peut maintenant se mettre en veille tout seul.</p>
+  <p id="quitHow"></p>
+  <button class="btn" id="bRelaunch" style="margin-top:10px">Relancer le cadre</button>
+</div></div>
 <div id="pausedMark">❚❚ EN PAUSE</div>
 
 <div id="setup">
   <div class="wrap">
-    <h1>Cadre photo <small id="ver"></small></h1>
+    <div class="titlebar"><h1>Cadre photo <small id="ver"></small></h1><button class="btn sm" id="bQuit2" style="margin-top:10px">✕ Quitter</button></div>
     <p class="sub">Tes albums tirés au hasard, en fondu, en mosaïque ou en bandes.</p>
 
     <div class="card">
@@ -231,7 +242,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.6";
+const VERSION = "3.7";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -1182,6 +1193,26 @@ function stop() {
 }
 $("#bStart").onclick = start;
 $("#bSetup").onclick = e => { e.stopPropagation(); stop(); };
+/* ---- quitter ----
+   Un navigateur n'autorise pas une page à fermer l'application qui l'affiche (sauf cas particuliers sur ordinateur).
+   On arrête donc tout, on libère la mise en veille, on tente la fermeture, et sinon on laisse un écran noir. */
+function quitApp() {
+  if (showing()) stop();
+  try { lock?.release(); } catch (e) {} lock = null;
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  $("#quitHow").textContent = ios
+    ? "Pour fermer complètement l'app : balaie depuis le bas de l'écran en marquant une pause, puis fais glisser la fenêtre du cadre vers le haut."
+    : "Pour fermer complètement l'app : ouvre les applications récentes (bouton carré ou balayage depuis le bas), puis fais glisser le cadre vers le haut.";
+  const q = $("#quitScreen"); q.classList.remove("hidden", "dim");
+  setTimeout(() => { if (!q.classList.contains("hidden")) q.classList.add("dim"); }, 15000);   // écran entièrement noir ensuite
+  try { window.close(); } catch (e) {}
+}
+$("#bQuit").onclick = e => { e.stopPropagation(); quitApp(); };
+$("#bQuit2").onclick = quitApp;
+$("#quitScreen").onclick = e => { if (e.target.id !== "bRelaunch") $("#quitScreen").classList.remove("dim"); };
+$("#bRelaunch").onclick = () => { $("#quitScreen").classList.add("hidden"); start(); };
+
 let hudT = null;
 function showHud() {
   $("#hud").classList.add("on"); clearTimeout(hudT);
