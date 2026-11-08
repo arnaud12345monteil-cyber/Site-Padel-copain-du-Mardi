@@ -1,8 +1,8 @@
-// Cadre photo – service worker (version 3.4)
+// Cadre photo – service worker (version 3.5)
 // Partage le dépôt avec d'autres applis : il ne s'occupe QUE des fichiers « cadre-photo* »
 // et ne touche jamais aux caches des autres applis.
 const PREFIX = "cadre-photo-";
-const CACHE = PREFIX + "3.4";
+const CACHE = PREFIX + "3.5";
 const SHELL = ["./cadre-photo.html", "./cadre-photo.webmanifest", "./cadre-photo-icon-192.png", "./cadre-photo-icon-512.png"];
 const mine = url => url.origin === self.location.origin && url.pathname.split("/").pop().startsWith("cadre-photo");
 

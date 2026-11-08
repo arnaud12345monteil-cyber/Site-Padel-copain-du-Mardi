@@ -49,6 +49,38 @@
     background: radial-gradient(circle at 30% 0%, #26221b 0%, #0c0c0d 55%);
     padding: max(28px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
   #setup.hidden { display: none; }
+  .hidden { display: none !important; }
+
+  /* ---- consultation d'un album ---- */
+  #viewer { position: fixed; inset: 0; z-index: 20; background: #0c0c0d; display: flex; flex-direction: column; }
+  .vhead { display: flex; align-items: center; gap: 12px; padding: max(14px, env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
+  .vtitle { flex: 1; min-width: 0; text-align: center; }
+  .vtitle b { display: block; font-weight: 500; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vtitle span { color: var(--mute); font-size: 13px; }
+  #vMsg { color: var(--acc); font-size: 14px; padding: 8px 16px 0; min-height: 0; }
+  #vMsg:empty { display: none; }
+  #vGrid { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px; display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; align-content: start; }
+  .th { position: relative; aspect-ratio: 1; background: #1a1a1c; border-radius: 3px; overflow: hidden; cursor: pointer; }
+  .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .th img:not([src]) { visibility: hidden; }
+  #viewer.selecting .th::after { content: ""; position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid #fff; background: rgba(0,0,0,.25); box-shadow: 0 0 4px rgba(0,0,0,.5); box-sizing: border-box;
+    font: 700 14px/20px -apple-system, sans-serif; text-align: center; color: #1a1408; }
+  #viewer.selecting .th.sel::after { content: "✓"; background: var(--acc); border-color: var(--acc); }
+  #viewer.selecting .th.sel img { opacity: .6; transform: scale(.92); transition: transform .15s; }
+  .vbar { display: none; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: #141416; }
+  #viewer.selecting .vbar { display: flex; }
+  #vInfo { flex: 1; color: var(--mute); font-size: 14px; min-width: 140px; }
+  .vmove { position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .vmove .box { width: 100%; max-width: 420px; background: #1b1b1e; border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  #lightbox { position: fixed; inset: 0; z-index: 30; background: #000; }
+  #lightbox img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #lightbox button { position: absolute; background: var(--ui); border: 1px solid var(--line); border-radius: 22px; padding: 10px 16px; font-size: 18px; }
+  #lbClose { top: max(14px, env(safe-area-inset-top)); right: 16px; }
+  #lbPrev { left: 14px; top: 50%; transform: translateY(-50%); }
+  #lbNext { right: 14px; top: 50%; transform: translateY(-50%); }
+  #lbInfo { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: var(--mute); font-size: 14px; text-shadow: 0 1px 6px #000; }
   .wrap { max-width: 680px; margin: 0 auto; }
   h1 { font-weight: 300; font-size: 34px; margin: 6px 0 4px; letter-spacing: -.5px; }
   h1 small { font-size: 14px; color: var(--mute); font-weight: 400; }
@@ -167,10 +199,33 @@
   </div>
 </div>
 
+<div id="viewer" class="hidden">
+  <div class="vhead">
+    <button class="btn sm" id="vBack">‹ Albums</button>
+    <div class="vtitle"><b id="vName"></b><span id="vCount"></span></div>
+    <button class="btn sm" id="vSel">Sélectionner</button>
+  </div>
+  <div id="vMsg"></div>
+  <div id="vGrid"></div>
+  <div class="vbar">
+    <span id="vInfo"></span>
+    <button class="btn sm" id="vAll">Tout</button>
+    <button class="btn sm" id="vMove">Déplacer vers…</button>
+    <button class="btn sm danger" id="vDel">Supprimer</button>
+  </div>
+</div>
+<div class="vmove hidden" id="vMovePanel"><div class="box">
+  <b id="vMoveTitle"></b>
+  <select id="vTarget"></select>
+  <input type="text" id="vNew" placeholder="Nom du nouvel album" maxlength="60">
+  <div class="row" style="justify-content:flex-end"><button class="btn sm" id="vMoveNo">Annuler</button><button class="btn sm main" id="vMoveOk" style="padding:8px 14px;font-size:14px">Déplacer</button></div>
+</div></div>
+<div id="lightbox" class="hidden"><img alt=""><button id="lbPrev" aria-label="Précédente">‹</button><button id="lbNext" aria-label="Suivante">›</button><button id="lbClose" aria-label="Fermer">✕</button><div id="lbInfo"></div></div>
+
 <script>
 (() => {
 "use strict";
-const VERSION = "3.4";
+const VERSION = "3.5";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -226,6 +281,40 @@ async function deleteIds(ids) {
   });
   ids.forEach(id => mem.delete(id));
   const set = new Set(ids); index = index.filter(p => !set.has(p.id));
+}
+// déplace des photos vers un autre album ; une photo déjà présente dans l'album cible est retirée (pas de doublon)
+async function moveIds(ids, target) {
+  const tgt = index.filter(p => p.album === target);
+  const gids = new Set(tgt.map(p => p.gid).filter(Boolean)), keys = new Set(tgt.map(p => p.key).filter(Boolean));
+  const dup = [], mv = [];
+  ids.forEach(id => { const p = index.find(x => x.id === id); if (!p || p.album === target) return;
+    ((p.gid && gids.has(p.gid)) || (p.key && keys.has(p.key)) ? dup : mv).push(id); });
+  if (db && mv.length) await new Promise((res, rej) => {
+    const t = db.transaction("photos", "readwrite"), s = t.objectStore("photos");
+    mv.forEach(id => { const g = s.get(id); g.onsuccess = () => { const v = g.result; if (v) { v.album = target; s.put(v); } }; });
+    t.oncomplete = res; t.onerror = () => rej(t.error);
+  });
+  mv.forEach(id => { const m = mem.get(id); if (m) m.album = target; const p = index.find(x => x.id === id); if (p) p.album = target; });
+  await deleteIds(dup);
+  return { moved: mv.length, dup: dup.length };
+}
+// vignettes 320 px, créées à la première consultation puis gardées
+async function makeThumb(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await loadImg(url), k = Math.min(1, 320 / Math.min(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(r, "image/jpeg", 0.8));
+  } finally { URL.revokeObjectURL(url); }
+}
+async function getThumb(id) {
+  if (!db) { const r = mem.get(id); if (!r) return null; if (!r.thumb) r.thumb = await makeThumb(r.blob); return r.thumb; }
+  const r = await idb(store("readonly").get(id)); if (!r) return null;
+  if (r.thumb) return r.thumb;
+  r.thumb = await makeThumb(r.blob);
+  try { await idb(store("readwrite").put(r)); } catch (e) {}
+  return r.thumb;
 }
 async function clearAll() { if (db) await idb(store("readwrite").clear()); mem.clear(); index = []; }
 async function askPersist() { try { await navigator.storage?.persist?.(); } catch (e) {} }
@@ -388,6 +477,7 @@ function renderSettings() {
       <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">
       <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
       <div class="act">
+        <button class="btn sm" data-act="view">Voir</button>
         <button class="btn sm" data-act="rename">Renommer</button>
         <button class="btn sm" data-act="google">Compléter (Google)</button>
         <button class="btn sm" data-act="local">+ Tablette</button>
@@ -440,6 +530,7 @@ $("#albums").addEventListener("click", async e => {
   } else if (act === "rename-no") { renderSettings(); }
   else if (act === "google") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; startGoogle(); }
   else if (act === "local") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; pendingResolver = albumResolver(); $("#fileIn").click(); }
+  else if (act === "view") openViewer(name);
   else if (act === "up" || act === "down") {
     const o = albumOrder(), i = o.indexOf(name), j = act === "up" ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= o.length) return;
@@ -657,6 +748,92 @@ async function runImport(p) {
     try { await gapi(p.token, "DELETE", "/sessions/" + p.id); } catch (e) {}
   }
 }
+
+/* ================= consultation d'un album ================= */
+let vAlbum = null, vIds = [], vSelMode = false, vSel = new Set(), vUrls = [], io = null;
+const plural = (n, s) => `${n} ${s}${n > 1 ? "s" : ""}`;
+const vmsg = t => $("#vMsg").textContent = t || "";
+function openViewer(name) { vAlbum = name; vSelMode = false; vSel.clear(); vmsg(""); $("#viewer").classList.remove("hidden"); renderViewer(); }
+function closeViewer() { $("#viewer").classList.add("hidden"); io?.disconnect(); vUrls.forEach(u => URL.revokeObjectURL(u)); vUrls = []; $("#vGrid").innerHTML = ""; renderSettings(); }
+function renderViewer() {
+  vIds = index.filter(p => p.album === vAlbum).map(p => p.id).sort((a, b) => a - b);
+  [...vSel].forEach(id => { if (!vIds.includes(id)) vSel.delete(id); });
+  if (!vIds.length) { closeViewer(); return; }
+  $("#vName").textContent = vAlbum; $("#vCount").textContent = plural(vIds.length, "photo");
+  io?.disconnect(); vUrls.forEach(u => URL.revokeObjectURL(u)); vUrls = [];
+  const g = $("#vGrid");
+  g.innerHTML = vIds.map(id => `<div class="th${vSel.has(id) ? " sel" : ""}" data-id="${id}"><img alt=""></div>`).join("");
+  io = new IntersectionObserver(es => es.forEach(async e => {
+    if (!e.isIntersecting) return; io.unobserve(e.target);
+    const b = await getThumb(+e.target.dataset.id); if (!b || !e.target.isConnected) return;
+    const u = URL.createObjectURL(b); vUrls.push(u); e.target.querySelector("img").src = u;
+  }), { root: g, rootMargin: "400px" });
+  g.querySelectorAll(".th").forEach(t => io.observe(t));
+  updateBar();
+}
+function updateBar() {
+  $("#viewer").classList.toggle("selecting", vSelMode);
+  $("#vSel").textContent = vSelMode ? "Terminé" : "Sélectionner";
+  $("#vInfo").textContent = vSel.size ? `${plural(vSel.size, "photo")} sélectionnée${vSel.size > 1 ? "s" : ""}` : "Touche les photos à sélectionner";
+  $("#vMove").disabled = $("#vDel").disabled = !vSel.size;
+  $("#vAll").textContent = vSel.size === vIds.length ? "Aucune" : "Tout";
+}
+$("#vBack").onclick = closeViewer;
+$("#vSel").onclick = () => { vSelMode = !vSelMode; if (!vSelMode) { vSel.clear(); $("#vGrid").querySelectorAll(".sel").forEach(t => t.classList.remove("sel")); } updateBar(); };
+$("#vGrid").onclick = e => {
+  const t = e.target.closest(".th"); if (!t) return; const id = +t.dataset.id;
+  if (vSelMode) { vSel.has(id) ? vSel.delete(id) : vSel.add(id); t.classList.toggle("sel", vSel.has(id)); updateBar(); }
+  else openLightbox(vIds.indexOf(id));
+};
+$("#vAll").onclick = () => {
+  if (vSel.size === vIds.length) vSel.clear(); else vIds.forEach(id => vSel.add(id));
+  $("#vGrid").querySelectorAll(".th").forEach(t => t.classList.toggle("sel", vSel.has(+t.dataset.id))); updateBar();
+};
+$("#vDel").onclick = async () => {
+  const b = $("#vDel");
+  if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirmer ?"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Supprimer"; }, 3000); return; }
+  b.dataset.armed = ""; b.textContent = "Supprimer";
+  const n = vSel.size; await deleteIds([...vSel]); vSel.clear(); bag = [];
+  vmsg(`${plural(n, "photo")} supprimée${n > 1 ? "s" : ""} de l'application (les originaux ne sont pas touchés).`);
+  renderViewer();
+};
+// choix de l'album de destination
+function syncNew() { $("#vNew").classList.toggle("hidden", $("#vTarget").value !== "__new"); }
+$("#vMove").onclick = () => {
+  const others = albumStats().map(x => x[0]).filter(a => a !== vAlbum);
+  $("#vMoveTitle").textContent = `Déplacer ${plural(vSel.size, "photo")} vers :`;
+  $("#vTarget").innerHTML = others.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("") + `<option value="__new">＋ Nouvel album…</option>`;
+  if (!others.length) $("#vTarget").value = "__new";
+  $("#vNew").value = ""; syncNew(); $("#vMovePanel").classList.remove("hidden");
+};
+$("#vTarget").onchange = syncNew;
+$("#vMoveNo").onclick = () => $("#vMovePanel").classList.add("hidden");
+$("#vMoveOk").onclick = async () => {
+  const sel = $("#vTarget").value, target = sel === "__new" ? cleanName($("#vNew").value) : sel;
+  if (!target) { $("#vNew").focus(); return; }
+  if (target === vAlbum) { $("#vMovePanel").classList.add("hidden"); return; }
+  const r = await moveIds([...vSel], target);
+  $("#vMovePanel").classList.add("hidden"); vSel.clear(); bag = [];
+  let t = `${plural(r.moved, "photo")} déplacée${r.moved > 1 ? "s" : ""} vers « ${target} »`;
+  if (r.dup) t += ` · ${r.dup} déjà présente${r.dup > 1 ? "s" : ""} là-bas, retirée${r.dup > 1 ? "s" : ""} d'ici`;
+  vmsg(t + ".");
+  if (!index.some(p => p.album === vAlbum)) { closeViewer(); msg(t + `. L'album « ${vAlbum} » est maintenant vide.`); return; }
+  renderViewer();
+};
+// photo en grand
+let lbI = 0, lbUrl = null, lbX = null;
+function openLightbox(i) { lbI = i; $("#lightbox").classList.remove("hidden"); showLb(); }
+async function showLb() {
+  const b = await getBlob(vIds[lbI]); if (lbUrl) URL.revokeObjectURL(lbUrl);
+  lbUrl = b ? URL.createObjectURL(b) : null; $("#lightbox img").src = lbUrl || "";
+  $("#lbInfo").textContent = `${lbI + 1} / ${vIds.length}`;
+}
+const lbStep = d => { lbI = (lbI + d + vIds.length) % vIds.length; showLb(); };
+$("#lbPrev").onclick = () => lbStep(-1);
+$("#lbNext").onclick = () => lbStep(1);
+$("#lbClose").onclick = () => { $("#lightbox").classList.add("hidden"); if (lbUrl) URL.revokeObjectURL(lbUrl); lbUrl = null; $("#lightbox img").removeAttribute("src"); };
+$("#lightbox").addEventListener("touchstart", e => { lbX = e.touches[0].clientX; }, { passive: true });
+$("#lightbox").addEventListener("touchend", e => { if (lbX == null) return; const dx = e.changedTouches[0].clientX - lbX; lbX = null; if (Math.abs(dx) > 50) lbStep(dx < 0 ? 1 : -1); });
 
 /* ================= diaporama ================= */
 const stage = $("#stage");
