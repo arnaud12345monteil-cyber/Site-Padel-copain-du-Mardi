@@ -38,7 +38,7 @@
   #clock .d { font-size: 17px; opacity: .85; margin-top: 4px; text-transform: capitalize; }
   #albumNow { display: none; font-size: 14px; letter-spacing: .4px; opacity: .7; margin-top: 6px; max-width: 45vw;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
-  .album .ord { order: 3; display: flex; gap: 6px; }
+  .album .ord { display: flex; gap: 4px; }
   .album .ord button { padding: 6px 12px; font-size: 13px; line-height: 1.2; }
   #hud { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
     display: flex; gap: 8px; z-index: 6; opacity: 0; pointer-events: none; transition: opacity .3s; }
@@ -86,7 +86,7 @@
   #lbPrev { left: 14px; top: 50%; transform: translateY(-50%); }
   #lbNext { right: 14px; top: 50%; transform: translateY(-50%); }
   #lbInfo { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: var(--mute); font-size: 14px; text-shadow: 0 1px 6px #000; }
-  .wrap { max-width: 680px; margin: 0 auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
   h1 { font-weight: 300; font-size: 34px; margin: 6px 0 4px; letter-spacing: -.5px; }
   .titlebar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   #quitScreen { position: fixed; inset: 0; z-index: 40; background: #000; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px; }
@@ -116,15 +116,30 @@
   .progress i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .2s; }
   details summary { cursor: pointer; color: var(--mute); font-size: 14px; }
   #msg { min-height: 20px; font-size: 14px; margin-top: 10px; color: var(--acc); line-height: 1.4; }
-  /* ligne 1 : case, nom complet, flèches d'ordre ; ligne 2 : boutons */
-  .album { display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 12px; row-gap: 10px;
-    padding: 14px 0; border-top: 1px solid var(--line); }
-  .album:first-child { border-top: 0; padding-top: 2px; }
-  .album > input[type=checkbox] { order: 1; }
-  .album .nm { order: 2; min-width: 0; }
-  .album .nm b { display: block; font-weight: 500; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
-  .album .nm span { color: var(--mute); font-size: 13px; }
-  .album .act { order: 4; grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; padding-left: 34px; }
+  /* une ligne par album : case, flèches, boutons, groupe, puis le nom en entier */
+  .album { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .album:first-child { border-top: 0; }
+  .album > input[type=checkbox] { order: -2; }
+  .album .act { display: flex; gap: 6px; flex-wrap: nowrap; }
+  .album .act .btn, .album select.grp { padding: 7px 10px; font-size: 13px; border-radius: 9px; }
+  .album select.grp { width: auto; max-width: 150px; }
+  .album .nm { flex: 1; min-width: 160px; }
+  .album .nm b { display: inline; font-weight: 500; font-size: 16px; overflow-wrap: anywhere; }
+  .album .nm span { color: var(--mute); font-size: 13px; margin-left: 8px; white-space: nowrap; }
+  .in-group { padding-left: 30px; }
+  .ghead { display: flex; align-items: center; gap: 10px; padding: 12px 0 8px; margin-top: 6px; border-top: 1px solid var(--line); }
+  .ghead:first-child { margin-top: 0; border-top: 0; }
+  .ghead .gname { flex: 1; cursor: pointer; font-size: 17px; font-weight: 600; color: var(--acc); user-select: none; }
+  .ghead .gname span { color: var(--mute); font-size: 13px; font-weight: 400; margin-left: 8px; }
+  .ghead .btn { padding: 7px 10px; font-size: 13px; border-radius: 9px; }
+  .newgroup { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .newgroup input { max-width: 260px; }
+  /* écran moins large (tablette en portrait) : le nom passe sur la première ligne */
+  @media (max-width: 1000px) {
+    .album { flex-wrap: wrap; }
+    .album .nm { order: -1; flex-basis: calc(100% - 40px); }
+    .album .act { flex-wrap: wrap; }
+  }
   .album.off .nm { opacity: .45; }
   #summary { font-size: 15px; color: var(--mute); margin: 4px 0 12px; }
   select { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-size: 15px; }
@@ -184,6 +199,7 @@
         <option value="album">Album par album, dans l'ordre ci-dessous</option>
       </select>
       <div id="summary"></div>
+      <div class="newgroup"><button class="btn sm" id="bNewGroup">＋ Créer un groupe</button><span id="newGroupBox" class="row hidden" style="gap:8px"><input type="text" id="newGroupName" placeholder="Ex. Voyages, Famille, Ski" maxlength="40"><button class="btn sm" id="newGroupOk">Créer</button><button class="btn sm" id="newGroupNo">Annuler</button></span></div>
       <div id="albums"></div>
     </div>
 
@@ -264,7 +280,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "4.0";
+const VERSION = "4.1";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -399,6 +415,9 @@ if (S.zoom == null) S.zoom = true;
 if (S.order !== "album") S.order = "mix";
 if (!Array.isArray(S.albumOrder)) S.albumOrder = [];
 if (S.showTag == null) S.showTag = true;
+if (!S.groupOf || typeof S.groupOf !== "object") S.groupOf = {};   // album -> groupe
+if (!Array.isArray(S.groups)) S.groups = [];                         // groupes, dans l'ordre
+if (!Array.isArray(S.collapsed)) S.collapsed = [];
 const fmtSec = s => s < 60 ? `${s} s` : (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
 const stepOf = s => STEPS.reduce((b, v, i) => Math.abs(v - s) < Math.abs(STEPS[b] - s) ? i : b, 0);
 S.fx = S.fx.filter(id => FX.some(x => x.id === id)); if (!S.fx.length) S.fx = ["kenburns"];
@@ -415,11 +434,19 @@ function albumOrder() {
   all.slice().reverse().forEach(a => { if (!o.includes(a)) o.push(a); });
   return o;
 }
+const groupOf = a => S.groups.includes(S.groupOf[a]) ? S.groupOf[a] : "";
+// ordre d'affichage et de lecture : groupe par groupe, puis les albums sans groupe
+function sections(base) {
+  const out = S.groups.map(g => ({ g, albums: base.filter(a => groupOf(a) === g) }));
+  out.push({ g: "", albums: base.filter(a => !groupOf(a)) });
+  return out;
+}
+const playOrder = () => sections(albumOrder()).flatMap(s => s.albums);
 let curAlbum = null;   // album en cours en mode « album par album »
 function refill() {
   if (S.order === "album") {
     const has = new Set(active().map(p => p.album));
-    const list = albumOrder().filter(a => has.has(a));
+    const list = playOrder().filter(a => has.has(a));
     if (!list.length) { bag = []; return; }
     // au démarrage on reprend là où on s'était arrêté, sinon album suivant (et retour au premier à la fin)
     let i = curAlbum == null ? Math.max(0, list.indexOf(S.lastAlbum)) : list.indexOf(curAlbum) + 1;
@@ -485,6 +512,7 @@ async function renameAlbum(a, b) {
   mem.forEach(v => { if ((v.album || DEFAULT_ALBUM) === a) v.album = b; });
   index.forEach(p => { if (p.album === a) p.album = b; });
   S.albumOrder = S.albumOrder.includes(b) ? S.albumOrder.filter(x => x !== a) : S.albumOrder.map(x => x === a ? b : x);
+  if (S.groupOf[a]) { if (!S.groupOf[b]) S.groupOf[b] = S.groupOf[a]; delete S.groupOf[a]; }
   const wasOff = S.off.includes(a), targetOff = S.off.includes(b);
   S.off = S.off.filter(x => x !== a && x !== b); if (wasOff && targetOff) S.off.push(b);
   save(); bag = [];
@@ -509,21 +537,46 @@ function renderSettings() {
   $("#summary").innerHTML = stats.length
     ? `<b>${nAct}</b> photo${nAct > 1 ? "s" : ""} au tirage sur ${index.length}, dans ${stats.length} album${stats.length > 1 ? "s" : ""}. ${byAlbum ? "Chaque album est montré en entier, au hasard, avant de passer au suivant. Les flèches changent l'ordre." : "Coche les albums à afficher."}`
     : "Aucun album pour l'instant. Importe des photos ci-dessus.";
-  $("#albums").innerHTML = stats.map(([n, c], i) => {
-    const on = !S.off.includes(n);
-    const ord = byAlbum ? `<div class="ord"><button class="btn sm" data-act="up" ${i ? "" : "disabled"} aria-label="Monter">▲</button><button class="btn sm" data-act="down" ${i < stats.length - 1 ? "" : "disabled"} aria-label="Descendre">▼</button></div>` : "";
-    return `<div class="album${on ? "" : " off"}" data-a="${esc(n)}">${ord}
-      <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">
-      <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
+  const counts = new Map(stats);
+  const base = byAlbum ? albumOrder() : stats.map(x => x[0]);
+  const grpOpts = sel => `<option value="">Sans groupe</option>` + S.groups.map(g => `<option value="${esc(g)}"${g === sel ? " selected" : ""}>${esc(g)}</option>`).join("") + `<option value="__new">＋ Nouveau groupe…</option>`;
+  const row = (n, i, len, grouped) => {
+    const c = counts.get(n) || 0, on = !S.off.includes(n);
+    const ord = byAlbum ? `<div class="ord"><button class="btn sm" data-act="up" ${i ? "" : "disabled"} aria-label="Monter">▲</button><button class="btn sm" data-act="down" ${i < len - 1 ? "" : "disabled"} aria-label="Descendre">▼</button></div>` : "";
+    return `<div class="album${on ? "" : " off"}${grouped ? " in-group" : ""}" data-a="${esc(n)}">
+      <input type="checkbox" data-act="toggle" ${on ? "checked" : ""} aria-label="Afficher ${esc(n)}">${ord}
       <div class="act">
         <button class="btn sm" data-act="view">Voir</button>
         <button class="btn sm" data-act="split">Par mois</button>
         <button class="btn sm" data-act="rename">Renommer</button>
-        <button class="btn sm" data-act="google">Compléter (Google)</button>
+        <button class="btn sm" data-act="google">+ Google</button>
         <button class="btn sm" data-act="local">+ Tablette</button>
         <button class="btn sm danger" data-act="del">Supprimer</button>
-      </div></div>`;
-  }).join("");
+      </div>
+      <select class="grp" data-act="group" aria-label="Groupe">${grpOpts(groupOf(n))}</select>
+      <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div></div>`;
+  };
+  let html = "";
+  sections(base).forEach((s, gi) => {
+    if (s.g) {
+      const photos = s.albums.reduce((t, a) => t + (counts.get(a) || 0), 0), open = !S.collapsed.includes(s.g);
+      const ord = byAlbum ? `<div class="ord"><button class="btn sm" data-gact="gup" ${gi ? "" : "disabled"}>▲</button><button class="btn sm" data-gact="gdown" ${gi < S.groups.length - 1 ? "" : "disabled"}>▼</button></div>` : "";
+      html += `<div class="ghead" data-g="${esc(s.g)}"><input type="checkbox" data-gact="gtoggle" ${s.albums.length ? "" : "disabled"} aria-label="Afficher le groupe ${esc(s.g)}">${ord}
+        <button class="btn sm" data-gact="grename">Renommer</button><button class="btn sm danger" data-gact="gdel">Dissoudre</button>
+        <div class="gname" data-gact="gfold">${open ? "▾" : "▸"} ${esc(s.g)}<span>${plural(s.albums.length, "album")} · ${plural(photos, "photo")}</span></div></div>`;
+      if (open) html += s.albums.map((a, i) => row(a, i, s.albums.length, true)).join("") || `<div class="note in-group" style="padding:6px 0 10px">Groupe vide : choisis-le dans le menu d'un album pour l'y ranger.</div>`;
+    } else if (s.albums.length) {
+      if (S.groups.length) html += `<div class="ghead"><div class="gname" style="cursor:default;color:var(--mute)">Sans groupe<span>${plural(s.albums.length, "album")}</span></div></div>`;
+      html += s.albums.map((a, i) => row(a, i, s.albums.length, false)).join("");
+    }
+  });
+  $("#albums").innerHTML = html;
+  // case du groupe : cochée si tous ses albums le sont, à moitié si certains seulement
+  $("#albums").querySelectorAll(".ghead[data-g]").forEach(hd => {
+    const al = sections(base).find(x => x.g === hd.dataset.g)?.albums || [], cb = hd.querySelector("input");
+    const n = al.filter(a => !S.off.includes(a)).length;
+    cb.checked = al.length > 0 && n === al.length; cb.indeterminate = n > 0 && n < al.length;
+  });
   $("#bStart").disabled = !nAct;
   renderBackup();
   showStorage();
@@ -552,7 +605,9 @@ $("#dur").oninput = e => { S.dur = +e.target.value; save(); renderSettings(); };
 $("#clockOn").onchange = e => { S.clock = e.target.checked; save(); };
 
 $("#albums").addEventListener("click", async e => {
-  const el = e.target.closest("[data-act]"); if (!el) return;
+  const gel = e.target.closest("[data-gact]");
+  if (gel) return groupAction(gel);
+  const el = e.target.closest("[data-act]"); if (!el || el.dataset.act === "group") return;
   const name = el.closest(".album").dataset.a, act = el.dataset.act;
   if (act === "toggle") {
     S.off = el.checked ? S.off.filter(a => a !== name) : [...new Set([...S.off, name])];
@@ -574,17 +629,74 @@ $("#albums").addEventListener("click", async e => {
   else if (act === "view") openViewer(name);
   else if (act === "split") openSplit(name);
   else if (act === "up" || act === "down") {
-    const o = albumOrder(), i = o.indexOf(name), j = act === "up" ? i - 1 : i + 1;
-    if (i < 0 || j < 0 || j >= o.length) return;
-    [o[i], o[j]] = [o[j], o[i]]; S.albumOrder = o; save(); renderSettings();
+    // échange avec le voisin du même groupe
+    const o = albumOrder(), sec = o.filter(a => groupOf(a) === groupOf(name));
+    const i = sec.indexOf(name), j = act === "up" ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= sec.length) return;
+    const a = o.indexOf(sec[i]), b = o.indexOf(sec[j]); [o[a], o[b]] = [o[b], o[a]];
+    S.albumOrder = o; save(); renderSettings();
   }
   else if (act === "del") {
     if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = "Supprimer"; } }, 3000); return; }
     await deleteIds(index.filter(p => p.album === name).map(p => p.id));
-    S.off = S.off.filter(a => a !== name); S.albumOrder = S.albumOrder.filter(a => a !== name);
+    S.off = S.off.filter(a => a !== name); S.albumOrder = S.albumOrder.filter(a => a !== name); delete S.groupOf[name];
     save(); bag = []; renderSettings(); msg(`Album « ${name} » supprimé.`);
   }
 });
+
+/* ---- groupes d'albums ---- */
+const cleanGroup = s => String(s || "").trim().replace(/\s+/g, " ").slice(0, 40);
+function addGroup(g) { g = cleanGroup(g); if (!g) return null; if (!S.groups.includes(g)) S.groups.push(g); S.collapsed = S.collapsed.filter(x => x !== g); return g; }
+$("#albums").addEventListener("change", e => {
+  const sel = e.target.closest('select[data-act="group"]'); if (!sel) return;
+  const name = sel.closest(".album").dataset.a;
+  if (sel.value === "__new") {
+    const box = document.createElement("span"); box.className = "row"; box.style.gap = "6px";
+    box.innerHTML = `<input type="text" placeholder="Nom du groupe" maxlength="40" style="width:160px;padding:7px"><button class="btn sm">OK</button>`;
+    sel.replaceWith(box);
+    const inp = box.querySelector("input"); inp.focus();
+    const ok = () => { const g = addGroup(inp.value); if (g) { S.groupOf[name] = g; save(); bag = []; msg(`« ${name} » rangé dans « ${g} ».`); } renderSettings(); };
+    box.querySelector("button").onclick = ok; inp.onkeydown = ev => { if (ev.key === "Enter") ok(); if (ev.key === "Escape") renderSettings(); };
+    return;
+  }
+  if (sel.value) S.groupOf[name] = sel.value; else delete S.groupOf[name];
+  save(); bag = []; renderSettings();
+});
+function groupAction(el) {
+  const hd = el.closest(".ghead"), g = hd?.dataset.g, act = el.dataset.gact; if (!g) return;
+  const albums = Object.keys(S.groupOf).filter(a => S.groupOf[a] === g && index.some(p => p.album === a));
+  if (act === "gfold") { S.collapsed = S.collapsed.includes(g) ? S.collapsed.filter(x => x !== g) : [...S.collapsed, g]; save(); renderSettings(); }
+  else if (act === "gtoggle") {
+    const allOn = albums.every(a => !S.off.includes(a));
+    S.off = allOn ? [...new Set([...S.off, ...albums])] : S.off.filter(a => !albums.includes(a));
+    save(); bag = []; renderSettings();
+  } else if (act === "gup" || act === "gdown") {
+    const i = S.groups.indexOf(g), j = act === "gup" ? i - 1 : i + 1; if (j < 0 || j >= S.groups.length) return;
+    [S.groups[i], S.groups[j]] = [S.groups[j], S.groups[i]]; save(); renderSettings();
+  } else if (act === "grename") {
+    const nm = hd.querySelector(".gname");
+    nm.outerHTML = `<span class="row" style="flex:1;gap:6px"><input type="text" value="${esc(g)}" maxlength="40" style="max-width:240px;padding:7px"><button class="btn sm" data-gact="grename-ok">OK</button><button class="btn sm" data-gact="grename-no">Annuler</button></span>`;
+    const inp = hd.querySelector("input[type=text]"); inp.focus(); inp.select();
+    inp.onkeydown = ev => { if (ev.key === "Enter") hd.querySelector('[data-gact="grename-ok"]').click(); };
+  } else if (act === "grename-ok") {
+    const nv = cleanGroup(hd.querySelector("input[type=text]").value); if (!nv || nv === g) return renderSettings();
+    Object.keys(S.groupOf).forEach(a => { if (S.groupOf[a] === g) S.groupOf[a] = nv; });
+    S.groups = S.groups.includes(nv) ? S.groups.filter(x => x !== g) : S.groups.map(x => x === g ? nv : x);
+    S.collapsed = S.collapsed.filter(x => x !== g);
+    save(); renderSettings(); msg(`Groupe renommé en « ${nv} ».`);
+  } else if (act === "grename-no") renderSettings();
+  else if (act === "gdel") {
+    if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.textContent = "Confirmer ?"; setTimeout(() => { if (el.isConnected) { el.dataset.armed = ""; el.textContent = "Dissoudre"; } }, 3000); return; }
+    Object.keys(S.groupOf).forEach(a => { if (S.groupOf[a] === g) delete S.groupOf[a]; });
+    S.groups = S.groups.filter(x => x !== g); S.collapsed = S.collapsed.filter(x => x !== g);
+    save(); bag = []; renderSettings(); msg(`Groupe « ${g} » dissous : ses albums sont conservés, sans groupe.`);
+  }
+}
+$("#bNewGroup").onclick = () => { $("#newGroupBox").classList.remove("hidden"); $("#bNewGroup").classList.add("hidden"); $("#newGroupName").value = ""; $("#newGroupName").focus(); };
+const closeNewGroup = () => { $("#newGroupBox").classList.add("hidden"); $("#bNewGroup").classList.remove("hidden"); };
+$("#newGroupNo").onclick = closeNewGroup;
+$("#newGroupOk").onclick = () => { const g = addGroup($("#newGroupName").value); if (!g) return; save(); closeNewGroup(); renderSettings(); msg(`Groupe « ${g} » créé. Range tes albums dedans avec le menu « Sans groupe » de chaque album.`); };
+$("#newGroupName").onkeydown = e => { if (e.key === "Enter") $("#newGroupOk").click(); if (e.key === "Escape") closeNewGroup(); };
 
 /* ---- import depuis la tablette ---- */
 // date de prise de vue lue dans l'EXIF d'un JPEG (null si absente)
@@ -938,6 +1050,7 @@ $("#splitOk").onclick = async () => {
   // un album du même nom qui existait déjà (fusion) garde sa place
   S.albumOrder = [...new Set(before.flatMap(a => a === album ? names.filter(n => !before.includes(n)) : [a]))];
   if (wasOff) S.off = [...new Set([...S.off.filter(a => a !== album), ...names])];
+  if (S.groupOf[album]) { names.forEach(n => { if (!S.groupOf[n]) S.groupOf[n] = S.groupOf[album]; }); delete S.groupOf[album]; }
   save(); bag = []; split = null; renderSettings();
   msg(`« ${album} » découpé en ${names.length} albums.`);
 };
