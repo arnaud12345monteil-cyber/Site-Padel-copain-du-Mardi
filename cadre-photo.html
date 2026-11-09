@@ -231,6 +231,12 @@
     <button class="btn sm danger" id="vDel">Supprimer</button>
   </div>
 </div>
+<div class="vmove hidden" id="splitPanel"><div class="box">
+  <b id="splitTitle"></b>
+  <div id="splitList" style="max-height:40vh;overflow-y:auto;color:var(--mute);font-size:14px;line-height:1.7"></div>
+  <label class="opt" style="padding:0"><span style="font-size:14px">Garder le nom de l'album devant le mois<small id="splitEx" style="display:block;color:var(--mute);font-size:12px"></small></span><input type="checkbox" id="splitPrefix" checked></label>
+  <div class="row" style="justify-content:flex-end"><button class="btn sm" id="splitNo">Annuler</button><button class="btn sm main" id="splitOk" style="padding:8px 14px;font-size:14px">Découper</button></div>
+</div></div>
 <div class="vmove hidden" id="vMovePanel"><div class="box">
   <b id="vMoveTitle"></b>
   <select id="vTarget"></select>
@@ -242,7 +248,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "3.7";
+const VERSION = "3.8";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -495,6 +501,7 @@ function renderSettings() {
       <div class="nm"><b>${esc(n)}</b><span>${c} photo${c > 1 ? "s" : ""}</span></div>
       <div class="act">
         <button class="btn sm" data-act="view">Voir</button>
+        <button class="btn sm" data-act="split">Par mois</button>
         <button class="btn sm" data-act="rename">Renommer</button>
         <button class="btn sm" data-act="google">Compléter (Google)</button>
         <button class="btn sm" data-act="local">+ Tablette</button>
@@ -548,6 +555,7 @@ $("#albums").addEventListener("click", async e => {
   else if (act === "google") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; startGoogle(); }
   else if (act === "local") { S.sortBy = "name"; save(); renderSettings(); $("#albumName").value = name; pendingResolver = albumResolver(); $("#fileIn").click(); }
   else if (act === "view") openViewer(name);
+  else if (act === "split") openSplit(name);
   else if (act === "up" || act === "down") {
     const o = albumOrder(), i = o.indexOf(name), j = act === "up" ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= o.length) return;
@@ -765,6 +773,55 @@ async function runImport(p) {
     try { await gapi(p.token, "DELETE", "/sessions/" + p.id); } catch (e) {}
   }
 }
+
+/* ================= découper un album par mois ================= */
+// date de prise de vue de chaque photo : enregistrée à l'import, sinon EXIF du fichier gardé, sinon date du fichier
+async function datesOf(album) {
+  const recs = [];
+  const take = v => { if ((v.album || DEFAULT_ALBUM) === album) recs.push({ id: v.id, taken: v.taken || 0, key: v.key || "" }); };
+  if (db) await new Promise(res => { const c = store("readonly").openCursor(); c.onsuccess = () => { const cur = c.result; if (!cur) return res(); take(cur.value); cur.continue(); }; c.onerror = res; });
+  else mem.forEach(take);
+  for (const r of recs) {
+    let d = r.taken ? new Date(r.taken) : null;
+    if (!d) { const b = await getBlob(r.id); if (b) d = await exifDate(b); }
+    if (!d && r.key) { const lm = +r.key.split("|")[2]; if (lm) d = new Date(lm); }
+    r.d = d;
+  }
+  return recs;
+}
+let split = null;   // { album, groups: Map(mois -> {ids, t}) }
+const splitName = m => $("#splitPrefix").checked ? `${split.album} · ${m}` : m;
+function renderSplit() {
+  const g = [...split.groups.entries()].sort((a, b) => a[1].t - b[1].t);
+  $("#splitList").innerHTML = g.map(([m, v]) => `${esc(splitName(m))} : <b style="color:var(--txt)">${plural(v.ids.length, "photo")}</b>`).join("<br>");
+  $("#splitEx").textContent = `ex. « ${split.album} · ${g[0][0]} » au lieu de « ${g[0][0]} »`;
+}
+async function openSplit(name) {
+  msg("Lecture des dates…");
+  const recs = await datesOf(name);
+  const groups = new Map();
+  recs.forEach(r => { const m = monthAlbum(r.d); const gr = groups.get(m) || { ids: [], t: r.d ? +r.d : Infinity }; gr.ids.push(r.id); if (r.d) gr.t = Math.min(gr.t, +r.d); groups.set(m, gr); });
+  msg("");
+  if (groups.size < 2) return msg(`Toutes les photos de « ${name} » sont du même mois (${[...groups.keys()][0] || "?"}) : rien à découper.`);
+  split = { album: name, groups };
+  $("#splitTitle").textContent = `Découper « ${name} » en ${groups.size} albums :`;
+  renderSplit(); $("#splitPanel").classList.remove("hidden");
+}
+$("#splitPrefix").onchange = renderSplit;
+$("#splitNo").onclick = () => { $("#splitPanel").classList.add("hidden"); split = null; };
+$("#splitOk").onclick = async () => {
+  if (!split) return;
+  const { album, groups } = split, wasOff = S.off.includes(album);
+  const g = [...groups.entries()].sort((a, b) => a[1].t - b[1].t), names = [], before = albumOrder();
+  $("#splitPanel").classList.add("hidden");
+  for (const [m, v] of g) { const n = splitName(m); names.push(n); if (n !== album) await moveIds(v.ids, n); }
+  // les nouveaux albums prennent la place de l'ancien dans l'ordre de lecture, et héritent de sa case cochée ou non
+  // un album du même nom qui existait déjà (fusion) garde sa place
+  S.albumOrder = [...new Set(before.flatMap(a => a === album ? names.filter(n => !before.includes(n)) : [a]))];
+  if (wasOff) S.off = [...new Set([...S.off.filter(a => a !== album), ...names])];
+  save(); bag = []; split = null; renderSettings();
+  msg(`« ${album} » découpé en ${names.length} albums.`);
+};
 
 /* ================= consultation d'un album ================= */
 let vAlbum = null, vIds = [], vSelMode = false, vSel = new Set(), vUrls = [], io = null;
