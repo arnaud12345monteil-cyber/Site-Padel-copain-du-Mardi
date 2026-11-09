@@ -124,13 +124,14 @@
   .album .act .btn, .album select.grp { padding: 7px 10px; font-size: 13px; border-radius: 9px; }
   .album select.grp { width: auto; max-width: 150px; }
   /* nom de l'album calé à droite, plus gros que les boutons */
-  .album .nm { flex: 1; min-width: 160px; text-align: right; }
+  .album .nm { order: -1; flex: 1; min-width: 160px; text-align: left; }
   .album .nm b { display: block; font-weight: 500; font-size: 19px; line-height: 1.25; overflow-wrap: anywhere; }
   .album .nm span { display: block; color: var(--mute); font-size: 13px; margin-top: 2px; white-space: nowrap; }
   .in-group { padding-left: 30px; }
   .ghead { display: flex; align-items: center; gap: 10px; padding: 12px 0 8px; margin-top: 6px; border-top: 1px solid var(--line); }
   .ghead:first-child { margin-top: 0; border-top: 0; }
-  .ghead .gname { flex: 1; cursor: pointer; font-size: 21px; font-weight: 600; color: var(--acc); user-select: none; text-align: right; }
+  .ghead > input[type=checkbox] { order: -2; }
+  .ghead .gname { order: -1; flex: 1; cursor: pointer; font-size: 21px; font-weight: 600; color: var(--acc); user-select: none; text-align: left; }
   .ghead .gname span { color: var(--mute); font-size: 13px; font-weight: 400; margin-left: 10px; }
   .ghead .btn { padding: 7px 10px; font-size: 13px; border-radius: 9px; }
   .newgroup { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
@@ -138,9 +139,8 @@
   /* écran moins large (tablette en portrait) : le nom passe sur la première ligne */
   @media (max-width: 1000px) {
     .album { flex-wrap: wrap; }
-    .album .nm { order: -1; flex-basis: calc(100% - 40px); text-align: left; }
+    .album .nm { flex-basis: calc(100% - 40px); }
     .album .nm span { display: inline; margin-left: 8px; }
-    .ghead .gname { text-align: left; }
     .album .act { flex-wrap: wrap; }
   }
   .album.off .nm { opacity: .45; }
@@ -283,7 +283,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "4.2";
+const VERSION = "4.3";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
