@@ -825,6 +825,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.37.1", d:"11/11/2026", c:["Programmes du PC : version, PID et emplacement de trajetve_voiture.py affichés ; Autres données : indique si la lecture vient d'une ancienne version du script restée en marche"]},
   {v:"2.37", d:"11/11/2026", c:[
     "Ma voiture → Maintenant : partie « Autres données de la voiture » (portes et verrouillage, alertes, entretien, préconditionnement et ses programmes, recharge et départ différé, mouvement et position, divers) et toutes les données brutes reçues",
     "Ma voiture : consommation réelle selon la température extérieure, calculée sur tes trajets des 6 derniers mois"]},
@@ -2436,7 +2437,7 @@ function readCar(wake, onStep, kind){
     const un=ref.onSnapshot(d=>{
       const x=d.data(); if(!x || x.req!==req) return;
       if(x.status && x.status!=="ok" && x.status!=="erreur" && onStep) onStep(x.status);
-      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(kind==="full" && x.full ? JSON.parse(x.full) : x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
+      if(x.done===req){ un(); clearTimeout(to); x.status==="ok" ? resolve(kind==="full" && x.full ? {...JSON.parse(x.full), _srv:x.srv||null} : x.res) : reject(new Error(x.error||"La voiture n'a pas répondu.")); }
     }, e=>{ clearTimeout(to); reject(new Error("Lecture impossible ("+(e.code||e.message)+").")); });
     to=setTimeout(()=>{ un(); reject(new Error("Pas de réponse du PC dans le délai (2 min).")); }, 120000);
     ref.set({req, wake:!!wake, kind:kind||"soc", status:"demande"}).catch(e=>{ un(); clearTimeout(to); reject(new Error("Demande refusée ("+(e.code||e.message)+").")); });
@@ -3280,7 +3281,7 @@ function pcRender(){
   const row=(n,cls,txt)=>`<div class="pc-row"><b><span class="pcstat"><i class="${cls}"></i></span> ${n}</b><span>${txt}</span></div>`;
   const sleepTxt=!up?"inconnu":!pcSvc.windows?"sans objet (pas Windows)":pcSvc.noSleep===true?"bloquée par trajetve_voiture.py":pcSvc.noSleep===false?"autorisée (selon les réglages Windows)":"en cours de réglage";
   $("pcBody").innerHTML=
-    row("trajetve_voiture.py",d1.className,pcSvc==null?"jamais vu en ligne":up?`actif · dernier signal ${agoTxt(age)}`:`ne répond pas · dernier signal ${agoTxt(age)} (${fmtDT(new Date(pcSvc.alive))})`)+tasksHtml("trajetve")+
+    row("trajetve_voiture.py",d1.className,pcSvc==null?"jamais vu en ligne":up?`actif · dernier signal ${agoTxt(age)}${pcSvc.version?` · version ${esc(pcSvc.version)} · PID ${esc(pcSvc.pid)}<br><span class="note">${esc(pcSvc.path||"")}</span>`:" · version antérieure à 2.37.1"}`:`ne répond pas · dernier signal ${agoTxt(age)} (${fmtDT(new Date(pcSvc.alive))})`)+tasksHtml("trajetve")+
     row("psa_car_controller",d2.className,!up?"inconnu (trajetve_voiture.py ne répond pas)":pcSvc.psacc?"actif (répond sur le PC)":"arrêté ou bloqué : il ne répond pas sur le PC")+tasksHtml("psacc")+
     row("Mise en veille du PC","",sleepTxt)+
     (pcTasks?`<p class="note">Tâches planifiées relevées ${agoTxt(Date.now()-pcTasks.at)}.</p>`:"");
@@ -3495,7 +3496,11 @@ var xTr=v=>{ if(v==null) return "—"; const t=X_TR[xKey(v)]; return t||String(v
 var xDur=v=>{ const m=String(v||"").match(/^P?T?(?:(\d+)H)?(?:(\d+)M)?/i); return m&&(m[1]||m[2])?`${(m[1]||"0").padStart(2,"0")}:${(m[2]||"0").padStart(2,"0")}`:String(v); };
 function extraHtml(r){
   const raw=r.raw;
-  if(!raw||typeof raw!=="object") return `<p class="note">Ces données arrivent avec la nouvelle version de trajetve_voiture.py : mets-la à jour sur le PC, puis touche « Actualiser ».</p>`;
+  if(!raw||typeof raw!=="object"){
+    if(r.stored || !r.readAt) return `<p class="note">Touche « Actualiser » pour lire ces données sur la voiture.</p>`;
+    return `<p class="note">${r._srv?`La lecture a été faite par trajetve_voiture.py version ${esc(r._srv.v)} (PID ${esc(r._srv.pid)}), qui n'a pas renvoyé ces données.`
+      :`<b>La lecture a été faite par une ancienne version de trajetve_voiture.py</b> (antérieure à la 2.37.1). Une ancienne copie tourne encore sur le PC, peut-être en plus de la nouvelle : ferme tous les processus python et pythonw dans le Gestionnaire des tâches (onglet Détails), puis relance la tâche.`}</p>`;
+  }
   const box=(t,body)=>`<div class="xd-box"><h4>${t}</h4>${body}</div>`, B=[];
   // portes
   const doors=xFind(raw,"doors_state")||xFind(raw,"doorsState");
