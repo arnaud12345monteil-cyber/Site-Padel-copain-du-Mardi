@@ -90,6 +90,16 @@ header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,
 .pc-row b{min-width:170px}
 .pc-task{margin:2px 0 10px 18px;padding:8px 10px;border-left:3px solid var(--line);background:var(--field);border-radius:0 6px 6px 0;font-size:.86rem}
 .pc-task ul{margin:4px 0;padding-left:18px}
+.xd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.xd-box{border:1px solid var(--line);border-radius:7px;background:var(--field);padding:8px 10px;font-size:.84rem;min-width:0}
+.xd-box h4{margin:0 0 4px;font:600 .82rem var(--f-display);letter-spacing:.02em;color:var(--muted);text-transform:uppercase}
+.xd-box ul{margin:0;padding-left:16px}
+.xd-ok{color:var(--charge);font-weight:600} .xd-bad{color:var(--bad);font-weight:600} .xd-warn{color:var(--warn);font-weight:600}
+.xd-raw{font:.74rem/1.45 var(--f-mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto;background:var(--field);border:1px solid var(--line);border-radius:7px;padding:8px;margin:6px 0 0}
+.ct-bar{display:flex;align-items:center;gap:8px;font-size:.84rem;margin:3px 0}
+.ct-bar span:first-child{width:92px;flex:0 0 auto;font-family:var(--f-mono);font-size:.78rem}
+.ct-bar i{display:block;height:12px;border-radius:3px;background:var(--accent);min-width:2px}
+.ct-bar b{font-family:var(--f-mono);font-size:.8rem;white-space:nowrap}
 .pc-warn{margin:6px 0 0;padding:6px 8px;border-radius:6px;font-size:.8rem;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--ink)}
 .pc-warn.bad{background:color-mix(in srgb,var(--bad) 14%,transparent)}
 .mini.danger{color:var(--bad);border-color:var(--bad)}
@@ -815,6 +825,9 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.37", d:"11/11/2026", c:[
+    "Ma voiture → Maintenant : partie « Autres données de la voiture » (portes et verrouillage, alertes, entretien, préconditionnement et ses programmes, recharge et départ différé, mouvement et position, divers) et toutes les données brutes reçues",
+    "Ma voiture : consommation réelle selon la température extérieure, calculée sur tes trajets des 6 derniers mois"]},
   {v:"2.36", d:"11/11/2026", c:["Ma voiture → Historique : courbes sur plusieurs jours (3, 7, 14, 30, 90 jours ou dates choisies) pour la batterie, l'autonomie, la température, la batterie 12 V, le compteur ou la santé, avec mini, maxi, moyenne et évolution ; visibles même sans trajet"]},
   {v:"2.35", d:"06/11/2026", c:[
     "Programmes du PC : journal des démarrages des programmes, des mises en veille et réveils du PC (avec la cause du réveil), des démarrages de Windows et des déclenchements des tâches ; filtre, export CSV ou JSON, effacement",
@@ -2542,12 +2555,15 @@ function carRender(r){
   }
   const noHist='<p class="note">Pas encore d\'historique : il faut lancer psa_car_controller avec l\'option -r (enregistrement). Les données s\'accumulent ensuite au fil des trajets et des recharges.</p>';
   const trips=(r.trips||[]).slice().sort((a,b)=>(+carDate(b.start_at)||0)-(+carDate(a.start_at)||0));
+  html+=csec("autres","Autres données de la voiture",extraHtml(r));
+  html+=csec("ctemp","Consommation selon la température",`<div id="cTemp">${cTempHtml||'<p class="note">Calcul à partir de tes trajets enregistrés…</p>'}</div>`);
   html+=csec("trajets","Derniers trajets",(trips.length?`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th><th>Dénivelé</th></tr></thead><tbody>${trips.slice(0,30).map(t=>`<tr><td>${fmtDT(carDate(t.start_at))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td><td>${t.altitude_diff!=null?Math.round(t.altitude_diff)+" m":"—"}</td></tr>`).join("")}</tbody></table></div>`
     +(()=>{ const T=trips.filter(t=>t.distance>0 && t.consumption!=null); if(!T.length) return ""; const d=T.reduce((a,t)=>a+t.distance,0), e=T.reduce((a,t)=>a+t.consumption,0); return `<p class="note">Consommation réelle moyenne sur ${T.length} trajets : <b>${n1(e/d*100)} kWh/100 km</b> (${n1(d)} km). Compare-la à tes valeurs à 90 et 130 km/h dans Voiture.</p>`; })():noHist));
   const ch=(r.chargings||[]).slice().sort((a,b)=>(+carDate(b.start_at)||0)-(+carDate(a.start_at)||0));
   html+=csec("recharges","Dernières recharges",(ch.length?`<div class="car-tbl"><table><thead><tr><th>Début</th><th>Durée</th><th>Batterie</th><th>Énergie</th><th>Coût</th></tr></thead><tbody>${ch.slice(0,30).map(c=>`<tr><td>${fmtDT(carDate(c.start_at))}</td><td>${c.duration_min!=null?fmtH(c.duration_min*60):"—"}</td><td>${c.start_level!=null?c.start_level+" → "+(c.end_level??"…")+" %":"—"}</td><td>${c.kw!=null?n1(c.kw)+" kWh":"—"}</td><td>${c.price!=null?fmtEur(+c.price):"—"}</td></tr>`).join("")}</tbody></table></div>`:noHist));
   $("carBody").innerHTML=html;
   if(!r._merged) carMergeHist(r);
+  if(!cTempHtml) loadConsoTemp();
   $("carOnMap")?.addEventListener("click",()=>{ if(!map) return; setCarMarker(r); map.setView([r.lat,r.lon],14); carMarker?.openTooltip(); $("map").scrollIntoView({behavior:"smooth",block:"center"}); });
 }
 // ---------- Historique de la voiture (lu directement dans Firebase, PC allumé ou non) ----------
@@ -3464,6 +3480,102 @@ function hmDraw(){
   const st=[[`${n1(Math.min(...rv))} – ${n1(Math.max(...rv))} ${unit}`,"mini – maxi"],[`${n1(mean)} ${unit}`,"moyenne"],
     [`${n1(first.v)} → ${n1(last.v)} ${unit}`,key==="km"?`soit ${n1(last.v-first.v)} km`:"début → fin"],[`${raw.length}`,`relevés · ${days} jour${days>1?"s":""} avec données sur ${nDays}`]];
   $("hmStats").innerHTML=st.map(([b,l])=>`<span><b>${b}</b> ${l}</span>`).join("")+`<span>Pointillés : plus de 6 h sans relevé (voiture endormie ou PC éteint)</span>`;
+}
+
+// ---------- Ma voiture : autres données brutes de la voiture (portes, alertes, entretien, programmes, mouvement) ----------
+// Les noms varient selon le modèle et la version de l'API : recherche tolérante (camelCase ou snake_case).
+var xKey=k=>String(k).toLowerCase().replace(/[_\-\s]/g,"");
+function xPick(o,...names){ if(!o||typeof o!=="object") return undefined; const want=names.map(xKey); for(const k of Object.keys(o)) if(want.includes(xKey(k))) return o[k]; return undefined; }
+function xFind(o,name,depth=0){ if(!o||typeof o!=="object"||depth>4) return undefined; const v=xPick(o,name); if(v!==undefined) return v; for(const k of Object.keys(o)){ const r=xFind(o[k],name,depth+1); if(r!==undefined) return r; } return undefined; }
+var X_TR={locked:"verrouillée",unlocked:"déverrouillée",superlocked:"super-verrouillée",closed:"fermée",open:"ouverte",opened:"ouverte",
+  driver:"conducteur",passenger:"passager",rearleft:"arrière gauche",rearright:"arrière droite",trunk:"coffre",rearwindow:"lunette arrière",roofwindow:"toit ouvrant",hood:"capot",fuelflap:"trappe",
+  enabled:"activé",disabled:"désactivé",true:"oui",false:"non",daily:"tous les jours",inprogress:"en cours",finished:"terminé",stopped:"arrêté",failure:"erreur",
+  immediate:"immédiate",none:"aucune",electric:"électrique",estimated:"estimée",delayed:"différée",no:"aucune",start:"mis",stop:"coupé",free:"libre",private:"privé"};
+var xTr=v=>{ if(v==null) return "—"; const t=X_TR[xKey(v)]; return t||String(v); };
+var xDur=v=>{ const m=String(v||"").match(/^P?T?(?:(\d+)H)?(?:(\d+)M)?/i); return m&&(m[1]||m[2])?`${(m[1]||"0").padStart(2,"0")}:${(m[2]||"0").padStart(2,"0")}`:String(v); };
+function extraHtml(r){
+  const raw=r.raw;
+  if(!raw||typeof raw!=="object") return `<p class="note">Ces données arrivent avec la nouvelle version de trajetve_voiture.py : mets-la à jour sur le PC, puis touche « Actualiser ».</p>`;
+  const box=(t,body)=>`<div class="xd-box"><h4>${t}</h4>${body}</div>`, B=[];
+  // portes
+  const doors=xFind(raw,"doors_state")||xFind(raw,"doorsState");
+  if(doors){
+    const lk=xPick(doors,"locked_state","lockedState"), op=xPick(doors,"opening");
+    const lkTxt=(Array.isArray(lk)?lk:[lk]).filter(Boolean).map(xTr).join(", ")||"—";
+    const opens=(Array.isArray(op)?op:[]).filter(o=>!/closed/i.test(xPick(o,"state")||""));
+    B.push(box("Portes",`<p>${/^verrouill|super/.test(lkTxt)?`<span class="xd-ok">${lkTxt}</span>`:`<span class="xd-bad">${lkTxt}</span>`}</p>`
+      +(Array.isArray(op)?(opens.length?`<p class="xd-bad">Ouvert : ${opens.map(o=>xTr(xPick(o,"identifier","id"))).join(", ")}</p>`:`<p class="xd-ok">Tout est fermé</p>`):"")));
+  }
+  // alertes
+  const al=xFind(raw,"alerts");
+  if(al!==undefined){
+    const L=Array.isArray(al)?al:(al&&typeof al==="object"?Object.values(al):[]);
+    B.push(box("Alertes",L.length?`<ul>${L.map(a=>`<li class="xd-warn">${esc(typeof a==="object"?[xPick(a,"type","title","code"),xPick(a,"description","message")].filter(Boolean).join(" · ")||JSON.stringify(a):a)}</li>`).join("")}</ul>`:`<p class="xd-ok">Aucune alerte</p>`));
+  }
+  // entretien
+  const mt=xFind(raw,"maintenance")||xFind(raw,"service");
+  if(mt&&typeof mt==="object"){
+    const d=xPick(mt,"days_before_maintenance","daysBeforeMaintenance"), km=xPick(mt,"mileage_before_maintenance","mileageBeforeMaintenance");
+    const rows=Object.entries(mt).filter(([k,v])=>v!=null&&typeof v!=="object"&&!/link/i.test(k)).map(([k,v])=>`<li>${esc(k.replace(/_/g," "))} : ${esc(/at$/i.test(k)&&carDate(v)?fmtDT(carDate(v)):xTr(v))}</li>`);
+    B.push(box("Entretien",(d!=null||km!=null?`<p><b>${d!=null?d+" jours":""}${d!=null&&km!=null?" · ":""}${km!=null?Math.round(km).toLocaleString("fr-FR")+" km":""}</b> avant la révision</p>`:"")+(rows.length?`<ul>${rows.join("")}</ul>`:"")));
+  }
+  // préconditionnement et programmes
+  const pc=xFind(raw,"preconditionning")||xFind(raw,"preconditioning");
+  if(pc){
+    const ac=xPick(pc,"air_conditioning","airConditioning")||pc, st=xPick(ac,"status"), progs=xPick(ac,"programs")||[];
+    const pl=(Array.isArray(progs)?progs:[]).map(p=>{ const en=xPick(p,"enabled"), rec=xPick(p,"recurrence"), occ=xPick(p,"occurence","occurrence"), start=xPick(p,"start"), slot=xPick(p,"slot");
+      const days=occ&&typeof occ==="object"?(xPick(occ,"day")||[]):[]; return `<li>${slot!=null?"n°"+slot+" · ":""}${start?xDur(start):"?"}${rec?" · "+xTr(rec):""}${Array.isArray(days)&&days.length?" ("+days.join(" ")+")":""} · ${en?'<span class="xd-ok">activé</span>':"désactivé"}</li>`; });
+    B.push(box("Préconditionnement",`<p>État : <b>${xTr(st)}</b></p>${pl.length?`<ul>${pl.join("")}</ul>`:'<p class="note">Aucun programme enregistré</p>'}`));
+  }
+  // recharge différée
+  const en=xFind(raw,"energy"), elec=Array.isArray(en)?en.find(e=>/elec/i.test(xPick(e,"type")||""))||en[0]:en, ch=elec&&xPick(elec,"charging");
+  if(ch){
+    const mode=xPick(ch,"charging_mode","chargingMode"), next=xPick(ch,"next_delayed_time","nextDelayedTime"), rate=xPick(ch,"charging_rate","chargingRate"), rem=xPick(ch,"remaining_time","remainingTime"), pl=xPick(ch,"plugged");
+    B.push(box("Recharge",`<ul><li>Câble : <b>${pl==null?"—":pl?"branché":"débranché"}</b></li><li>Mode : ${xTr(mode)}</li>${next?`<li>Départ différé : ${esc(xDur(next))}</li>`:""}${rate!=null?`<li>Vitesse : ${rate} km d'autonomie/h</li>`:""}${rem&&!/^PT0+S$/i.test(rem)?`<li>Temps restant : ${esc(xDur(rem))}</li>`:""}</ul>`));
+  }
+  // mouvement et position
+  const kin=xFind(raw,"kinetic"), lp=xFind(raw,"last_position")||xFind(raw,"lastPosition");
+  if(kin||lp){
+    const pr=lp&&xPick(lp,"properties"), co=lp&&xFind(lp,"coordinates");
+    const L=[];
+    if(kin){ const mv=xPick(kin,"moving"), sp=xPick(kin,"speed"), ac=xPick(kin,"acceleration"), pace=xPick(kin,"pace"); L.push(`<li>${mv?"<b>en mouvement</b>":"à l'arrêt"}${sp!=null?" · "+Math.round(sp)+" km/h":""}${ac!=null?" · accélération "+ac:""}${pace!=null?" · allure "+pace:""}</li>`); }
+    if(pr){ const hd=xPick(pr,"heading"), sq=xPick(pr,"signal_quality","signalQuality"), ty=xPick(pr,"type"), up=xPick(pr,"updated_at","updatedAt"); L.push(`<li>${hd!=null?"Cap "+Math.round(hd)+"°":""}${sq!=null?" · signal "+sq+"/5":""}${ty?" · "+esc(ty):""}</li>`); if(up&&carDate(up)) L.push(`<li>Position du ${fmtDT(carDate(up))}</li>`); }
+    if(Array.isArray(co)&&co[2]!=null) L.push(`<li>Altitude ${Math.round(co[2])} m</li>`);
+    B.push(box("Mouvement et position",`<ul>${L.join("")}</ul>`));
+  }
+  // divers
+  const misc=[["Contact",xFind(xFind(raw,"ignition"),"type")],["Jour / nuit",(()=>{ const d=xFind(xFind(raw,"luminosity"),"day"); return d==null?null:d?"jour":"nuit"; })()],["Confidentialité",xFind(xFind(raw,"privacy"),"state")],["Compteur (relevé horodaté)",(()=>{ const o=xFind(raw,"timed_odometer")||xFind(raw,"timedOdometer"); const m=o&&xPick(o,"mileage"); return m!=null?Math.round(m).toLocaleString("fr-FR")+" km":null; })()]].filter(([,v])=>v!=null);
+  if(misc.length) B.push(box("Divers",`<ul>${misc.map(([k,v])=>`<li>${k} : ${esc(xTr(v))}</li>`).join("")}</ul>`));
+  const known=B.length;
+  return (known?`<div class="xd-grid">${B.join("")}</div>`:`<p class="note">Aucune de ces données n'est fournie pour ta voiture.</p>`)
+    +`<details style="margin-top:8px"><summary class="note">Toutes les données brutes reçues (JSON)</summary><pre class="xd-raw">${esc(JSON.stringify(raw,null,1))}</pre></details>`;
+}
+
+// ---------- Consommation réelle selon la température (trajets enregistrés + température des relevés) ----------
+var cTempHtml="";
+async function loadConsoTemp(){
+  if(!fb || !fb.auth.currentUser) return;
+  try{
+    const since=new Date(Date.now()-180*86400000), sinceIso=isoDay(since), id=firebase.firestore.FieldPath.documentId();
+    const [tr,jr]=await Promise.all([carColl("trajets").where("jour",">=",sinceIso).get(), carColl("jours").where(id,">=",sinceIso).get()]);
+    const temps=[]; jr.docs.forEach(d=>{ const x=d.data(); [...(x.points||[]),...(x.etats||[])].forEach(p=>{ const t=+carDate(p.t); if(t&&p.temp!=null) temps.push([t,+p.temp]); }); });
+    temps.sort((a,b)=>a[0]-b[0]);
+    const tempAt=(a,b)=>{ const v=temps.filter(([t])=>t>=a-1800000&&t<=b+1800000).map(x=>x[1]); return v.length?v.reduce((s,x)=>s+x,0)/v.length:null; };
+    const BINS=[[-99,0,"< 0 °C"],[0,5,"0 à 5 °C"],[5,10,"5 à 10 °C"],[10,15,"10 à 15 °C"],[15,20,"15 à 20 °C"],[20,25,"20 à 25 °C"],[25,99,"> 25 °C"]];
+    const acc=BINS.map(()=>({km:0,kwh:0,n:0}));
+    let used=0;
+    tr.docs.forEach(d=>{ const t=d.data(), a=+carDate(t.t); if(!a||!(t.distance>=3)||t.consumption==null) return;
+      const T=tempAt(a,a+(t.duration||0)*1000); if(T==null) return;
+      const i=BINS.findIndex(([lo,hi])=>T>=lo&&T<hi); if(i<0) return; acc[i].km+=t.distance; acc[i].kwh+=t.consumption; acc[i].n++; used++; });
+    const rows=BINS.map((b,i)=>({l:b[2],...acc[i],c:acc[i].km>0?acc[i].kwh/acc[i].km*100:null})).filter(x=>x.n);
+    if(!rows.length){ cTempHtml=`<p class="note">Pas encore assez de trajets avec une température relevée (trajets de 3 km et plus, sur les 6 derniers mois). La courbe se remplira au fil des semaines.</p>`; }
+    else{
+      const mx=Math.max(...rows.map(x=>x.c)), ref=rows.filter(x=>x.km>=20).reduce((m,x)=>x.c<m?x.c:m,Infinity);
+      cTempHtml=rows.map(x=>`<div class="ct-bar"><span>${x.l}</span><i style="width:${Math.round(x.c/mx*60)}%"></i><b>${n1(x.c)} kWh/100</b><span class="note">${x.n} trajet${x.n>1?"s":""} · ${Math.round(x.km)} km${isFinite(ref)&&x.km>=20&&x.c>ref*1.02?` · +${Math.round((x.c/ref-1)*100)} %`:""}</span></div>`).join("")
+        +`<p class="note">${used} trajets des 6 derniers mois, température moyenne relevée pendant chaque trajet. Les % comparent à la tranche la plus économe (au moins 20 km). C'est la consommation réelle, vitesses et dénivelés mélangés : à comparer avec les coefficients de saison du calcul (mi-saison +10 %, hiver +25 %).</p>`;
+    }
+  }catch(e){ cTempHtml=`<p class="note">Calcul impossible (${esc(e.code||e.message)}).</p>`; }
+  if($("cTemp")) $("cTemp").innerHTML=cTempHtml;
 }
 </script>
 </body>
