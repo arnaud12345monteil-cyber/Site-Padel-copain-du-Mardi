@@ -228,6 +228,11 @@ select{min-width:0;max-width:100%}
 .hist-nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .hist-nav input[type=date]{width:auto;flex:0 1 170px}
 .hist-nav select{width:auto;margin-left:auto}
+.hm-ctl select{margin-left:0}
+.hm-ctl #hmCustom{display:inline-flex;gap:4px;align-items:center}
+.hm-ctl #hmCustom[hidden]{display:none}
+.hm-stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted);margin-top:4px}
+.hm-stats b{color:var(--ink);font-family:var(--f-mono)}
 .car-tbl tr[data-day]{cursor:pointer}
 .car-tbl tr[data-day]:hover td{background:var(--field)}
 .qhead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
@@ -672,6 +677,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
           <select id="hRange" aria-label="Période du récapitulatif"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option><option value="365">1 an</option><option value="730">2 ans</option><option value="36500">tout</option></select>
         </div>
         <p class="note" id="hMsg"></p>
+        <div id="hMulti"></div>
         <div id="hDayBody"></div>
         <div id="hSum"></div>
       </div>
@@ -809,6 +815,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.36", d:"11/11/2026", c:["Ma voiture → Historique : courbes sur plusieurs jours (3, 7, 14, 30, 90 jours ou dates choisies) pour la batterie, l'autonomie, la température, la batterie 12 V, le compteur ou la santé, avec mini, maxi, moyenne et évolution ; visibles même sans trajet"]},
   {v:"2.35", d:"06/11/2026", c:[
     "Programmes du PC : journal des démarrages des programmes, des mises en veille et réveils du PC (avec la cause du réveil), des démarrages de Windows et des déclenchements des tâches ; filtre, export CSV ou JSON, effacement",
     "Tâches planifiées : « refusée par Windows » sur une tâche déjà en cours est affiché comme un déclenchement ignoré (normal) ; alertes si Windows doit arrêter le programme au bout d'un délai, ou si la tâche empêche la mise en veille"]},
@@ -2634,7 +2641,7 @@ async function loadHistSum(){
     box.innerHTML=csec("hrecap",n>=36500?"Récapitulatif de tout l'historique":`Récapitulatif sur ${n} jours`,h);
   }catch(e){ box.innerHTML=`<p class="note status err">Récapitulatif impossible (${e.code||e.message}).</p>`; }
 }
-function showHist(){ if(!$("hDay").value) $("hDay").value=isoDay(new Date()); loadHistDay(); loadHistSum(); }
+function showHist(){ if(!$("hDay").value) $("hDay").value=isoDay(new Date()); hmShell(); loadHMulti(); loadHistDay(); loadHistSum(); }
 document.querySelectorAll('input[name="cartab"]').forEach(r=>r.addEventListener("change",()=>{
   const h=$("ctHist").checked; $("carHist").hidden=!h; $("carBody").hidden=h; $("carRefresh").hidden=h; $("carAge").hidden=h; if(h) showHist(); }));
 const shiftDay=k=>{ const d=new Date(($("hDay").value||isoDay(new Date()))+"T12:00"); d.setDate(d.getDate()+k); $("hDay").value=isoDay(d); loadHistDay(); };
@@ -3388,6 +3395,76 @@ $("pcJClear").addEventListener("click",async()=>{
     setTimeout(pcJRefresh,6000);
   }catch(e){ $("pcMsg").textContent=`Effacement impossible (${e.code||e.message}).`; }
 });
+
+// ---------- Historique : courbes sur plusieurs jours (état de la voiture, même sans trajet) ----------
+let hmData=null, hmMetric="soc", hmSpan="7", hmFrom="", hmTo="";
+try{ const o=JSON.parse(localStorage.getItem("trajetve-hmulti")||"{}"); hmMetric=METRICS[o.m]?o.m:hmMetric; hmSpan=o.s||hmSpan; hmFrom=o.f||""; hmTo=o.t||""; }catch(e){}
+const hmSave=()=>{ try{ localStorage.setItem("trajetve-hmulti",JSON.stringify({m:hmMetric,s:hmSpan,f:hmFrom,t:hmTo})); }catch(e){} };
+function hmRange(){
+  if(hmSpan==="custom" && hmFrom && hmTo) return hmFrom<=hmTo?[hmFrom,hmTo]:[hmTo,hmFrom];
+  const to=new Date(), from=new Date(); from.setDate(from.getDate()-(+hmSpan||7)+1);
+  return [isoDay(from),isoDay(to)];
+}
+function hmShell(){
+  const box=$("hMulti"); if(box.dataset.ready) return; box.dataset.ready="1";
+  const [f,t]=hmRange();
+  box.innerHTML=csec("hmulti","Courbes sur plusieurs jours",`<div class="hist-nav hm-ctl">
+      <select id="hmMetric" aria-label="Donnée affichée">${Object.entries(METRICS).map(([k,[l]])=>`<option value="${k}" ${k===hmMetric?"selected":""}>${l}</option>`).join("")}</select>
+      <select id="hmSpan" aria-label="Période">${[["3","3 jours"],["7","7 jours"],["14","14 jours"],["30","30 jours"],["90","90 jours"],["custom","Période choisie"]].map(([v,l])=>`<option value="${v}" ${v===hmSpan?"selected":""}>${l}</option>`).join("")}</select>
+      <span id="hmCustom" ${hmSpan==="custom"?"":"hidden"}><input type="date" id="hmFrom" value="${hmFrom||f}" aria-label="Du"> → <input type="date" id="hmTo" value="${hmTo||t}" aria-label="Au"></span>
+    </div><div id="hmChart"><p class="note">Chargement…</p></div><div class="hm-stats" id="hmStats"></div>`);
+  box.addEventListener("change",e=>{
+    const id=e.target.id;
+    if(id==="hmMetric"){ hmMetric=e.target.value; hmSave(); hmDraw(); return; }
+    if(id==="hmSpan"){ hmSpan=e.target.value; $("hmCustom").hidden=hmSpan!=="custom"; if(hmSpan==="custom"){ const [a,b]=hmRange(); if(!hmFrom){ hmFrom=$("hmFrom").value||a; } if(!hmTo){ hmTo=$("hmTo").value||b; } } hmSave(); loadHMulti(); return; }
+    if(id==="hmFrom"||id==="hmTo"){ hmFrom=$("hmFrom").value; hmTo=$("hmTo").value; hmSave(); loadHMulti(); }
+  });
+}
+async function loadHMulti(){
+  if(!fb || !fb.auth.currentUser || !$("hmChart")) return;
+  const [from,to]=hmRange();
+  $("hmChart").innerHTML='<p class="note">Chargement…</p>'; $("hmStats").innerHTML="";
+  try{
+    const id=firebase.firestore.FieldPath.documentId();
+    const sn=await carColl("jours").where(id,">=",from).where(id,"<=",to).get();
+    const pts=[], et=[];
+    sn.docs.forEach(d=>{ const x=d.data(); (x.points||[]).forEach(p=>pts.push(p)); (x.etats||[]).forEach(e=>et.push(e)); });
+    hmData={pts,et,from,to,days:sn.docs.length};
+    hmDraw();
+  }catch(e){ $("hmChart").innerHTML=`<p class="note">Lecture impossible (${esc(e.code||e.message)}).</p>`; }
+}
+function hmDraw(){
+  if(!hmData) return;
+  const {pts,et,from,to,days}=hmData, key=hmMetric, [label,unit,fmin,fmax]=METRICS[key]||["",""];
+  const src=key==="soc"||key==="temp"||key==="km" ? [...pts,...et] : et;
+  let P=src.map(x=>({d:+carDate(x.t),v:x[key]})).filter(x=>x.d&&x.v!=null&&isFinite(+x.v)).map(x=>({d:x.d,v:+x.v})).sort((a,b)=>a.d-b.d);
+  const t0=+new Date(from+"T00:00"), t1=+new Date(to+"T00:00")+86400000, nDays=Math.round((t1-t0)/86400000);
+  P=P.filter(x=>x.d>=t0&&x.d<t1);
+  if(P.length<2){ $("hmChart").innerHTML=`<p class="note">Pas assez de relevés « ${esc(label)} » entre le ${new Date(t0).toLocaleDateString("fr-FR")} et le ${new Date(t1-1).toLocaleDateString("fr-FR")}.</p>`; $("hmStats").innerHTML=""; return; }
+  // réduction à ~1200 points (moyenne par tranche) pour garder une courbe légère sur 90 jours
+  const raw=P;
+  if(P.length>1200){ const step=(t1-t0)/1200, B=new Map(); P.forEach(x=>{ const k=Math.floor((x.d-t0)/step); const b=B.get(k)||{d:0,v:0,n:0}; b.d+=x.d; b.v+=x.v; b.n++; B.set(k,b); }); P=[...B.values()].map(b=>({d:b.d/b.n,v:b.v/b.n})).sort((a,b)=>a.d-b.d); }
+  const W=900,H=220,ml=46,mr=12,mt=12,mb=28, vs=P.map(x=>x.v);
+  let lo=fmin??Math.floor(Math.min(...vs)), hi=fmax??Math.ceil(Math.max(...vs)); if(hi-lo<2){ lo-=1; hi+=1; }
+  const X=d=>ml+(d-t0)/(t1-t0)*(W-ml-mr), Y=v=>mt+(1-(v-lo)/(hi-lo))*(H-mt-mb);
+  let g="";
+  for(const v of [lo,(lo+hi)/2,hi]) g+=`<line x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${ml-5}" y="${Y(v)+4}" text-anchor="end">${Math.round(v)}${unit==="%"?"%":""}</text>`;
+  const every=nDays<=10?1:nDays<=31?Math.ceil(nDays/10):Math.ceil(nDays/8);
+  for(let k=0;k<=nDays;k++){ const t=t0+k*86400000, x=X(t);
+    g+=`<line x1="${x}" x2="${x}" y1="${mt}" y2="${H-mb}" stroke="var(--line)" stroke-dasharray="${k%every?"1 5":"0"}" opacity="${k%every?.6:1}"/>`;
+    if(k<nDays && k%every===0) g+=`<text x="${X(t+43200000)}" y="${H-8}" text-anchor="middle">${new Date(t).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</text>`; }
+  // trou de plus de 6 h sans relevé (voiture endormie, PC éteint) : tracé en pointillés
+  const GAP=6*3600000; let seg=[], solid="", dashed="";
+  P.forEach((x,i)=>{ if(i && x.d-P[i-1].d>GAP){ dashed+=`M${X(P[i-1].d).toFixed(1)},${Y(P[i-1].v).toFixed(1)}L${X(x.d).toFixed(1)},${Y(x.v).toFixed(1)}`; if(seg.length) solid+="M"+seg.join("L"); seg=[]; } seg.push(`${X(x.d).toFixed(1)},${Y(x.v).toFixed(1)}`); });
+  if(seg.length) solid+="M"+seg.join("L");
+  g+=`<path d="${dashed}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 5" opacity=".7"/><path d="${solid}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  if(P.length<=400) g+=P.map(x=>`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="2.2" fill="var(--accent)"><title>${new Date(x.d).toLocaleString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} · ${n1(x.v)} ${unit}</title></circle>`).join("");
+  $("hmChart").innerHTML=`<div class="chart-box"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:520px">${g}</svg></div>`;
+  const rv=raw.map(x=>x.v), first=raw[0], last=raw[raw.length-1], mean=rv.reduce((a,v)=>a+v,0)/rv.length;
+  const st=[[`${n1(Math.min(...rv))} – ${n1(Math.max(...rv))} ${unit}`,"mini – maxi"],[`${n1(mean)} ${unit}`,"moyenne"],
+    [`${n1(first.v)} → ${n1(last.v)} ${unit}`,key==="km"?`soit ${n1(last.v-first.v)} km`:"début → fin"],[`${raw.length}`,`relevés · ${days} jour${days>1?"s":""} avec données sur ${nDays}`]];
+  $("hmStats").innerHTML=st.map(([b,l])=>`<span><b>${b}</b> ${l}</span>`).join("")+`<span>Pointillés : plus de 6 h sans relevé (voiture endormie ou PC éteint)</span>`;
+}
 </script>
 </body>
 </html>
