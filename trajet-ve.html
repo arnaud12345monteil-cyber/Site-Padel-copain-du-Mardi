@@ -825,6 +825,10 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.38", d:"11/11/2026", c:[
+    "Historique de la voiture : verrouillage, ouvrants ouverts, alertes, entretien (jours et km), programmes de préconditionnement, signal GPS et altitude enregistrés avec chaque état (nécessite trajetve_voiture.py 2.38)",
+    "Tableau des états du jour : colonnes Portes, Alertes et Entretien ; courbes sur plusieurs jours : verrouillage, alertes, entretien et signal GPS",
+    "Le PC enregistre aussi un nouvel état quand les portes, les alertes ou l'entretien changent, même sans nouvelle donnée de batterie"]},
   {v:"2.37.1", d:"11/11/2026", c:["Programmes du PC : version, PID et emplacement de trajetve_voiture.py affichés ; Autres données : indique si la lecture vient d'une ancienne version du script restée en marche"]},
   {v:"2.37", d:"11/11/2026", c:[
     "Ma voiture → Maintenant : partie « Autres données de la voiture » (portes et verrouillage, alertes, entretien, préconditionnement et ses programmes, recharge et départ différé, mouvement et position, divers) et toutes les données brutes reçues",
@@ -2572,7 +2576,8 @@ const isoDay=d=>{ const z=n=>String(n).padStart(2,"0"); return `${d.getFullYear(
 let histDayData=null, histMetric="soc";
 try{ const m=localStorage.getItem("trajetve-courbe"); if(m) histMetric=m; }catch(e){}
 function carColl(n){ return fb.db.collection("trajetve_car").doc(fb.auth.currentUser.uid).collection(n); }
-const METRICS={soc:["Batterie","%",0,100],range:["Autonomie","km"],temp:["Température","°C"],v12:["Batterie 12 V",""],km:["Compteur","km"],sante:["Santé batterie","%"]};
+const METRICS={soc:["Batterie","%",0,100],range:["Autonomie","km"],temp:["Température","°C"],v12:["Batterie 12 V",""],km:["Compteur","km"],sante:["Santé batterie","%"],
+  lockOk:["Verrouillée (1 = oui, 0 = non)","",0,1],alerts:["Alertes actives",""],maintDays:["Jours avant entretien","j"],maintKm:["Km avant entretien","km"],gps:["Signal GPS (sur 5)","",0,5]};
 function socChart(pts,etats,key="soc"){
   const [,unit,fmin,fmax]=METRICS[key]||["",""];
   const src=key==="soc"||key==="temp"||key==="km" ? [...(pts||[]),...(etats||[])] : (etats||[]);
@@ -2631,7 +2636,7 @@ async function loadHistDay(){
     if(pts.some(x=>x.lat!=null)) h+=`<p class="note">${pts.length} relevé${pts.length>1?"s":""} · <button type="button" class="swap" id="hOnMap">voir les positions de la journée sur la carte</button></p>`;
     if(et.length){
       const chT={Disconnected:"débranchée",InProgress:"en charge",Finished:"terminée",Stopped:"arrêtée",Failure:"erreur"};
-      h+=csec("hetats",`États de la voiture (${et.length})`,`<div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate&&(e.charge||e.chargeStatus)==="InProgress"?" · +"+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`);
+      h+=csec("hetats",`États de la voiture (${et.length})`,`<div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Portes</th><th>Alertes</th><th>Entretien</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate&&(e.charge||e.chargeStatus)==="InProgress"?" · +"+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.locked==null?"—":(e.lockOk?'<span class="xd-ok">verrouillée</span>':'<span class="xd-bad">'+esc(xTr(e.locked))+'</span>')+(e.opens?' · <span class="xd-bad">ouvert : '+esc(String(e.opens).split(",").map(xTr).join(", "))+'</span>':"")}</td><td>${e.alerts==null?"—":e.alerts?`<span class="xd-warn" title="${esc(e.alertsTxt||"")}">${e.alerts}</span>`:"0"}</td><td>${e.maintDays!=null||e.maintKm!=null?[e.maintDays!=null?e.maintDays+" j":"",e.maintKm!=null?Math.round(e.maintKm).toLocaleString("fr-FR")+" km":""].filter(Boolean).join(" · "):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`);
     }
     if(T.length) h+=csec("htrajets",`Trajets (${T.length})`,tripRows(T));
     if(C.length) h+=csec("hrecharges",`Recharges (${C.length})`,chargeRows(C));
