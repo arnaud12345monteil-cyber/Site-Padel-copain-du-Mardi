@@ -814,8 +814,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   <div class="bak-grid">
     <p class="note">Un seul fichier JSON avec tout : réglages, favoris, feuilles de route, tarifs, et, si tu es connecté, tout l'historique de la voiture (chaque jour, trajets, recharges, santé de la batterie, dernier état) et Mes recharges (recharges, abonnements, relevés du compteur), sans limite de durée.</p>
     <button type="button" class="mini primary" id="bakExport">Exporter toutes les données (.json)</button>
-    <label class="mini" style="cursor:pointer;text-align:center">Restaurer les réglages, favoris et feuilles de route depuis une sauvegarde…<input type="file" id="bakFile" accept=".json,application/json" hidden></label>
-    <p class="note">L'historique de la voiture n'est pas restauré : il est écrit uniquement par le PC (sécurité). Les recharges se restaurent depuis la page Mes recharges, qui accepte ce même fichier.</p>
+    <label class="mini" style="cursor:pointer;text-align:center">Restaurer depuis une sauvegarde (réglages, favoris, feuilles de route, Mes recharges)…<input type="file" id="bakFile" accept=".json,application/json" hidden></label>
+    <p class="note">C'est la même sauvegarde que celle de la page Mes recharges : un seul fichier pour tout. Les recharges sont ajoutées à celles déjà présentes, rien n'est effacé. L'historique de la voiture n'est pas restauré : il est écrit uniquement par le PC (sécurité). Les recharges se restaurent depuis la page Mes recharges, qui accepte ce même fichier.</p>
     <p class="note" id="bakMsg" role="status"></p>
   </div>
 </dialog>
@@ -825,6 +825,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.39", d:"13/11/2026", c:["Sauvegarde unique : la restauration remet aussi les recharges, abonnements et relevés de Mes recharges (ajout sans effacement) ; elle accepte aussi une ancienne sauvegarde de Mes recharges"]},
   {v:"2.38", d:"11/11/2026", c:[
     "Historique de la voiture : verrouillage, ouvrants ouverts, alertes, entretien (jours et km), programmes de préconditionnement, signal GPS et altitude enregistrés avec chaque état (nécessite trajetve_voiture.py 2.38)",
     "Tableau des états du jour : colonnes Portes, Alertes et Entretien ; courbes sur plusieurs jours : verrouillage, alertes, entretien et signal GPS",
@@ -3203,12 +3204,36 @@ $("bakExport").addEventListener("click",async()=>{
 $("bakFile").addEventListener("change",async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f) return;
   try{
-    const o=JSON.parse(await f.text()), st=o.etat||o;
-    if(!st || (!st.favs && !st.settings && !st.sheets)) throw new Error("ce fichier n'est pas une sauvegarde de Trajet VE");
-    applyState(st); save();
-    $("bakMsg").textContent=`Restauré : réglages, ${(st.favs?.trips||[]).length} trajets favoris, ${(st.sheets||[]).length} feuilles de route${o.exportedAt?` (sauvegarde du ${new Date(o.exportedAt).toLocaleDateString("fr-FR")})`:""}.`;
+    const o=JSON.parse(await f.text()), st=o.etat||(o.favs||o.settings&&!o.sessions||o.sheets?o:null);
+    const mr=o.mesRecharges||(o.app==="trajetve-recharges"||Array.isArray(o.sessions)?o:null);
+    if(!st && !mr) throw new Error("ce fichier n'est pas une sauvegarde de Trajet VE ni de Mes recharges");
+    const parts=[];
+    if(st){ applyState(st); save(); parts.push(`réglages, ${(st.favs?.trips||[]).length} trajets favoris, ${(st.sheets||[]).length} feuilles de route`); }
+    if(mr && Array.isArray(mr.sessions)){
+      $("bakMsg").textContent="Restauration des recharges…";
+      parts.push(await restoreRecharges(mr));
+    }
+    $("bakMsg").textContent=`Restauré : ${parts.join(" ; ")}${o.exportedAt?` (sauvegarde du ${new Date(o.exportedAt).toLocaleDateString("fr-FR")})`:""}.`;
   }catch(err){ $("bakMsg").textContent=`Restauration impossible : ${err.message}.`; }
 });
+
+// Recharges d'une sauvegarde → Mes recharges (Firebase) : ajoute celles qui manquent, sans rien effacer.
+// Réglages (prix maison, abonnements, relevés du compteur) : complétés, les valeurs actuelles sont gardées.
+async function restoreRecharges(mr){
+  const u=fb && fb.auth.currentUser;
+  if(!u) return "recharges non restaurées (connecte-toi d'abord)";
+  const ref=fb.db.collection("trajetve_recharges").doc(u.uid), col=ref.collection("sessions");
+  const have=new Set((await col.get()).docs.map(d=>d.id));
+  const add=(mr.sessions||[]).filter(x=>x && x.id && x.start && x.kwh>0 && !have.has(x.id));
+  for(let k=0;k<add.length;k+=400){ const b=fb.db.batch(); add.slice(k,k+400).forEach(x=>b.set(col.doc(x.id),x)); await b.commit(); }
+  if(mr.settings && typeof mr.settings==="object"){
+    const cur=(await ref.get()).data()?.settings||{}, bk=mr.settings, set={...bk,...cur};
+    const uni=(a,b,key)=>{ const m=new Map(); [...(b||[]),...(a||[])].forEach(x=>x&&m.set(x[key],x)); return [...m.values()]; };
+    set.subs=uni(cur.subs,bk.subs,"id"); set.odo=uni(cur.odo,bk.odo,"d");
+    await ref.set({settings:set, updatedAt:Date.now()},{merge:true});
+  }
+  return `${add.length} recharge${add.length>1?"s":""} ajoutée${add.length>1?"s":""} dans Mes recharges (${(mr.sessions||[]).length-add.length} déjà présente${(mr.sessions||[]).length-add.length>1?"s":""})`;
+}
 
 // ---------- En-tête figé : boutons Calculer / Effacer, hauteur pour la carte collante ----------
 $("topCalc").addEventListener("click",()=>$("f").requestSubmit());

@@ -249,7 +249,7 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
       <label>Nom du lieu « maison »<input id="homeName" placeholder="Maison"></label>
     </div>
     <div class="row">
-      <button type="button" class="mini" id="expBtn">Exporter une sauvegarde (.json)</button>
+      <button type="button" class="mini" id="expBtn">Exporter la sauvegarde complète (.json)</button>
       <button type="button" class="mini" id="expCsv">Exporter en CSV</button>
       <label class="mini" style="display:inline-block;cursor:pointer">Restaurer une sauvegarde…<input type="file" id="resFile" accept=".json,application/json" hidden></label>
     </div>
@@ -289,6 +289,7 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.8", d:"13/11/2026", c:["Sauvegarde unique : l'export contient tout (recharges et abonnements, mais aussi réglages, favoris et historique de Trajet VE), au même format que le bouton « Sauvegarde » de Trajet VE"]},
   {v:"1.7", d:"01/11/2026", c:["Restauration : accepte aussi la sauvegarde complète exportée depuis Trajet VE (bouton « Sauvegarde »)"]},
   {v:"1.6", d:"31/10/2026", c:[
     "Abonnements : colonnes renommées (« payé à la borne » = prix remisé déjà payé ; « abonnement compris » = ce prix plus l'abonnement réparti sur les kWh)",
@@ -1002,9 +1003,26 @@ $("homePrice").addEventListener("change",()=>{ S.settings.homePrice=num($("homeP
 $("homeName").addEventListener("change",()=>{ S.settings.homeName=$("homeName").value.trim()||"Maison"; render(); pushSettings(); });
 function download(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); }
 const stamp=()=>{ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
-$("expBtn").onclick=()=>{
-  download(`trajetve-recharges-${stamp()}.json`,JSON.stringify({app:"trajetve-recharges", version:CHANGELOG[0].v, exportedAt:new Date().toISOString(), settings:S.settings, sessions:S.sessions.slice().sort((a,b)=>a.start<b.start?-1:1)},null,1),"application/json");
-  setMsg(`Sauvegarde de ${S.sessions.length} recharges téléchargée.`,"ok");
+// Sauvegarde complète, au même format que le bouton « Sauvegarde » de Trajet VE : un seul fichier pour tout
+$("expBtn").onclick=async()=>{
+  const out={app:"trajetve", version:"recharges "+CHANGELOG[0].v, exportedAt:new Date().toISOString(), etat:null,
+    mesRecharges:{settings:S.settings, sessions:S.sessions.slice().sort((a,b)=>a.start<b.start?-1:1)}};
+  if(user){
+    setMsg("Préparation de la sauvegarde complète…");
+    try{
+      out.compte=user.email||"";
+      const tv=await fb.db.collection("trajetve").doc(user.uid).get();
+      if(tv.exists){ const d=tv.data(); try{ out.etat=typeof d.data==="string"?JSON.parse(d.data):d; }catch(e){ out.etat=null; } }
+      const car=fb.db.collection("trajetve_car").doc(user.uid), all=async r=>{ const o={}; (await r.get()).docs.forEach(d=>o[d.id]=d.data()); return o; };
+      const top=await car.get(); out.voiture={dernierEtat:top.exists?top.data():null};
+      if(out.voiture.dernierEtat && typeof out.voiture.dernierEtat.full==="string"){ try{ out.voiture.dernierEtat.full=JSON.parse(out.voiture.dernierEtat.full); }catch(e){} }
+      const [jours,trajets,recharges,sante]=await Promise.all(["jours","trajets","recharges","sante"].map(n=>all(car.collection(n))));
+      Object.assign(out.voiture,{jours,trajets,recharges,sante});
+    }catch(e){ out.erreur=e.code||e.message; }
+  }
+  download(`trajetve-sauvegarde-${stamp()}.json`,JSON.stringify(out),"application/json");
+  const nj=Object.keys(out.voiture?.jours||{}).length, ns=S.sessions.length;
+  setMsg(`Sauvegarde téléchargée : ${ns} recharge${ns>1?"s":""}${out.etat?", réglages et favoris de Trajet VE":""}${out.voiture?`, ${nj} jour${nj>1?"s":""} d'historique voiture`:""}${out.erreur?` (partie Trajet VE incomplète : ${out.erreur})`:""}.`,"ok");
 };
 $("expCsv").onclick=()=>{
   const q=v=>{ const s=String(v??""); return /[;"\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; };
