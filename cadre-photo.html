@@ -212,6 +212,8 @@
       <p class="note" id="fxNote"></p>
       <label class="opt"><span>Rythme des photos <span id="durLbl"></span></span><input type="range" id="dur" min="4" max="30" step="1"></label>
       <label class="opt" id="everyRow"><span>Changer d'effet toutes les <span id="everyLbl"></span></span><input type="range" id="every" min="0" max="19" step="1"></label>
+      <label class="opt"><span>Cadrage des photos<small style="display:block;color:var(--mute);font-size:12px">Automatique : la photo entière (bords floutés) dès que son format diffère de l'écran</small></span>
+        <select id="fitSel" style="width:auto"><option value="auto">Automatique</option><option value="full">Toujours la photo entière</option><option value="fill">Remplir l'écran (recadrer)</option></select></label>
       <label class="opt"><span>Effet de zoom<small style="display:block;color:var(--mute);font-size:12px">Zoom lent pendant l'affichage (Ken Burns, mosaïque…)</small></span><input type="checkbox" id="zoomOn"></label>
       <label class="opt"><span>Afficher l'heure</span><input type="checkbox" id="clockOn"></label>
       <label class="opt"><span>Afficher le nom de l'album<small style="display:block;color:var(--mute);font-size:12px">En bas à droite, discret. Avec la mosaïque, les bandes et le diptyque, le nom s'affiche sur chaque photo.</small></span><input type="checkbox" id="tagOn"></label>
@@ -283,7 +285,7 @@
 <script>
 (() => {
 "use strict";
-const VERSION = "4.3";
+const VERSION = "4.4";
 const $ = s => document.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -415,6 +417,8 @@ const STEPS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 420, 60
 if (S.everySec == null) S.everySec = (S.every || 3) * 60;
 delete S.every;
 if (S.zoom == null) S.zoom = true;
+// cadrage des photos plein écran : auto = recadrer seulement si le format est presque celui de l'écran
+if (["auto", "full", "fill"].indexOf(S.fit) < 0) S.fit = "auto";
 if (S.order !== "album") S.order = "mix";
 if (!Array.isArray(S.albumOrder)) S.albumOrder = [];
 if (S.showTag == null) S.showTag = true;
@@ -526,7 +530,7 @@ function renderSettings() {
   $("#fxNote").textContent = S.fx.length > 1 ? `${S.fx.length} effets cochés : ils alternent au hasard.` : "Un seul effet coché : il tourne en continu.";
   $("#everyRow").style.display = S.fx.length > 1 ? "" : "none";
   $("#every").value = stepOf(S.everySec); $("#everyLbl").textContent = fmtSec(S.everySec);
-  $("#zoomOn").checked = S.zoom;
+  $("#zoomOn").checked = S.zoom; $("#fitSel").value = S.fit;
   $("#sortBy").value = S.sortBy; $("#albumName").style.display = S.sortBy === "month" ? "none" : "";
   $("#dur").value = S.dur; $("#durLbl").textContent = `· ${S.dur} s`;
   $("#clockOn").checked = S.clock;
@@ -601,6 +605,7 @@ $("#fx").onclick = e => {
 $("#bFxAll").onclick = () => { S.fx = FX.map(x => x.id); save(); renderSettings(); };
 $("#every").oninput = e => { S.everySec = STEPS[+e.target.value]; save(); renderSettings(); };
 $("#zoomOn").onchange = e => { S.zoom = e.target.checked; save(); };
+$("#fitSel").onchange = e => { S.fit = e.target.value; save(); };
 $("#order").onchange = e => { S.order = e.target.value; if (S.order === "album") S.albumOrder = albumOrder(); save(); bag = []; renderSettings(); };
 $("#tagOn").onchange = e => { S.showTag = e.target.checked; save(); };
 $("#sortBy").onchange = e => { S.sortBy = e.target.value; save(); renderSettings(); };
@@ -1207,7 +1212,9 @@ async function nextPhoto(ratio, hist) {
 // une couche plein écran : photo en plein cadre si son format est proche de l'écran, sinon fond flouté
 function makeLayer(ph) {
   const L = document.createElement("div"); L.className = "layer"; L.dataset.url = ph.url;
-  const same = Math.abs(Math.log((ph.p.w / ph.p.h) / (innerWidth / innerHeight))) < 0.45;
+  // plein cadre seulement si la photo a presque le format de l'écran (sinon on couperait le haut et le bas)
+  const limit = S.fit === "fill" ? 0.45 : S.fit === "full" ? 0 : 0.1;
+  const same = Math.abs(Math.log((ph.p.w / ph.p.h) / (innerWidth / innerHeight))) < limit;
   L.innerHTML = same ? `<img class="kb-fg cover" src="${ph.url}">` : `<img class="kb-bg" src="${ph.url}"><img class="kb-fg" src="${ph.url}">`;
   return L;
 }
@@ -1221,13 +1228,19 @@ const waitUntil = (ms, until, my) => wait(Math.min(ms, Math.max(0, until - Date.
 async function transitionIn(kind, L, old) {
   const fg = L.querySelector(".kb-fg");
   if (!S.zoom) { /* zoom désactivé : photo fixe */ }
+  else if (kind === "kenburns" && !fg.classList.contains("cover")) {
+    // photo entière : on zoome entre 92 % et 100 % pour ne jamais en couper un morceau
+    const zIn = Math.random() < .6, s0 = zIn ? 0.92 : 1, s1 = zIn ? 1 : 0.92;
+    fg.animate([{ transform: `scale(${s0})` }, { transform: `scale(${s1})` }], { duration: S.dur * 1000 + 2600, easing: "linear", fill: "forwards" });
+  }
   else if (kind === "kenburns") {
     const zIn = Math.random() < .6, s0 = zIn ? 1.02 : rnd(1.14, 1.2), s1 = zIn ? rnd(1.14, 1.2) : 1.02;
     const dx = rnd(-3, 3), dy = rnd(-3, 3);
     fg.animate([{ transform: `scale(${s0}) translate(${dx}%,${dy}%)` }, { transform: `scale(${s1}) translate(${-dx}%,${-dy}%)` }],
       { duration: S.dur * 1000 + 2600, easing: "linear", fill: "forwards" });
   } else {
-    fg.animate([{ transform: "scale(1)" }, { transform: "scale(1.05)" }], { duration: S.dur * 1000 + 2000, easing: "linear", fill: "forwards" });
+    const cv = fg.classList.contains("cover");
+    fg.animate([{ transform: cv ? "scale(1)" : "scale(0.96)" }, { transform: cv ? "scale(1.05)" : "scale(1)" }], { duration: S.dur * 1000 + 2000, easing: "linear", fill: "forwards" });
   }
   if (!old || kind === "kenburns" || kind === "fade") return anim(L, [{ opacity: 0 }, { opacity: 1 }], { duration: kind === "fade" ? 1400 : 1800, easing: "ease-in-out" });
 
