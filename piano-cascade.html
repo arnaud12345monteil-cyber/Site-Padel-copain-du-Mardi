@@ -78,6 +78,13 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .scanopts label{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px}
 .scanopts select,.scanopts input{width:auto;padding:6px 8px}
 #scanLog{font-size:13px;margin-top:10px;min-height:18px}
+.trow{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.trow .nm{font-weight:600;font-size:14px}
+.trow .sub{font-size:12px;color:var(--mut)}
+.trow .ctl{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.trow select{width:auto;padding:6px 8px;font-size:13px}
+.news h3{font-size:14px;margin:12px 0 4px}
+.news ul{margin:0;padding-left:18px;color:var(--mut);font-size:13px}
 .status{font-size:12px;color:var(--mut);margin-left:8px}
 #rotate{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(20,22,28,.9);border:1px solid var(--line);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--mut);display:none}
 @media (max-width:640px){
@@ -91,6 +98,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 <header>
   <div class="logo"></div>
   <h1>Piano Cascade</h1>
+  <button class="ghost" id="verBadge" style="padding:2px 8px;font-size:12px;border-radius:20px" title="Nouveautés"></button>
   <span class="status" id="storeStatus"></span>
   <nav>
     <button data-v="lib" class="on">Bibliothèque</button>
@@ -157,6 +165,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 
   <section class="view" id="v-help">
     <div class="card">
+      <p class="muted" style="margin:0 0 10px" id="helpVer"></p>
       <h2>Comment ça marche</h2>
       <p>1. Récupère un fichier <b>MIDI</b> (le plus simple) ou <b>MusicXML</b> du morceau.<br>
       2. Importe-le : il rejoint ta bibliothèque.<br>
@@ -190,6 +199,8 @@ main{max-width:1100px;margin:0 auto;padding:16px}
     </select>
     <span class="hand"><span class="dot" style="background:var(--rh)"></span><button id="hR">MD : son</button></span>
     <span class="hand"><span class="dot" style="background:var(--lh)"></span><button id="hL">MG : son</button></span>
+    <span class="hand" id="accWrap"><span class="dot" style="background:#8a93a3"></span><button id="hA">Acc : son</button></span>
+    <button id="tracksBtn">Pistes</button>
     <button id="swap" title="Inverser les mains">⇄</button>
     <button id="names" title="Noms des notes">Do Ré Mi</button>
     <button id="loopA" title="Début de boucle">A</button>
@@ -199,6 +210,23 @@ main{max-width:1100px;margin:0 auto;padding:16px}
   </div>
 </div>
 
+<div class="modal" id="tracksM"><div class="box" style="max-width:640px;max-height:88vh;overflow:auto">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0;font-size:15px">Pistes du morceau</h2><button class="ghost" id="tracksClose">Fermer</button></div>
+  <p class="muted" style="margin:6px 0 12px">Choisis ce que fait chaque piste. Main droite et main gauche jouent avec l'instrument du lecteur. L'accompagnement se joue derrière, avec son propre son.</p>
+  <div id="trackRows"></div>
+  <div class="row scanopts" style="margin-top:12px;gap:14px">
+    <label>Volume accomp. <input type="range" id="accVol" min="0" max="100" style="width:110px"></label>
+    <label>Affichage accomp. <select id="accShow"><option value="grey">En gris</option><option value="hide">Masqué</option></select></label>
+    <label>Coupure « 2 mains » <select id="splitPt"></select></label>
+  </div>
+  <div class="row" style="justify-content:space-between;margin-top:14px"><button id="tracksAuto">Revenir à la proposition auto</button><span class="muted" id="tracksSaved"></span></div>
+</div></div>
+<div class="modal" id="newsM"><div class="box" style="max-width:460px;max-height:85vh;overflow:auto">
+  <h2 style="margin:0 0 4px;font-size:15px">Nouveautés</h2>
+  <p class="muted" style="margin:0 0 12px" id="newsSub"></p>
+  <div id="newsList"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="primary" id="newsOk">OK</button></div>
+</div></div>
 <div class="modal" id="renameM"><div class="box">
   <h2 style="margin:0 0 10px;font-size:15px">Renommer</h2>
   <input type="text" id="renameI">
@@ -265,11 +293,16 @@ function withTimeout(p, ms){ return Promise.race([p, new Promise((_,rej)=>setTim
 /* ---------- lecture des fichiers ---------- */
 function midiToNotes(u8){
   const midi = new Midi(u8);
-  const tracks = midi.tracks.filter(t => t.notes.length && !(t.channel===9));
-  const notes = [];
-  tracks.forEach((t,ti) => t.notes.forEach(n => notes.push({m:n.midi, t:n.time, d:Math.max(0.03,n.duration), v:n.velocity||0.7, tr:ti})));
+  const tracks = [], notes = [];
+  midi.tracks.forEach(t => {
+    if (!t.notes.length || t.channel===9 || (t.instrument && t.instrument.percussion)) return;
+    const ti = tracks.length; let sum=0, lo=127, hi=0;
+    t.notes.forEach(n => { notes.push({m:n.midi, t:n.time, d:Math.max(0.03,n.duration), v:n.velocity||0.7, tr:ti}); sum+=n.midi; if (n.midi<lo) lo=n.midi; if (n.midi>hi) hi=n.midi; });
+    const ins = t.instrument || {};
+    tracks.push({ name:(t.name||"").trim(), prog: ins.number||0, family: ins.family||"piano", iname: ins.name||"", count:t.notes.length, avg:sum/t.notes.length, lo, hi });
+  });
   notes.sort((a,b)=>a.t-b.t || a.m-b.m);
-  return { notes, trackCount: tracks.length, name: midi.name || (midi.header && midi.header.name) || "" };
+  return { notes, tracks, trackCount: tracks.length, name: midi.name || (midi.header && midi.header.name) || "" };
 }
 
 async function readMusicXMLFile(file){
@@ -366,7 +399,7 @@ function render(){
   $("#lib").innerHTML = list.map(s => `
     <div class="song">
       <div class="t">${esc(s.title||"Sans titre")}</div>
-      <div class="m"><span class="tag">${({musicxml:"MusicXML",scan:"Scan"})[s.source]||"MIDI"}</span>${fmt(s.duration||0)} · ${s.noteCount||0} notes · ${s.tracks>=2?"2 mains":"1 piste"}</div>
+      <div class="m"><span class="tag">${({musicxml:"MusicXML",scan:"Scan"})[s.source]||"MIDI"}</span>${fmt(s.duration||0)} · ${s.noteCount||0} notes · ${(s.tracks||1)>1?s.tracks+" pistes":"1 piste"}</div>
       <div class="a">
         <button class="primary" data-act="play" data-id="${s.id}">▶ Jouer</button>
         <button data-act="export" data-id="${s.id}">Exporter</button>
@@ -708,6 +741,38 @@ function buildScanNotes(measures, time0, bpm){
   return notes;
 }
 
+/* ---------- versions de l'application ---------- */
+const APP_VERSION = "1.3.0";
+const CHANGELOG = [
+  {v:"1.3.0", d:"15 nov. 2026", items:[
+    "Panneau Pistes : chaque piste d'un MIDI peut être main droite, main gauche, les deux mains, accompagnement ou ignorée",
+    "Proposition automatique de répartition (pistes de piano repérées en priorité)",
+    "Accompagnement joué avec son propre son, volume réglable, affiché en gris ou masqué",
+    "Réglages des pistes enregistrés pour chaque morceau",
+    "Numéro de version et historique des nouveautés"]},
+  {v:"1.2.0", d:"15 nov. 2026", items:["Choix de l'instrument d'écoute : piano, piano électrique, clavecin, orgue, synthés, cordes, marimba, 8-bit"]},
+  {v:"1.1.0", d:"15 nov. 2026", items:["Conversion de partitions JPEG / PNG / PDF en MIDI (lecture par Claude)","Redressement automatique des photos et découpage par système"]},
+  {v:"1.0.0", d:"8 nov. 2026", items:["Lecteur en cascade avec clavier, vitesse, boucle A-B, noms des notes","Bibliothèque synchronisée, import MIDI et MusicXML, export du MIDI","Recherche de partitions et de fichiers MIDI"]},
+];
+function showNews(onlyNew){
+  let seen=null; try{ seen=localStorage.getItem("pc-seen-version"); }catch(e){}
+  const list = onlyNew && seen ? CHANGELOG.filter(c => cmpVer(c.v, seen) > 0) : CHANGELOG;
+  $("#newsSub").textContent = "Version actuelle : "+APP_VERSION;
+  $("#newsList").innerHTML = '<div class="news">'+list.map(c=>`<h3>Version ${c.v} <span class="muted" style="font-weight:400">· ${c.d}</span></h3><ul>${c.items.map(i=>"<li>"+esc(i)+"</li>").join("")}</ul>`).join("")+'</div>';
+  $("#newsM").classList.add("on");
+}
+function cmpVer(a,b){ const x=a.split(".").map(Number), y=String(b).split(".").map(Number); for (let i=0;i<3;i++){ if ((x[i]||0)!==(y[i]||0)) return (x[i]||0)-(y[i]||0); } return 0; }
+function initVersion(){
+  $("#verBadge").textContent = "v"+APP_VERSION;
+  $("#helpVer").innerHTML = "Version "+APP_VERSION+" · <a href=\"#\" id=\"helpNews\">voir les nouveautés</a>";
+  $("#helpNews").onclick = e => { e.preventDefault(); showNews(false); };
+  $("#verBadge").onclick = () => showNews(false);
+  let seen=null; try{ seen=localStorage.getItem("pc-seen-version"); }catch(e){}
+  if (seen && cmpVer(APP_VERSION, seen) > 0) showNews(true);
+  else if (!seen){ try{ localStorage.setItem("pc-seen-version", APP_VERSION); }catch(e){} }
+}
+$("#newsOk").onclick = () => { $("#newsM").classList.remove("on"); try{ localStorage.setItem("pc-seen-version", APP_VERSION); }catch(e){} };
+
 /* ---------- navigation ---------- */
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on", x===b));
@@ -746,11 +811,11 @@ function env(g, when, end, {a=0.005, peak=0.2, sus=0.2, dt=0.3, rel=0.1}){
   if (sus < 0.999) g.gain.setTargetAtTime(peak*sus, when+a, dt);
   g.gain.setTargetAtTime(0, Math.max(end, when+a), rel/3);
 }
-function voice(m, when, dur, vel){
+function voice(m, when, dur, vel, ins){
   const f = 440*Math.pow(2,(m-69)/12), end = when+dur;
   const out = AC.createGain(); out.connect(master);
   let os = [], stopAt = end + 0.6, lowB = m<48?1.15:1;
-  switch (INSTR){
+  switch (ins||INSTR){
     case "epiano": {
       stopAt = end + 0.8;
       const car = osc("sine", f, when, stopAt), mod = osc("sine", f, when, stopAt), mg = AC.createGain();
@@ -833,27 +898,111 @@ function silenceAll(){
 
 /* ---------- lecteur ---------- */
 const P = { song:null, notes:[], dur:0, playing:false, songT:-1.5, ctxStart:0, songStart:0, speed:1, pps:150,
-  hands:[0,0], swap:false, names:false, loopA:null, loopB:null, schedIdx:0, lo:21, hi:108 };
+  hands:[0,0,0], swap:false, all:[], tracks:[], cfg:null, names:false, loopA:null, loopB:null, schedIdx:0, lo:21, hi:108 };
 const HSTATE = ["son","muette","masquée"];
 const cv=$("#cv"), cx=cv.getContext("2d");
 
 function openPlayer(s){
   let info; try{ info = midiToNotes(bytesFromB64(s.b64)); }catch(e){ toast("Fichier MIDI illisible."); return; }
-  P.song=s; P.notes=info.notes;
-  // attribution des mains
-  const split = info.trackCount < 2;
-  P.notes.forEach(n => n.h = split ? (n.m>=60?0:1) : (n.tr===0?0:1));
-  P.dur = Math.max(...P.notes.map(n=>n.t+n.d));
-  // tessiture en octaves entières
-  let lo=Math.min(...P.notes.map(n=>n.m)), hi=Math.max(...P.notes.map(n=>n.m));
-  lo = Math.max(21, lo - (lo%12) ); hi = Math.min(108, hi + (11 - hi%12));
-  while (hi-lo < 35){ if (lo>21) lo-=12; if (hi-lo<35 && hi<108) hi+=12; if (lo<=21&&hi>=108) break; }
-  P.lo=Math.max(21,lo); P.hi=Math.min(108,hi);
+  P.song=s; P.all=info.notes; P.tracks=info.tracks;
+  const saved = s.trackCfg;
+  const fresh = !(saved && Array.isArray(saved.roles) && saved.roles.length===P.tracks.length);
+  P.cfg = fresh ? defaultCfg(P.tracks) : {...defaultCfg(P.tracks), ...saved};
+  P.hands=[0,0,0]; updHands();
+  applyCfg();
   P.loopA=P.loopB=null; updLoopBtns();
   $("#ptitle").textContent=s.title;
   $("#player").classList.add("on");
   seek(-1.5); resize(); requestAnimationFrame(loop);
+  if (fresh && P.tracks.length>2){ openTracks(); toast(P.tracks.length+" pistes détectées : vérifie la répartition proposée.", 4000); }
 }
+/* ---------- pistes ---------- */
+const FAMILY_FR = {"piano":"Piano","chromatic percussion":"Perc. chromatiques","organ":"Orgue","guitar":"Guitare","bass":"Basse","strings":"Cordes","ensemble":"Ensemble","brass":"Cuivres","reed":"Anches","pipe":"Flûtes","synth lead":"Synthé lead","synth pad":"Synthé pad","synth effects":"Effets synthé","world":"Ethnique","percussive":"Percussions","sound effects":"Effets"};
+const FAMILY_INSTR = {"piano":"piano","chromatic percussion":"marimba","organ":"organ","guitar":"harpsi","bass":"synth","strings":"strings","ensemble":"strings","brass":"synth","reed":"synth","pipe":"organ","synth lead":"synth","synth pad":"pad","synth effects":"pad","world":"harpsi","percussive":"marimba","sound effects":"pad"};
+const ROLES = {rh:"Main droite", lh:"Main gauche", both:"Les 2 mains", acc:"Accompagnement", off:"Ignorée"};
+const noteName = m => NAMES_FR[m%12]+(Math.floor(m/12)-1);
+
+function autoRoles(tr){
+  const n=tr.length, roles=new Array(n).fill("acc");
+  if (n===1) return ["both"];
+  const idx = [...Array(n).keys()];
+  const byAvg = a => a.slice().sort((x,y)=>tr[y].avg-tr[x].avg);
+  const piano = idx.filter(i => tr[i].family==="piano");
+  if (piano.length===1) roles[piano[0]]="both";
+  else if (piano.length>=2){ const o=byAvg(piano); roles[o[0]]="rh"; roles[o[o.length-1]]="lh"; }
+  else if (n===2){ const o=byAvg(idx); roles[o[0]]="rh"; roles[o[1]]="lh"; }
+  else { const o=byAvg(idx.filter(i=>tr[i].count>=8)); if (o.length>1){ roles[o[0]]="rh"; roles[o[o.length-1]]="lh"; } else if (o.length) roles[o[0]]="both"; }
+  return roles;
+}
+function defaultCfg(tr){ return { roles: autoRoles(tr), instr: tr.map(()=>"auto"), accVol: 0.6, accShow: "grey", split: 60 }; }
+function trackInstr(i){ const c=P.cfg.instr[i]; return (c && c!=="auto" && INSTRUMENTS[c]) ? c : (FAMILY_INSTR[P.tracks[i].family]||"piano"); }
+
+function applyCfg(){
+  const c = P.cfg;
+  P.notes = [];
+  for (const n of P.all){
+    const r = c.roles[n.tr]; if (!r || r==="off") continue;
+    const h = r==="rh"?0 : r==="lh"?1 : r==="both" ? (n.m>=c.split?0:1) : 2;
+    P.notes.push({...n, h, ins: h===2 ? trackInstr(n.tr) : null});
+  }
+  P.dur = P.notes.length ? Math.max(...P.notes.map(n=>n.t+n.d)) : 1;
+  const hasAcc = P.notes.some(n=>n.h===2);
+  $("#accWrap").style.display = hasAcc ? "" : "none";
+  $("#tracksBtn").style.display = P.tracks.length>1 ? "" : "none";
+  computeRange();
+}
+function computeRange(){
+  const vis = P.notes.filter(n => n.h<2 || P.cfg.accShow!=="hide");
+  const src = vis.length ? vis : P.notes;
+  if (!src.length){ P.lo=48; P.hi=83; return; }
+  let lo=Infinity, hi=-Infinity; for (const n of src){ if (n.m<lo) lo=n.m; if (n.m>hi) hi=n.m; }
+  lo = Math.max(21, lo - (lo%12)); hi = Math.min(108, hi + (11 - hi%12));
+  while (hi-lo < 35){ if (lo>21) lo-=12; if (hi-lo<35 && hi<108) hi+=12; if (lo<=21&&hi>=108) break; }
+  P.lo=Math.max(21,lo); P.hi=Math.min(108,hi);
+}
+let cfgSaveT=null;
+function cfgChanged(){
+  const t = now(), was = P.playing; if (was) pause();
+  applyCfg(); resize(); P.songT = Math.min(t, P.dur); if (was) play();
+  renderTracks();
+  $("#tracksSaved").textContent = "Enregistrement…";
+  clearTimeout(cfgSaveT);
+  cfgSaveT = setTimeout(async () => {
+    try{ P.song.trackCfg = JSON.parse(JSON.stringify(P.cfg)); await Store.put(P.song); const i=LIB.findIndex(x=>x.id===P.song.id); if (i>=0) LIB[i]=P.song; $("#tracksSaved").textContent="Réglages enregistrés pour ce morceau"; }
+    catch(e){ $("#tracksSaved").textContent="Réglages non enregistrés (stockage indisponible)"; }
+  }, 900);
+}
+function renderTracks(){
+  const c = P.cfg;
+  const instrOpts = sel => `<option value="auto"${sel==="auto"?" selected":""}>Son auto</option>`+Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}"${sel===k?" selected":""}>${v}</option>`).join("");
+  const dotCol = r => r==="rh"?"var(--rh)" : r==="lh"?"var(--lh)" : r==="both"?"linear-gradient(90deg,var(--rh) 50%,var(--lh) 50%)" : r==="acc"?"#8a93a3" : "transparent";
+  $("#trackRows").innerHTML = P.tracks.map((t,i) => `
+    <div class="trow">
+      <span class="dot" style="background:${dotCol(c.roles[i])};border:1px solid #3a4150"></span>
+      <div><div class="nm">${esc(t.name || ("Piste "+(i+1)))}</div>
+        <div class="sub">${esc(FAMILY_FR[t.family]||t.family)}${t.iname?" · "+esc(t.iname):""} · ${t.count} notes · ${noteName(t.lo)}–${noteName(t.hi)}</div></div>
+      <div class="ctl">
+        <select data-role="${i}">${Object.entries(ROLES).map(([k,v])=>`<option value="${k}"${c.roles[i]===k?" selected":""}>${v}</option>`).join("")}</select>
+        ${c.roles[i]==="acc" ? `<select data-ins="${i}" title="Son de cette piste">${instrOpts(c.instr[i]||"auto")}</select>` : ""}
+      </div>
+    </div>`).join("");
+  $("#accVol").value = Math.round(c.accVol*100);
+  $("#accShow").value = c.accShow;
+  $("#splitPt").innerHTML = [48,53,55,57,60,62,64,65,67].map(m=>`<option value="${m}"${c.split===m?" selected":""}>${noteName(m)}</option>`).join("");
+}
+function openTracks(){ renderTracks(); $("#tracksSaved").textContent=""; $("#tracksM").classList.add("on"); }
+$("#tracksBtn").onclick = openTracks;
+$("#tracksClose").onclick = () => $("#tracksM").classList.remove("on");
+$("#trackRows").addEventListener("change", e => {
+  const r = e.target.dataset.role, ins = e.target.dataset.ins;
+  if (r!=null){ P.cfg.roles[+r] = e.target.value; cfgChanged(); }
+  else if (ins!=null){ P.cfg.instr[+ins] = e.target.value; cfgChanged(); }
+});
+$("#accVol").onchange = e => { P.cfg.accVol = e.target.value/100; cfgChanged(); };
+$("#accShow").onchange = e => { P.cfg.accShow = e.target.value; cfgChanged(); };
+$("#splitPt").onchange = e => { P.cfg.split = +e.target.value; cfgChanged(); };
+$("#tracksAuto").onclick = () => { P.cfg = defaultCfg(P.tracks); cfgChanged(); };
+
 function closePlayer(){ pause(); $("#player").classList.remove("on"); }
 $("#close").onclick = closePlayer;
 
@@ -868,7 +1017,7 @@ function play(){
 function pause(){ if (P.playing){ P.songT = now(); } P.playing=false; silenceAll(); $("#play").textContent="▶"; }
 function seek(t){ const was=P.playing; if (was) pause(); P.songT = Math.max(-1.5, Math.min(t, P.dur)); if (was) play(); }
 function firstIdx(t){ let lo=0, hi=P.notes.length; while(lo<hi){ const m=(lo+hi)>>1; if (P.notes[m].t < t) lo=m+1; else hi=m; } return lo; }
-function handOf(n){ return P.swap ? 1-n.h : n.h; }
+function handOf(n){ return n.h===2 ? 2 : (P.swap ? 1-n.h : n.h); }
 
 setInterval(() => {
   if (!P.playing) return;
@@ -881,7 +1030,7 @@ setInterval(() => {
     if (n.t < t - 0.05) continue;
     if (!muted && P.hands[handOf(n)]===0){
       const when = P.ctxStart + (n.t - P.songStart)/P.speed;
-      voice(n.m, Math.max(AC.currentTime, when), n.d/P.speed, n.v);
+      voice(n.m, Math.max(AC.currentTime, when), n.d/P.speed, n.h===2 ? n.v*P.cfg.accVol : n.v, n.ins);
     }
   }
   for (let i=voices.length-1;i>=0;i--) if (voices[i].stopAt < AC.currentTime) voices.splice(i,1);
@@ -905,7 +1054,7 @@ function resize(){
 }
 window.addEventListener("resize", () => { if ($("#player").classList.contains("on")) resize(); });
 
-const COL = [ ["#4fd1a5","#2c9c78"], ["#5b9cff","#3768c4"] ];
+const COL = [ ["#4fd1a5","#2c9c78"], ["#5b9cff","#3768c4"], ["#5d6573","#454c58"] ];
 function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
 
 function loop(){
@@ -924,7 +1073,7 @@ function loop(){
   const start = firstIdx(t - 8);
   for (let i=start;i<P.notes.length;i++){
     const n=P.notes[i]; if (n.t > tTop) break;
-    const h = handOf(n); if (P.hands[h]===2) continue;
+    const h = handOf(n); if (P.hands[h]===2 || (h===2 && P.cfg.accShow==="hide")) continue;
     if (n.t + n.d < t) continue;
     const k = KEYS[n.m]; if (!k) continue;
     if (n.t <= t) active.set(n.m, h);
@@ -933,7 +1082,7 @@ function loop(){
     if (y1 <= y0) continue;
     const pad = k.black ? 0.5 : Math.max(1, k.w*0.08);
     roundRect(k.x+pad, y0, k.w-pad*2, y1-y0, Math.min(6,k.w/3));
-    cx.fillStyle = COL[h][k.black?1:0]; cx.globalAlpha = P.hands[h]===1 ? 0.55 : 1; cx.fill(); cx.globalAlpha=1;
+    cx.fillStyle = COL[h][k.black?1:0]; cx.globalAlpha = (P.hands[h]===1 ? 0.55 : 1) * (h===2 ? 0.75 : 1); cx.fill(); cx.globalAlpha=1;
     if (P.names && (y1-y0)>14 && k.w>12){ cx.fillStyle="rgba(0,0,0,.65)"; cx.font=`600 ${Math.min(11,k.w*0.42)}px Inter`; cx.textAlign="center"; cx.fillText(NAMES_FR[n.m%12].replace("#","♯"), k.x+k.w/2, y1-5); }
   }
   // ligne de frappe
@@ -969,7 +1118,8 @@ sk.addEventListener("input", ()=>{ if (!P.playing) P.songT = sk.value/1000*P.dur
 sk.addEventListener("change", ()=>{ seeking=false; seek(sk.value/1000*P.dur); });
 $("#speed").onchange = e => { const t=now(); const was=P.playing; if (was) pause(); P.speed=parseFloat(e.target.value); P.songT=t; if (was) play(); };
 $("#zoom").onchange = e => P.pps = parseFloat(e.target.value);
-function updHands(){ $("#hR").textContent="MD : "+HSTATE[P.hands[0]]; $("#hL").textContent="MG : "+HSTATE[P.hands[1]]; }
+function updHands(){ $("#hR").textContent="MD : "+HSTATE[P.hands[0]]; $("#hL").textContent="MG : "+HSTATE[P.hands[1]]; $("#hA").textContent="Acc : "+["son","muet","masqué"][P.hands[2]]; }
+$("#hA").onclick = () => { P.hands[2]=(P.hands[2]+1)%3; updHands(); if (P.playing){ seek(now()); } };
 $("#hR").onclick = () => { P.hands[0]=(P.hands[0]+1)%3; updHands(); if (P.playing){ seek(now()); } };
 $("#hL").onclick = () => { P.hands[1]=(P.hands[1]+1)%3; updHands(); if (P.playing){ seek(now()); } };
 $("#swap").onclick = () => { P.swap=!P.swap; if (P.playing) seek(now()); toast(P.swap?"Mains inversées":"Mains d'origine",1500); };
@@ -995,6 +1145,7 @@ document.addEventListener("keydown", e => {
 (async () => {
   if (!window.Midi){ toast("La bibliothèque MIDI n'a pas pu se charger."); }
   render();
+  initVersion();
   initScan();
   await Store.init();
   await refresh();
