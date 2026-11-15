@@ -139,7 +139,16 @@ main{max-width:1100px;margin:0 auto;padding:16px}
     </div>
     <div class="card" id="scanCard">
       <h2>Convertir une partition (photo, scan ou PDF) en MIDI</h2>
-      <p class="muted" id="scanOff" style="margin:0">Cette fonction passe par Claude : elle ne marche que dans l'app ouverte depuis Claude, pas dans le fichier HTML seul.</p>
+      <p class="muted" id="scanWhy" style="margin:0 0 8px">Vérification de l'accès à Claude…</p>
+      <div id="apiBox" style="display:none;margin-bottom:12px">
+        <div class="row scanopts">
+          <div style="flex:1;min-width:220px"><input type="password" id="apiKey" placeholder="Clé API Anthropic (sk-ant-…)" autocomplete="off"></div>
+          <label>Modèle <select id="apiModel"><option value="claude-sonnet-5-5">Sonnet 5.5 (moins cher)</option><option value="claude-opus-5-5">Opus 5.5 (plus précis)</option></select></label>
+          <button id="apiSave">Enregistrer</button>
+          <button class="ghost" id="apiForget" style="display:none">Oublier la clé</button>
+        </div>
+        <p class="muted" style="margin:8px 0 0;font-size:12px">La clé reste uniquement dans ce navigateur, sur cet appareil. Chaque conversion est facturée sur ton compte API Anthropic (de l'ordre de quelques centimes par page). Crée une clé dédiée à cette app, avec une limite de dépense dans la console Anthropic.</p>
+      </div>
       <div id="scanOn" style="display:none">
         <div class="row">
           <button class="primary" id="scanPick">Choisir JPEG / PNG / PDF</button>
@@ -195,7 +204,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       <h2 style="margin-top:16px">Partition défilante</h2>
       <p class="muted">Le bouton « Partition » du lecteur affiche au-dessus du clavier la partition des deux mains, qui défile en même temps que la musique. Elle est reconstruite à partir du MIDI : rythmes arrondis à la double-croche, pas de triolets, une seule voix par main, armure devinée. Elle aide à se repérer, mais elle n'aura pas la qualité d'une partition éditée.</p>
       <h2 style="margin-top:16px">Installer l'application</h2>
-      <p class="muted">La version web app (fichiers piano-cascade.html, piano-cascade-sw.js, piano-cascade.webmanifest et icônes piano-cascade-*) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil et la conversion photo/PDF n'est pas disponible (elle passe par Claude).</p>
+      <p class="muted">La version web app (fichiers piano-cascade.html, piano-cascade-sw.js, piano-cascade.webmanifest et icônes piano-cascade-*) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil, et la conversion photo/PDF demande une clé API Anthropic.</p>
       <h2 style="margin-top:16px">Raccourcis (clavier physique)</h2>
       <p class="muted">Espace : lecture/pause · ← → : ±5 s · ↑ ↓ : vitesse · Échap : fermer le lecteur</p>
     </div>
@@ -523,15 +532,77 @@ $("#sform").addEventListener("submit", e => { e.preventDefault(); const q=$("#q"
 const Scan = { sample:null, maxImgs:3, pages:[], strips:[], ctl:null, busy:false, title:"" };
 if (window.pdfjsLib) try{ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }catch(e){}
 
+let API_KEY = "", API_MODEL = "claude-sonnet-5-5";
+try{ API_KEY = localStorage.getItem("pc-api-key")||""; API_MODEL = localStorage.getItem("pc-api-model")||API_MODEL; }catch(e){}
+function scanMode(){ return Scan.sample ? "claude" : (API_KEY ? "api" : null); }
+function refreshScanUI(why){
+  if (why!=null) Scan.why = why;
+  const mode = scanMode();
+  $("#scanOn").style.display = mode ? "block" : "none";
+  $("#apiForget").style.display = API_KEY ? "" : "none";
+  $("#apiModel").value = API_MODEL;
+  $("#scanWhy").innerHTML = mode==="claude" ? "Lecture par Claude via ton compte Claude." :
+    mode==="api" ? "Lecture par Claude via ta clé API ("+esc(API_MODEL.replace("claude-","").replace(/-(\d)-(\d)$/," $1.$2"))+")." :
+    esc(Scan.why||"") + (Scan.apiAllowed ? " Pour l'utiliser ici, ajoute une clé API Anthropic :" : "");
+}
 async function initScan(){
+  let why = "";
+  const inFrame = (()=>{ try{ return window.self !== window.top; }catch(e){ return true; } })();
   try{
-    if (!(window.claude && claude.use)) return;
-    const s = await claude.use("sample"); if (!s) return;
-    const lim = await s.limits().catch(()=>null);
-    if (!lim || !lim.images) return;
-    Scan.sample = s; Scan.maxImgs = Math.max(1, Math.min(3, lim.images.maxCount||3));
-    $("#scanOff").style.display="none"; $("#scanOn").style.display="block";
-  }catch(e){}
+    if (!(window.claude && claude.use)){
+      why = "Ici, la page n'est pas ouverte dans Claude, donc elle ne peut pas lui demander de lire la partition.";
+    } else {
+      const s = await claude.use("sample");
+      if (!s) why = inFrame ? "Claude ne répond pas dans cette vue de la page." : "La page est ouverte seule dans un onglet : Claude n'y est pas accessible. Ouvre-la depuis l'app Claude ou depuis claude.ai.";
+      else {
+        const lim = await s.limits().catch(()=>null);
+        if (!lim || !lim.images) why = "Cette version de l'app Claude ne permet pas encore à une page d'envoyer des images. Mets l'app à jour ou ouvre la page sur claude.ai depuis un ordinateur.";
+        else { Scan.sample = s; Scan.maxImgs = Math.max(1, Math.min(3, lim.images.maxCount||3)); }
+      }
+    }
+  }catch(e){ why = "Accès à Claude impossible ("+(e && (e.code||e.message) || "erreur")+")."; }
+  // sur l'hébergement de Claude, les appels vers l'API sont bloqués : la clé ne sert que sur ton site ou en fichier local
+  Scan.apiAllowed = !Scan.sample && !window.claude;
+  $("#apiBox").style.display = Scan.apiAllowed ? "block" : "none";
+  refreshScanUI(why);
+}
+$("#apiSave").onclick = () => {
+  const k = $("#apiKey").value.trim();
+  if (k && !/^sk-ant-/.test(k)){ toast("Ça ne ressemble pas à une clé Anthropic (sk-ant-…)."); return; }
+  if (k) API_KEY = k; API_MODEL = $("#apiModel").value;
+  try{ localStorage.setItem("pc-api-key", API_KEY); localStorage.setItem("pc-api-model", API_MODEL); }catch(e){ toast("Stockage indisponible : la clé ne sera pas retenue."); }
+  $("#apiKey").value = ""; refreshScanUI(); toast(API_KEY ? "Clé enregistrée sur cet appareil." : "Aucune clé saisie.");
+};
+$("#apiModel").onchange = e => { API_MODEL = e.target.value; try{ localStorage.setItem("pc-api-model", API_MODEL); }catch(err){} refreshScanUI(); };
+$("#apiForget").onclick = () => { API_KEY=""; try{ localStorage.removeItem("pc-api-key"); }catch(e){} refreshScanUI(); toast("Clé supprimée de cet appareil."); };
+
+const blobToB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(b); });
+function parseJSONLoose(t){
+  try{ return JSON.parse(t); }catch(e){}
+  const f = /```(?:json)?\s*([\s\S]*?)```/.exec(t); if (f){ try{ return JSON.parse(f[1]); }catch(e){} }
+  const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a>=0 && b>a){ try{ return JSON.parse(t.slice(a,b+1)); }catch(e){} }
+  throw {code:"invalid_json", message:"réponse illisible"};
+}
+async function scanAsk(prompt, blobs, signal){
+  if (Scan.sample) return Scan.sample.json(prompt, { images: blobs, modelTier:"complex", signal });
+  const content = [];
+  for (const b of blobs) content.push({type:"image", source:{type:"base64", media_type:"image/jpeg", data: await blobToB64(b)}});
+  content.push({type:"text", text: prompt});
+  let r;
+  try{
+    r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", signal,
+      headers:{ "content-type":"application/json", "x-api-key":API_KEY, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+      body: JSON.stringify({ model: API_MODEL, max_tokens: 16000, messages:[{role:"user", content}] }) });
+  }catch(e){ if (e && e.name==="AbortError") throw {code:"cancelled"}; throw {code:"network", message:"connexion à l'API impossible"}; }
+  const j = await r.json().catch(()=>null);
+  if (!r.ok){
+    const msg = j && j.error && j.error.message || ("HTTP "+r.status);
+    if (r.status===401) throw {code:"bad_key", message:"clé API refusée"};
+    if (r.status===429) throw {code:"rate_limited", message:msg};
+    throw {code:"api_error", message:msg};
+  }
+  const text = (j.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");
+  return parseJSONLoose(text);
 }
 const isScanFile = f => /\.(pdf|jpe?g|png|webp)$/i.test(f.name) || /^image\//.test(f.type) || f.type==="application/pdf";
 $("#scanPick").onclick = () => $("#scanFile").click();
@@ -539,7 +610,7 @@ $("#scanFile").onchange = e => { loadScan([...e.target.files]); e.target.value="
 $("#perSys").onchange = () => { if (Scan.pages.length) cutStrips(); };
 
 async function loadScan(files){
-  if (!Scan.sample){ toast("La conversion de partitions n'est disponible que dans l'app ouverte depuis Claude."); return; }
+  if (!scanMode()){ toast("Ajoute d'abord une clé API (voir le bloc Convertir une partition)."); return; }
   if (Scan.busy) return;
   Scan.pages=[]; $("#scanLog").textContent="Lecture des fichiers…";
   Scan.title = files[0] ? files[0].name.replace(/\.[^.]+$/,"") : "Partition";
@@ -653,7 +724,7 @@ function cutStrips(){
     });
   });
   Promise.all(jobs.map(j => new Promise(res => {
-    const sc = Math.min(1, 2000/j.c.width);
+    const sc = Math.min(1, (Scan.sample ? 2000 : 1568)/j.c.width);
     const o = document.createElement("canvas"); o.width=Math.round(j.c.width*sc); o.height=Math.max(1,Math.round((j.y1-j.y0)*sc));
     const g=o.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,o.width,o.height);
     g.drawImage(j.c, 0, j.y0, j.c.width, j.y1-j.y0, 0, 0, o.width, o.height);
@@ -697,7 +768,7 @@ $("#scanStop").onclick = () => { if (Scan.ctl) Scan.ctl.abort(); };
 $("#scanGo").onclick = async () => {
   if (Scan.busy || !Scan.strips.length) return;
   Scan.busy=true; $("#scanGo").disabled=true; $("#scanStop").style.display=""; $("#scanPick").disabled=true;
-  const ctx = {key:null, time:null}; let tempo=null; const allSystems=[]; let failed=0;
+  const ctx = {key:null, time:null}; let tempo=null; Scan.lastErr=null; const allSystems=[]; let failed=0;
   const log = t => $("#scanLog").textContent = t;
   try{
     for (let i=0;i<Scan.strips.length;i+=Scan.maxImgs){
@@ -707,11 +778,15 @@ $("#scanGo").onclick = async () => {
       Scan.ctl = new AbortController();
       let res;
       try{
-        res = await Scan.sample.json(scanPrompt(batch.length, ctx), { images: batch.map(b=>b.blob), modelTier:"complex", signal: Scan.ctl.signal });
+        res = await scanAsk(scanPrompt(batch.length, ctx), batch.map(b=>b.blob), Scan.ctl.signal);
       }catch(e){
+        console.error(e);
         if (e && e.code==="cancelled"){ log("Conversion arrêtée."); break; }
-        if (e && (e.code==="not_granted"||e.code==="sampling_disabled")){ log("Claude n'a pas été autorisé pour cette page."); break; }
-        if (e && e.code==="rate_limited"){ log("Limite d'usage Claude atteinte. Réessaie plus tard."); break; }
+        if (e && (e.code==="not_granted"||e.code==="sampling_disabled")){ log("Claude n'a pas été autorisé pour cette page (fenêtre de consentement refusée ou option désactivée)."); break; }
+        if (e && e.code==="rate_limited"){ log("Limite d'usage atteinte. Réessaie plus tard."); break; }
+        if (e && e.code==="bad_key"){ log("Clé API refusée : vérifie-la ou crée-en une nouvelle."); break; }
+        if (e && (e.code==="images_unavailable"||e.code==="image_rejected")){ log("Images refusées par Claude ("+e.code+")."); break; }
+        Scan.lastErr = (e && (e.message||e.code)) || "erreur";
         failed += batch.length; batch.forEach((_,j)=>{ const f=$("#st"+(i+j)); if (f) f.classList.add("err"); });
         allSystems.push(...batch.map(()=>null));
         continue;
@@ -727,7 +802,7 @@ $("#scanGo").onclick = async () => {
       if (!ctx.firstTime && ctx.time) ctx.firstTime = ctx.time;
     }
     const measures = allSystems.filter(Boolean).flatMap(s => Array.isArray(s.measures) ? s.measures : []);
-    if (!measures.length){ if (!/arrêtée|autorisé|Limite/.test($("#scanLog").textContent)) log("Aucune note n'a pu être lue."); return; }
+    if (!measures.length){ if (!/arrêtée|autorisé|Limite|refusée|refusées/.test($("#scanLog").textContent)) log("Aucune note n'a pu être lue"+(Scan.lastErr?" ("+Scan.lastErr+")":"")+"."); return; }
     const bpm = parseFloat($("#scanTempo").value) || tempo || 80;
     const notes = buildScanNotes(measures, ctx.firstTime || ctx.time || "4/4", bpm);
     if (!notes.length){ log("Aucune note exploitable dans la réponse."); return; }
@@ -767,8 +842,12 @@ function buildScanNotes(measures, time0, bpm){
 }
 
 /* ---------- versions de l'application ---------- */
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5.0";
 const CHANGELOG = [
+  {v:"1.5.0", d:"15 nov. 2026", items:[
+    "Conversion photo/PDF utilisable sur ton site avec une clé API Anthropic (gardée sur l'appareil)",
+    "La page indique pourquoi la conversion via Claude n'est pas disponible",
+    "Messages d'erreur plus précis pendant la conversion"]},
   {v:"1.4.1", d:"15 nov. 2026", items:[
     "Fichiers de la web app renommés en piano-cascade-* pour cohabiter avec d'autres sites dans le même dossier",
     "Numéro de version déplacé en haut à droite"]},
