@@ -1,0 +1,18 @@
+{
+  "id": "./tension.html",
+  "name": "Suivi tension artérielle",
+  "short_name": "Tension",
+  "description": "Courbes et suivi des mesures de tension (import CSV OMRON).",
+  "lang": "fr",
+  "start_url": "./tension.html",
+  "scope": "./tension",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f4f0",
+  "theme_color": "#b8322a",
+  "icons": [
+    { "src": "tension-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "tension-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "tension-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

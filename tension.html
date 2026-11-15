@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#b8322a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tension">
+<link rel="manifest" href="tension-manifest.webmanifest">
+<link rel="icon" href="tension-icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="tension-apple-touch-icon.png">
+<title>Suivi tension artérielle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="tension-chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f5f4f0; --card:#ffffff; --ink:#1d1f22; --muted:#6b6f76; --line:#e3e1db; --accent:#b8322a;
+  --sys:#c0392b; --dia:#2f5d9e; --pul:#8a8f98; --soft:#efede7;
+  --c-hypo:#4a7bd1; --c-opt:#2e9e6a; --c-norm:#74ac3f; --c-nh:#d39b00; --c-h1:#e2702a; --c-h2:#cf3f37; --c-h3:#8f1d3a;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#16171a; --card:#1f2125; --ink:#ecebe7; --muted:#9a9ea6; --line:#30333a; --soft:#272a2f;
+    --sys:#ff6b5e; --dia:#6e9be0; --pul:#9aa0aa; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+header{padding:calc(18px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 6px calc(16px + env(safe-area-inset-left));max-width:1100px;margin:auto;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:20px;margin:0;font-weight:600;letter-spacing:-.01em}
+#status{font-size:12px;color:var(--muted)}
+.ver{font:500 11px "IBM Plex Mono",monospace;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+nav{max-width:1100px;margin:8px auto 0;padding:0 16px;display:flex;gap:4px;border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;padding:10px 12px;font:inherit;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+nav button.on{color:var(--ink);border-color:var(--accent);font-weight:500}
+main{max-width:1100px;margin:auto;padding:14px 16px calc(60px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+select,input{font:inherit;color:var(--ink);background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:7px 8px;min-width:0}
+input[type=checkbox]{width:auto}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--soft);color:var(--ink);padding:8px 12px;border-radius:7px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.small{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{background:var(--soft);border-radius:8px;padding:10px}
+.stat b{display:block;font:500 20px "IBM Plex Mono",monospace}
+.stat span{font-size:12px;color:var(--muted)}
+.chartbox{position:relative;height:340px}
+.hidden{display:none!important}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.badge{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 7px;border-radius:20px;color:#fff;white-space:nowrap}
+.sess{border:1px solid var(--line);border-radius:9px;margin-bottom:10px;overflow:hidden;background:var(--card)}
+.sess h3{margin:0;font-size:14px;font-weight:600;padding:9px 12px;background:var(--soft);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.sess h3 small{font-weight:400;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td{padding:7px 12px;border-top:1px solid var(--line);vertical-align:middle}
+td.n{font-family:"IBM Plex Mono",monospace}
+tr.off td{opacity:.42}
+.flag{font-size:11px;color:var(--c-h2);margin-left:6px}
+.del{background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+#modal .box{background:var(--card);border-radius:12px;padding:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto}
+textarea{width:100%;height:220px;font:12px "IBM Plex Mono",monospace;background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:7px}
+.snap{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:13.5px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+h2{font-size:15px;margin:0 0 10px;font-weight:600}
+.ref td{padding:5px 8px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Suivi tension artérielle</h1>
+  <span class="row"><span id="status">Chargement…</span><button class="btn small primary hidden" id="btnInstall">Installer l'appli</button><span id="appVersion" class="ver"></span></span>
+</header>
+<nav>
+  <button data-tab="chart" class="on">Courbes</button>
+  <button data-tab="list">Liste</button>
+  <button data-tab="data">Import &amp; sauvegardes</button>
+</nav>
+<main>
+
+<section class="card" id="filterCard">
+  <div class="filters">
+    <label class="f">Mesure retenue par séance
+      <select id="fRank">
+        <option value="avg23">Moyenne sans la 1ʳᵉ (recommandé)</option>
+        <option value="avg">Moyenne de la séance</option>
+        <option value="all">Toutes les mesures</option>
+        <option value="1">1ʳᵉ mesure</option>
+        <option value="2">2ᵉ mesure</option>
+        <option value="3">3ᵉ mesure</option>
+        <option value="last">Dernière mesure</option>
+      </select>
+    </label>
+    <label class="f">Moment de la journée
+      <select id="fSlot">
+        <option value="any">Toutes heures</option>
+        <option value="morning">Matin (4h – 12h)</option>
+        <option value="afternoon">Après-midi (12h – 18h)</option>
+        <option value="evening">Soir / nuit (18h – 4h)</option>
+        <option value="custom">Autour d'une heure précise</option>
+      </select>
+    </label>
+    <label class="f slotC hidden">Heure cible
+      <input type="time" id="fHour" value="23:00">
+    </label>
+    <label class="f slotC hidden">Tolérance
+      <select id="fTol">
+        <option value="30">± 30 min</option>
+        <option value="60" selected>± 1 h</option>
+        <option value="90">± 1 h 30</option>
+        <option value="120">± 2 h</option>
+      </select>
+    </label>
+    <label class="f">Du
+      <input type="date" id="fFrom">
+    </label>
+    <label class="f">Au
+      <input type="date" id="fTo">
+    </label>
+  </div>
+  <p class="hint" id="filterHint"></p>
+</section>
+
+<!-- COURBES -->
+<section id="tab-chart">
+  <div class="card">
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Évolution</h2>
+      <label class="row" style="font-size:13px;color:var(--muted)"><input type="checkbox" id="showPulse"> Afficher le pouls</label>
+    </div>
+    <div class="chartbox"><canvas id="cv"></canvas></div>
+    <div class="legend" id="catLegend"></div>
+    <p class="hint">Lignes pointillées : seuils d'hypertension pour l'automesure à domicile (135 / 85 mmHg). La couleur des points suit la classification de la séance.</p>
+    <p class="hint" id="emptyChart"></p>
+  </div>
+</section>
+
+<!-- LISTE -->
+<section id="tab-list" class="hidden">
+  <div class="card row" style="justify-content:space-between">
+    <label class="row" style="font-size:14px"><input type="checkbox" id="onlyAbn"> Uniquement les mesures hors norme</label>
+    <span class="hint" id="listCount" style="margin:0"></span>
+  </div>
+  <div id="list"></div>
+  <div class="card">
+    <h2>Repères utilisés</h2>
+    <table class="ref" id="refTable"></table>
+    <p class="hint">Classification ESH 2023 (valeurs de cabinet). En automesure à domicile, on parle d'hypertension à partir de 135 / 85 en moyenne. Une mesure isolée élevée ne vaut pas diagnostic : c'est la moyenne sur plusieurs jours qui compte. Les lignes grisées ne sont pas prises en compte par le filtre « mesure retenue ».</p>
+  </div>
+</section>
+
+<!-- DONNEES -->
+<section id="tab-data" class="hidden">
+  <div class="card">
+    <h2>Importer un fichier</h2>
+    <div class="row">
+      <input type="file" id="fileCsv" accept=".csv,text/csv,.txt" class="hidden">
+      <button class="btn primary" id="btnCsv">Importer un CSV OMRON</button>
+      <label class="row" style="font-size:13px"><input type="radio" name="imode" value="merge" checked> Fusionner</label>
+      <label class="row" style="font-size:13px"><input type="radio" name="imode" value="replace"> Remplacer tout</label>
+    </div>
+    <p class="hint">Format export OMRON Connect (virgule ou point-virgule). Les doublons (même date, heure et valeurs) sont ignorés à la fusion.</p>
+  </div>
+
+  <div class="card">
+    <h2>Ajouter une mesure à la main</h2>
+    <form id="addForm" class="filters">
+      <label class="f">Date<input type="date" id="aD" required></label>
+      <label class="f">Heure<input type="time" id="aT" required></label>
+      <label class="f">Systolique<input type="number" id="aS" min="50" max="260" required></label>
+      <label class="f">Diastolique<input type="number" id="aDi" min="30" max="160" required></label>
+      <label class="f">Pouls<input type="number" id="aP" min="25" max="220"></label>
+      <label class="f">&nbsp;<button class="btn" type="submit">Ajouter</button></label>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Points de sauvegarde</h2>
+    <p class="hint" style="margin-top:0">Les données sont enregistrées automatiquement à chaque modification. Un point de sauvegarde fige l'état actuel pour pouvoir y revenir.</p>
+    <div class="row" style="margin-top:8px">
+      <input id="snapName" placeholder="Nom (facultatif)" style="flex:1;min-width:150px">
+      <button class="btn primary" id="btnSnap">Créer un point</button>
+    </div>
+    <div id="snaps" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Fichiers de sauvegarde</h2>
+    <div class="row">
+      <button class="btn" id="btnExpJson">Exporter la sauvegarde (.json)</button>
+      <button class="btn" id="btnExpCsv">Exporter en CSV</button>
+      <input type="file" id="fileJson" accept=".json,application/json" class="hidden">
+      <button class="btn" id="btnImpJson">Restaurer un fichier .json</button>
+    </div>
+    <p class="hint">Le .json contient toutes les mesures ; il permet de tout restaurer sur un autre appareil.</p>
+  </div>
+
+  <div class="card" id="installCard">
+    <h2>Installer sur cet appareil</h2>
+    <p class="hint" id="installHint" style="margin-top:0"></p>
+  </div>
+
+  <div class="card">
+    <h2>Zone sensible</h2>
+    <button class="btn" id="btnWipe">Effacer toutes les mesures</button>
+    <p class="hint">Pensez à créer un point de sauvegarde avant.</p>
+  </div>
+</section>
+</main>
+
+<div id="modal" class="hidden"><div class="box" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- utilitaires ---------- */
+const APP_VERSION = '1.0.0';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const pad = n => String(n).padStart(2,'0');
+const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); };
+const fmtD = d => { const [y,m,j]=d.split('-'); return `${j}/${m}/${y}`; };
+const DAYS = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+const dayName = d => DAYS[new Date(d+'T12:00:00').getDay()];
+const mins = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+const lsGet = (k,def) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch(e){ return def; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } };
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- classification ---------- */
+const CATS = [
+  {k:'hypo', label:'Basse',          color:'var(--c-hypo)', desc:'< 90 ou < 60'},
+  {k:'opt',  label:'Optimale',       color:'var(--c-opt)',  desc:'< 120 et < 80'},
+  {k:'norm', label:'Normale',        color:'var(--c-norm)', desc:'120–129 ou 80–84'},
+  {k:'nh',   label:'Normale haute',  color:'var(--c-nh)',   desc:'130–139 ou 85–89'},
+  {k:'h1',   label:'HTA grade 1',    color:'var(--c-h1)',   desc:'140–159 ou 90–99'},
+  {k:'h2',   label:'HTA grade 2',    color:'var(--c-h2)',   desc:'160–179 ou 100–109'},
+  {k:'h3',   label:'HTA grade 3',    color:'var(--c-h3)',   desc:'≥ 180 ou ≥ 110'},
+];
+function classify(s,d){
+  if (s<90 || d<60) return CATS[0];
+  const ls = s<120?1: s<130?2: s<140?3: s<160?4: s<180?5:6;
+  const ld = d<80?1: d<85?2: d<90?3: d<100?4: d<110?5:6;
+  return CATS[Math.max(ls,ld)];
+}
+const aboveHome = (s,d) => s>=135 || d>=85;
+const isAbnormal = (s,d) => aboveHome(s,d) || s<90 || d<60;
+const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v.replace(/var\((.*)\)/,'$1')).trim();
+const badge = c => `<span class="badge" style="background:${c.color}">${c.label}</span>`;
+
+/* ---------- état ---------- */
+let state = { measures: [], updatedAt: 0 };
+const local = lsGet('tension_state', null);
+if (local && Array.isArray(local.measures)) state = local;
+const ui = Object.assign({rank:'avg23', slot:'any', hour:'23:00', tol:'60', from:'', to:'', pulse:false, onlyAbn:false, tab:'chart'}, lsGet('tension_ui',{}));
+
+/* ---------- stockage distant (espace privé de l'utilisateur) ---------- */
+let db=null, uid=null, mainRef=null, remoteOK=false;
+function setStatus(){
+  const n = state.measures.length;
+  const where = remoteOK ? 'enregistré dans votre espace' : 'enregistré sur cet appareil';
+  $('#status').textContent = `${n} mesure${n>1?'s':''} · ${where}`;
+}
+let saveTimer=null, saving=Promise.resolve();
+function persist(){
+  state.updatedAt = Date.now();
+  lsSet('tension_state', state);
+  setStatus();
+  if (!remoteOK) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    const body = { measures: state.measures, updatedAt: state.updatedAt };
+    saving = saving.then(()=>mainRef.set(body)).catch(e=>{
+      if (e && e.code==='quota_exceeded') toast('Espace de stockage plein : exportez un .json.');
+      else toast('Sauvegarde distante impossible, données gardées sur l\'appareil.');
+    });
+  }, 700);
+}
+function withTimeout(p,ms){ return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r({code:'timeout'}),ms))]); }
+async function initRemote(){
+  try{
+    if (!window.claude || !claude.use) return;
+    const [d,u] = await Promise.all([claude.use('db'), claude.use('user')]);
+    if (!d || !u) return;
+    const id = await u.id();
+    if (!id) return;
+    db=d; uid=id;
+    mainRef = db.collection('data/users/'+uid).doc('mesures');
+    const snap = await withTimeout(mainRef.get(), 10000);
+    remoteOK = true;
+    if (snap.exists){
+      const data = snap.data();
+      if ((data.updatedAt||0) > (state.updatedAt||0) && Array.isArray(data.measures)){
+        state = { measures: data.measures.map(m=>({...m})), updatedAt: data.updatedAt };
+        lsSet('tension_state', state);
+        render();
+      } else if ((state.updatedAt||0) > (data.updatedAt||0)) { persist(); }
+    } else if (state.measures.length){ persist(); }
+    setStatus(); renderSnaps();
+  }catch(e){ remoteOK=false; setStatus(); }
+}
+
+/* ---------- parsing CSV ---------- */
+const MONTHS = {jan:0,janv:0,feb:1,fev:1,'fév':1,'févr':1,fevr:1,mar:2,mars:2,apr:3,avr:3,may:4,mai:4,jun:5,juin:5,jul:6,juil:6,aug:7,aou:7,'aoû':7,'août':7,sep:8,sept:8,oct:9,nov:10,dec:11,'déc':11};
+function parseDate(s){
+  s = (s||'').trim().replace(/\./g,'');
+  let m = s.match(/^(\d{1,2})\s+([^\s\d]+)\s+(\d{4})$/);
+  if (m){
+    const k = m[2].toLowerCase();
+    const mo = MONTHS[k] ?? MONTHS[k.slice(0,4)] ?? MONTHS[k.slice(0,3)];
+    if (mo===undefined) return null;
+    return `${m[3]}-${pad(mo+1)}-${pad(+m[1])}`;
+  }
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
+  return null;
+}
+function parseTime(s){
+  const m = (s||'').trim().match(/^(\d{1,2})[:hH](\d{2})/);
+  return m ? `${pad(+m[1])}:${m[2]}` : null;
+}
+function splitCSV(text, sep){
+  const rows=[]; let row=[], cur='', q=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (q){ if (c=='"'){ if (text[i+1]=='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if (c=='"') q=true;
+    else if (c==sep){ row.push(cur); cur=''; }
+    else if (c=='\n' || c=='\r'){ if (c=='\r' && text[i+1]=='\n') i++; row.push(cur); rows.push(row); row=[]; cur=''; }
+    else cur+=c;
+  }
+  if (cur!=='' || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+const flagOn = v => { v=(v||'').trim(); return v!=='' && v!=='-'; };
+function parseOmron(text){
+  text = text.replace(/^﻿/,'');
+  const first = text.split(/\r?\n/)[0];
+  const sep = (first.split(';').length > first.split(',').length) ? ';' : ',';
+  const rows = splitCSV(text, sep);
+  if (!rows.length) throw new Error('Fichier vide');
+  const h = rows[0].map(x=>x.toLowerCase());
+  const col = (...keys) => h.findIndex(x=>keys.some(k=>x.includes(k)));
+  const iD=col('date'), iT=col('heure','time'), iS=col('systol'), iDi=col('diastol'), iP=col('pouls','pulse'),
+        iIrr=col('irrégul','irregul','irregular'), iMov=col('mouvement','movement'), iN=col('note');
+  if (iD<0||iS<0||iDi<0) throw new Error('Colonnes Date / Systolique / Diastolique introuvables');
+  const out=[]; let skipped=0;
+  for (const r of rows.slice(1)){
+    if (!r.join('').trim()) continue;
+    const d=parseDate(r[iD]), t=parseTime(iT>=0?r[iT]:'') || '12:00';
+    const s=parseInt(r[iS]), di=parseInt(r[iDi]), p=iP>=0?parseInt(r[iP]):NaN;
+    if (!d || !s || !di){ skipped++; continue; }
+    const note = iN>=0 ? (r[iN]||'').trim() : '';
+    out.push(mk(d,t,s,di,isNaN(p)?null:p, iIrr>=0&&flagOn(r[iIrr]), iMov>=0&&flagOn(r[iMov]), note==='-'?'':note));
+  }
+  return {out, skipped};
+}
+function mk(d,t,s,di,p,irr=false,mov=false,note=''){
+  return { id:`${d}_${t}_${s}_${di}`, d, t, sys:s, dia:di, pul:p, irr, mov, note };
+}
+function mergeMeasures(list, replace){
+  const map = new Map(replace ? [] : state.measures.map(m=>[m.id,m]));
+  let added=0;
+  for (const m of list){ if (!map.has(m.id)){ map.set(m.id,m); added++; } }
+  state.measures = [...map.values()].sort((a,b)=> (a.d+a.t).localeCompare(b.d+b.t));
+  return added;
+}
+
+/* ---------- séances ---------- */
+const GAP = 15; // minutes max entre deux mesures d'une même séance
+function sessions(){
+  const ms = [...state.measures].sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+  const out=[]; let cur=null, prevAbs=null;
+  for (const m of ms){
+    const abs = new Date(m.d+'T'+m.t+':00').getTime()/60000;
+    if (cur && abs-prevAbs <= GAP) cur.items.push(m);
+    else { cur={ d:m.d, t:m.t, items:[m] }; out.push(cur); }
+    prevAbs=abs;
+  }
+  return out;
+}
+const avgOf = arr => {
+  const a = k => { const v=arr.map(x=>x[k]).filter(x=>x!=null); return v.length? Math.round(v.reduce((s,x)=>s+x,0)/v.length) : null; };
+  return { sys:a('sys'), dia:a('dia'), pul:a('pul') };
+};
+function inSlot(t){
+  const x = mins(t);
+  switch(ui.slot){
+    case 'morning': return x>=240 && x<720;
+    case 'afternoon': return x>=720 && x<1080;
+    case 'evening': return x>=1080 || x<240;
+    case 'custom': { let d=Math.abs(x-mins(ui.hour||'00:00')); d=Math.min(d,1440-d); return d<=+ui.tol; }
+    default: return true;
+  }
+}
+const inRange = d => (!ui.from || d>=ui.from) && (!ui.to || d<=ui.to);
+function filteredSessions(){ return sessions().filter(s=>inRange(s.d) && inSlot(s.t)); }
+/* renvoie les points retenus + les mesures utilisées */
+function selectPoints(sess){
+  const pts=[], used=new Set();
+  for (const s of sess){
+    const it=s.items, n=it.length;
+    const push = (arr, label, t) => { arr.forEach(m=>used.add(m.id)); const a=arr.length===1?{sys:arr[0].sys,dia:arr[0].dia,pul:arr[0].pul}:avgOf(arr); pts.push({ d:s.d, t:t||s.t, ...a, n:arr.length, label, single: arr.length===1 && n===1 }); };
+    switch(ui.rank){
+      case 'all': it.forEach((m,i)=>push([m], `${i+1}ʳᵉ/ᵉ`, m.t)); break;
+      case 'avg': push(it, `moy. ${n}`); break;
+      case 'avg23': push(n>1? it.slice(1): it, n>1?`moy. ${n-1} (sans 1ʳᵉ)`:'mesure unique'); break;
+      case 'last': push([it[n-1]], 'dernière', it[n-1].t); break;
+      default: { const k=+ui.rank; if (n>=k) push([it[k-1]], `${k}ᵉ`, it[k-1].t); }
+    }
+  }
+  return {pts, used};
+}
+
+/* ---------- rendu : courbes ---------- */
+let chart=null;
+function renderChart(){
+  const sess = filteredSessions();
+  const {pts} = selectPoints(sess);
+  // stats
+  const st=$('#stats');
+  if (!pts.length){
+    st.innerHTML = `<div class="stat"><b>—</b><span>Aucune donnée pour ces filtres</span></div>`;
+  } else {
+    const a = avgOf(pts);
+    const above = pts.filter(p=>aboveHome(p.sys,p.dia)).length;
+    const maxP = pts.reduce((m,p)=>p.sys>m.sys?p:m, pts[0]);
+    const c = classify(a.sys,a.dia);
+    st.innerHTML = `
+      <div class="stat"><b>${a.sys}/${a.dia}</b><span>Moyenne (mmHg)</span></div>
+      <div class="stat"><b>${a.pul??'—'}</b><span>Pouls moyen (bpm)</span></div>
+      <div class="stat"><b>${pts.length}</b><span>Points sur ${sess.length} séance${sess.length>1?'s':''}</span></div>
+      <div class="stat"><b>${Math.round(above*100/pts.length)} %</b><span>Points ≥ 135/85</span></div>
+      <div class="stat"><b>${maxP.sys}/${maxP.dia}</b><span>Plus haut · ${fmtD(maxP.d).slice(0,5)}</span></div>
+      <div class="stat" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:4px">${badge(c)}<span>Classe de la moyenne${aboveHome(a.sys,a.dia)?' · au-dessus du seuil domicile':''}</span></div>`;
+  }
+  $('#emptyChart').textContent = pts.length ? '' : (state.measures.length ? 'Aucun point avec ces filtres.' : 'Importez un fichier CSV dans l\'onglet « Import & sauvegardes ».');
+  if (!window.Chart){ $('#emptyChart').textContent='Bibliothèque graphique non chargée.'; return; }
+  const labels = pts.map(p=>`${fmtD(p.d).slice(0,5)} ${p.t}`);
+  const colors = pts.map(p=>cssVar(classify(p.sys,p.dia).color));
+  const ink=cssVar('--muted'), grid=cssVar('--line');
+  const ds = [
+    { label:'Systolique', data:pts.map(p=>p.sys), borderColor:cssVar('--sys'), pointBackgroundColor:colors, pointBorderColor:colors, pointRadius:4.5, pointHoverRadius:6, tension:.25, borderWidth:2, yAxisID:'y' },
+    { label:'Diastolique', data:pts.map(p=>p.dia), borderColor:cssVar('--dia'), pointBackgroundColor:colors, pointBorderColor:colors, pointRadius:4.5, pointHoverRadius:6, tension:.25, borderWidth:2, yAxisID:'y' },
+    { label:'Seuil 135', data:pts.map(()=>135), borderColor:cssVar('--sys'), borderDash:[5,5], borderWidth:1, pointRadius:0, pointHoverRadius:0, yAxisID:'y' },
+    { label:'Seuil 85', data:pts.map(()=>85), borderColor:cssVar('--dia'), borderDash:[5,5], borderWidth:1, pointRadius:0, pointHoverRadius:0, yAxisID:'y' },
+  ];
+  if (ui.pulse) ds.push({ label:'Pouls', data:pts.map(p=>p.pul), borderColor:cssVar('--pul'), backgroundColor:cssVar('--pul'), pointRadius:3, borderWidth:1.5, tension:.25, yAxisID:'y2' });
+  const cfg = {
+    type:'line', data:{labels, datasets:ds},
+    options:{ responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{ labels:{ color:ink, boxWidth:12, filter:i=>!i.text.startsWith('Seuil') } },
+        tooltip:{ filter:i=>!i.dataset.label.startsWith('Seuil'), callbacks:{
+          title:items=>{ const p=pts[items[0].dataIndex]; return `${dayName(p.d)} ${fmtD(p.d)} · ${p.t}`; },
+          afterBody:items=>{ const p=pts[items[0].dataIndex]; return [`${classify(p.sys,p.dia).label} · ${p.label}`]; } } } },
+      scales:{
+        x:{ ticks:{color:ink, maxRotation:60, autoSkip:true, maxTicksLimit:12, font:{size:11}}, grid:{color:grid} },
+        y:{ suggestedMin:60, suggestedMax:160, ticks:{color:ink}, grid:{color:grid}, title:{display:true,text:'mmHg',color:ink} },
+        y2:{ display:ui.pulse, position:'right', suggestedMin:40, suggestedMax:110, ticks:{color:ink}, grid:{drawOnChartArea:false}, title:{display:true,text:'bpm',color:ink} }
+      } }
+  };
+  if (chart) chart.destroy();
+  chart = new Chart($('#cv'), cfg);
+}
+
+/* ---------- rendu : liste ---------- */
+function renderList(){
+  const sess = filteredSessions().reverse();
+  const {used} = selectPoints(sess);
+  let html='', count=0;
+  for (const s of sess){
+    let items = s.items.map((m,i)=>({m,i}));
+    if (ui.onlyAbn) items = items.filter(({m})=>isAbnormal(m.sys,m.dia));
+    if (!items.length) continue;
+    const a = s.items.length>1 ? avgOf(s.items.slice(1)) : avgOf(s.items);
+    const ca = classify(a.sys,a.dia);
+    html += `<div class="sess"><h3><span>${dayName(s.d)} ${fmtD(s.d)} · ${s.t} <small>${s.items.length} mesure${s.items.length>1?'s':''}</small></span>
+      <span><small>${s.items.length>1?'moy. sans 1ʳᵉ':'mesure'} </small>${a.sys}/${a.dia} ${badge(ca)}</span></h3><table>`;
+    for (const {m,i} of items){
+      count++;
+      const c = classify(m.sys,m.dia);
+      const flags = [aboveHome(m.sys,m.dia)?'≥ seuil domicile':'', m.irr?'rythme irrégulier':'', m.mov?'mouvement détecté':''].filter(Boolean).join(' · ');
+      html += `<tr class="${used.has(m.id)?'':'off'}">
+        <td style="width:46px;color:var(--muted)">${i+1}${i?'ᵉ':'ʳᵉ'}</td>
+        <td style="width:56px">${m.t}</td>
+        <td class="n">${m.sys}/${m.dia}</td>
+        <td class="n" style="color:var(--muted)">${m.pul??'—'} bpm</td>
+        <td>${badge(c)}${flags?`<span class="flag">${flags}</span>`:''}</td>
+        <td style="width:30px;text-align:right"><button class="del" title="Supprimer" data-del="${esc(m.id)}">×</button></td></tr>`;
+    }
+    html += `</table></div>`;
+  }
+  $('#list').innerHTML = html || `<div class="card hint">Aucune mesure à afficher.</div>`;
+  $('#listCount').textContent = `${count} mesure${count>1?'s':''} affichée${count>1?'s':''}`;
+}
+function renderRef(){
+  $('#refTable').innerHTML = CATS.map(c=>`<tr><td>${badge(c)}</td><td>${c.desc} mmHg</td></tr>`).join('');
+  $('#catLegend').innerHTML = CATS.map(c=>`<span><i class="dot" style="background:${c.color}"></i>${c.label}</span>`).join('');
+}
+
+/* ---------- sauvegardes (points) ---------- */
+async function listSnaps(){
+  if (remoteOK){
+    try{
+      const q = await db.collection('data/users/'+uid).get();
+      return q.docs.filter(d=>d.id.startsWith('snap-')).map(d=>({id:d.id, ...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
+    }catch(e){ return []; }
+  }
+  return lsGet('tension_snaps',[]);
+}
+async function renderSnaps(){
+  const box=$('#snaps');
+  const snaps = await listSnaps();
+  box.innerHTML = snaps.length ? snaps.map(s=>{
+    const dt=new Date(s.createdAt);
+    return `<div class="snap"><span><b>${esc(s.name||'Sans nom')}</b><br><small class="hint">${dt.toLocaleDateString('fr-FR')} ${pad(dt.getHours())}:${pad(dt.getMinutes())} · ${s.measures.length} mesures</small></span>
+      <span class="row"><button class="btn small" data-restore="${s.id}">Restaurer</button><button class="btn small" data-delsnap="${s.id}">Supprimer</button></span></div>`;
+  }).join('') : `<p class="hint">Aucun point de sauvegarde pour l'instant.</p>`;
+  box._snaps = snaps;
+}
+async function createSnap(){
+  if (!state.measures.length) return toast('Rien à sauvegarder.');
+  const name = $('#snapName').value.trim() || `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`;
+  const snap = { kind:'snap', name, createdAt:Date.now(), measures: state.measures };
+  if (remoteOK){
+    try{ await db.collection('data/users/'+uid).doc('snap-'+snap.createdAt).set(snap); }
+    catch(e){ return toast(e && e.code==='quota_exceeded' ? 'Stockage plein : supprimez d\'anciens points.' : 'Échec de la sauvegarde.'); }
+  } else {
+    const list = lsGet('tension_snaps',[]); list.unshift({id:'snap-'+snap.createdAt, ...snap});
+    if (!lsSet('tension_snaps', list.slice(0,20))) return toast('Stockage local indisponible : exportez un .json.');
+  }
+  $('#snapName').value=''; toast('Point de sauvegarde créé.'); renderSnaps();
+}
+function confirmBox(msg, onOk){
+  openModal(`<p>${msg}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="mNo">Annuler</button><button class="btn primary" id="mOk">Confirmer</button></div>`);
+  $('#mNo').onclick=closeModal; $('#mOk').onclick=()=>{ closeModal(); onOk(); };
+}
+$('#snaps').addEventListener('click', async e=>{
+  const r=e.target.dataset.restore, d=e.target.dataset.delsnap;
+  const snaps=$('#snaps')._snaps||[];
+  if (r){ const s=snaps.find(x=>x.id===r); if(!s) return;
+    confirmBox(`Remplacer les ${state.measures.length} mesures actuelles par les ${s.measures.length} de « ${esc(s.name)} » ?`, ()=>{
+      state.measures = s.measures.map(m=>({...m})); persist(); render(); toast('Sauvegarde restaurée.'); });
+  }
+  if (d){ confirmBox('Supprimer ce point de sauvegarde ?', async ()=>{
+      if (remoteOK){ try{ await db.collection('data/users/'+uid).doc(d).delete(); }catch(e){ toast('Suppression impossible.'); } }
+      else lsSet('tension_snaps', lsGet('tension_snaps',[]).filter(x=>x.id!==d));
+      renderSnaps(); });
+  }
+});
+
+/* ---------- export ---------- */
+function openModal(html){ $('#modalBox').innerHTML=html; $('#modal').classList.remove('hidden'); }
+function closeModal(){ $('#modal').classList.add('hidden'); }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+async function offerFile(filename, data){
+  try{
+    const dl = window.claude && claude.use ? await claude.use('downloads') : null;
+    if (dl){ await dl.save({filename, data}); toast('Fichier enregistré.'); return; }
+  }catch(e){ if (e && e.code==='declined') return; }
+  try{
+    const type = filename.endsWith('.json') ? 'application/json' : 'text/csv';
+    const file = new File([data], filename, {type});
+    const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (mobile && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:filename}); return;
+    }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    toast('Fichier téléchargé.'); return;
+  }catch(e){ if (e && e.name==='AbortError') return; }
+  openModal(`<h2>${esc(filename)}</h2><p class="hint">Le téléchargement direct n'est pas disponible ici. Copiez le contenu et collez-le dans un fichier.</p>
+    <textarea readonly id="mTxt">${esc(data)}</textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="mClose">Fermer</button><button class="btn primary" id="mCopy">Copier</button></div>`);
+  $('#mClose').onclick=closeModal;
+  $('#mCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText(data); toast('Copié.'); }catch(e){ $('#mTxt').select(); toast('Sélectionné : copiez avec Ctrl/Cmd+C.'); } };
+}
+const stamp = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+$('#btnExpJson').onclick = ()=>{
+  if (!state.measures.length) return toast('Aucune mesure.');
+  offerFile(`tension-sauvegarde-${stamp()}.json`, JSON.stringify({app:'tension', version:APP_VERSION, exportedAt:new Date().toISOString(), measures:state.measures}, null, 1));
+};
+$('#btnExpCsv').onclick = ()=>{
+  if (!state.measures.length) return toast('Aucune mesure.');
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const lines=['Date,Heure,Systolique (mmHg),Diastolique (mmHg),Pouls (bpm),Pulsations cardiaques irrégulières détectées,Mouvement corporel,Classe,Notes'];
+  [...state.measures].sort((a,b)=>(b.d+b.t).localeCompare(a.d+a.t)).forEach(m=>{
+    const [y,mo,j]=m.d.split('-');
+    lines.push([`${j} ${M[+mo-1]} ${y}`, m.t, m.sys, m.dia, m.pul??'', m.irr?'Détecté':'', m.mov?'Détecté':'', classify(m.sys,m.dia).label, `"${(m.note||'').replace(/"/g,'""')}"`].join(','));
+  });
+  offerFile(`tension-${stamp()}.csv`, '﻿'+lines.join('\n'));
+};
+
+/* ---------- import ---------- */
+$('#btnCsv').onclick=()=>$('#fileCsv').click();
+$('#btnImpJson').onclick=()=>$('#fileJson').click();
+$('#fileCsv').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const {out, skipped} = parseOmron(await f.text());
+    if (!out.length) return toast('Aucune mesure reconnue dans ce fichier.');
+    const replace = document.querySelector('input[name=imode]:checked').value==='replace';
+    const go = ()=>{ const added=mergeMeasures(out, replace); persist(); render(); toast(`${added} mesure${added>1?'s':''} ajoutée${added>1?'s':''}${skipped?` · ${skipped} ligne(s) ignorée(s)`:''}.`); };
+    if (replace && state.measures.length) confirmBox(`Remplacer les ${state.measures.length} mesures actuelles par les ${out.length} du fichier ?`, go); else go();
+  }catch(err){ toast('Import impossible : '+err.message); }
+};
+$('#fileJson').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const j = JSON.parse(await f.text());
+    const ms = (j.measures||[]).filter(m=>m && m.d && m.t && m.sys && m.dia).map(m=>mk(m.d,m.t,+m.sys,+m.dia,m.pul==null?null:+m.pul,!!m.irr,!!m.mov,m.note||''));
+    if (!ms.length) return toast('Fichier de sauvegarde vide ou invalide.');
+    confirmBox(`Restaurer ${ms.length} mesures ? Les mesures actuelles (${state.measures.length}) seront remplacées.`, ()=>{ mergeMeasures(ms,true); persist(); render(); toast('Restauration terminée.'); });
+  }catch(err){ toast('Fichier .json illisible.'); }
+};
+$('#addForm').onsubmit = e=>{
+  e.preventDefault();
+  const p=$('#aP').value;
+  const m = mk($('#aD').value, $('#aT').value, +$('#aS').value, +$('#aDi').value, p?+p:null);
+  const added=mergeMeasures([m], false);
+  if (!added) return toast('Cette mesure existe déjà.');
+  persist(); render(); toast('Mesure ajoutée.');
+  $('#aS').value=$('#aDi').value=$('#aP').value='';
+};
+$('#list').addEventListener('click', e=>{
+  const id=e.target.dataset.del; if(!id) return;
+  const m=state.measures.find(x=>x.id===id); if(!m) return;
+  confirmBox(`Supprimer la mesure ${m.sys}/${m.dia} du ${fmtD(m.d)} à ${m.t} ?`, ()=>{ state.measures=state.measures.filter(x=>x.id!==id); persist(); render(); });
+});
+$('#btnWipe').onclick = ()=>{ if(!state.measures.length) return; confirmBox(`Effacer définitivement les ${state.measures.length} mesures ? (les points de sauvegarde sont conservés)`, ()=>{ state.measures=[]; persist(); render(); }); };
+$('#btnSnap').onclick = createSnap;
+
+/* ---------- filtres & onglets ---------- */
+function syncUI(){
+  $('#fRank').value=ui.rank; $('#fSlot').value=ui.slot; $('#fHour').value=ui.hour; $('#fTol').value=ui.tol;
+  $('#fFrom').value=ui.from; $('#fTo').value=ui.to; $('#showPulse').checked=ui.pulse; $('#onlyAbn').checked=ui.onlyAbn;
+  $$('.slotC').forEach(x=>x.classList.toggle('hidden', ui.slot!=='custom'));
+}
+function readUI(){
+  ui.rank=$('#fRank').value; ui.slot=$('#fSlot').value; ui.hour=$('#fHour').value||'00:00'; ui.tol=$('#fTol').value;
+  ui.from=$('#fFrom').value; ui.to=$('#fTo').value; ui.pulse=$('#showPulse').checked; ui.onlyAbn=$('#onlyAbn').checked;
+  lsSet('tension_ui', ui); syncUI(); render();
+}
+['#fRank','#fSlot','#fHour','#fTol','#fFrom','#fTo','#showPulse','#onlyAbn'].forEach(s=>$(s).addEventListener('change', readUI));
+function showTab(t){
+  ui.tab=t; lsSet('tension_ui',ui);
+  $$('nav button').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+  ['chart','list','data'].forEach(x=>$('#tab-'+x).classList.toggle('hidden', x!==t));
+  $('#filterCard').classList.toggle('hidden', t==='data');
+  if (t==='chart') renderChart();
+  if (t==='data') renderSnaps();
+}
+$$('nav button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+function render(){
+  const hints = {
+    avg23:'Pour chaque séance, la 1ʳᵉ mesure (souvent plus haute) est écartée et les suivantes sont moyennées.',
+    avg:'Moyenne de toutes les mesures de chaque séance.', all:'Chaque mesure est un point.',
+    '1':'Seule la 1ʳᵉ mesure de chaque séance. Elle est souvent surestimée (effet « réaction d\'alerte »).',
+    '2':'Seule la 2ᵉ mesure de chaque séance (séances d\'au moins 2 mesures).', '3':'Seule la 3ᵉ mesure de chaque séance (séances d\'au moins 3 mesures).',
+    last:'Seule la dernière mesure de chaque séance.'
+  };
+  $('#filterHint').textContent = hints[ui.rank] + ` Une séance = des mesures espacées de moins de ${GAP} min.`;
+  setStatus();
+  if (ui.tab==='chart') renderChart();
+  renderList();
+}
+const today=new Date(); $('#aD').value=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`; $('#aT').value=`${pad(today.getHours())}:${pad(today.getMinutes())}`;
+$('#appVersion').textContent = 'v' + APP_VERSION;
+renderRef(); syncUI(); showTab(ui.tab); render();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ if(ui.tab==='chart') renderChart(); });
+initRemote();
+
+/* ---------- PWA : installation, hors-ligne, stockage persistant ---------- */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('tension-sw.js', { scope: './tension' }).catch(()=>{});
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+let deferredPrompt = null;
+function installHint(){
+  const h = $('#installHint');
+  if (standalone) { h.textContent = "L'application est installée. Les données restent sur cet appareil : exportez un .json de temps en temps."; return; }
+  if (deferredPrompt) h.innerHTML = 'Appuyez sur « Installer l\'appli » en haut de l\'écran.';
+  else if (isIOS) h.innerHTML = 'Sur iPhone / iPad, dans Safari : bouton <b>Partager</b> → <b>Sur l\'écran d\'accueil</b>.';
+  else h.innerHTML = 'Dans Chrome ou Edge : menu ⋮ → <b>Installer l\'application</b> (ou icône d\'installation dans la barre d\'adresse).';
+}
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt=e; $('#btnInstall').classList.remove('hidden'); installHint(); });
+window.addEventListener('appinstalled', ()=>{ deferredPrompt=null; $('#btnInstall').classList.add('hidden'); toast('Application installée.'); });
+$('#btnInstall').onclick = async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice.catch(()=>{}); deferredPrompt=null; $('#btnInstall').classList.add('hidden'); };
+installHint();
+</script>
+</body>
+</html>
