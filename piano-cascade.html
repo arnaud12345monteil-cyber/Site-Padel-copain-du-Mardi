@@ -194,6 +194,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
     <button id="names" title="Noms des notes">Do Ré Mi</button>
     <button id="loopA" title="Début de boucle">A</button>
     <button id="loopB" title="Fin de boucle">B</button>
+    <select id="instr" title="Instrument"></select>
     <button id="vol" title="Son">🔊</button>
   </div>
 </div>
@@ -723,22 +724,106 @@ function ensureAudio(){
   master = AC.createGain(); master.gain.value=0.55;
   master.connect(lp); lp.connect(comp); comp.connect(AC.destination);
 }
+const INSTRUMENTS = {
+  piano:  "Piano",
+  epiano: "Piano électrique",
+  harpsi: "Clavecin",
+  organ:  "Orgue",
+  synth:  "Synthé lead",
+  pad:    "Synthé pad",
+  strings:"Cordes",
+  marimba:"Marimba",
+  chip:   "Synthé 8-bit"
+};
+let INSTR = "piano";
+try{ const v=localStorage.getItem("pc-instr"); if (v && INSTRUMENTS[v]) INSTR=v; }catch(e){}
+function osc(type, f, when, stopAt, detune=0){ const o=AC.createOscillator(); o.type=type; o.frequency.value=f; if (detune) o.detune.value=detune; o.start(when); o.stop(stopAt); return o; }
+function amp(v){ const g=AC.createGain(); g.gain.value=v; return g; }
+/* enveloppe : attaque a, pic, décroissance vers sus (constante dt), relâchement rel */
+function env(g, when, end, {a=0.005, peak=0.2, sus=0.2, dt=0.3, rel=0.1}){
+  g.gain.setValueAtTime(0, when);
+  g.gain.linearRampToValueAtTime(peak, when+a);
+  if (sus < 0.999) g.gain.setTargetAtTime(peak*sus, when+a, dt);
+  g.gain.setTargetAtTime(0, Math.max(end, when+a), rel/3);
+}
 function voice(m, when, dur, vel){
-  const f = 440*Math.pow(2,(m-69)/12);
-  const g = AC.createGain(); g.gain.setValueAtTime(0, when);
-  const peak = 0.22*vel*(m<48?1.15:1);
-  g.gain.linearRampToValueAtTime(peak, when+0.006);
-  const decay = Math.max(0.6, 3.2 - (m-40)*0.03);
-  g.gain.setTargetAtTime(peak*0.25, when+0.01, decay/3);
-  const end = when + dur;
-  g.gain.setTargetAtTime(0, end, 0.09);
-  const o1 = AC.createOscillator(); o1.type="triangle"; o1.frequency.value=f;
-  const o2 = AC.createOscillator(); o2.type="sine"; o2.frequency.value=f*2; const g2=AC.createGain(); g2.gain.value=0.25;
-  const o3 = AC.createOscillator(); o3.type="sine"; o3.frequency.value=f*0.5; const g3=AC.createGain(); g3.gain.value=m<55?0.2:0.05;
-  o1.connect(g); o2.connect(g2); g2.connect(g); o3.connect(g3); g3.connect(g); g.connect(master);
-  const stopAt = end + 0.6;
-  [o1,o2,o3].forEach(o=>{ o.start(when); o.stop(stopAt); });
-  voices.push({g, os:[o1,o2,o3], stopAt});
+  const f = 440*Math.pow(2,(m-69)/12), end = when+dur;
+  const out = AC.createGain(); out.connect(master);
+  let os = [], stopAt = end + 0.6, lowB = m<48?1.15:1;
+  switch (INSTR){
+    case "epiano": {
+      stopAt = end + 0.8;
+      const car = osc("sine", f, when, stopAt), mod = osc("sine", f, when, stopAt), mg = AC.createGain();
+      mg.gain.setValueAtTime(f*2.2, when); mg.gain.setTargetAtTime(f*0.25, when, 0.25);
+      mod.connect(mg); mg.connect(car.frequency);
+      const bell = osc("sine", f*4, when, stopAt), bg = amp(0); bg.gain.setValueAtTime(0.12*vel, when); bg.gain.setTargetAtTime(0, when, 0.08);
+      car.connect(out); bell.connect(bg); bg.connect(out);
+      env(out, when, end, {a:0.004, peak:0.24*vel, sus:0.3, dt:Math.max(0.5, 2.4-(m-40)*0.025), rel:0.25});
+      os=[car,mod,bell]; break;
+    }
+    case "harpsi": {
+      stopAt = end + 0.3;
+      const o1=osc("sawtooth", f, when, stopAt), o2=osc("square", f*2, when, stopAt, 4), hp=AC.createBiquadFilter(), g2=amp(0.25);
+      hp.type="highpass"; hp.frequency.value=Math.min(800, f*0.9);
+      o1.connect(hp); o2.connect(g2); g2.connect(hp); hp.connect(out);
+      env(out, when, Math.min(end, when+1.6), {a:0.002, peak:0.12*vel, sus:0.05, dt:Math.max(0.35, 1.3-(m-40)*0.012), rel:0.06});
+      os=[o1,o2]; break;
+    }
+    case "organ": {
+      stopAt = end + 0.2;
+      [[0.5,0.35],[1,0.5],[2,0.35],[3,0.18],[4,0.15],[6,0.06]].forEach(([r,gv])=>{ if (f*r<12000){ const o=osc("sine", f*r, when, stopAt), gg=amp(gv); o.connect(gg); gg.connect(out); os.push(o); } });
+      env(out, when, end, {a:0.012, peak:0.11*vel+0.03, sus:0.97, dt:2, rel:0.08});
+      break;
+    }
+    case "synth": {
+      stopAt = end + 0.5;
+      const o1=osc("sawtooth", f, when, stopAt, -7), o2=osc("sawtooth", f, when, stopAt, 7), lp=AC.createBiquadFilter();
+      lp.type="lowpass"; lp.Q.value=6; lp.frequency.setValueAtTime(Math.min(9000, f*8), when); lp.frequency.setTargetAtTime(Math.min(4000, f*3), when, 0.25);
+      o1.connect(lp); o2.connect(lp); lp.connect(out);
+      env(out, when, end, {a:0.01, peak:0.11*vel, sus:0.7, dt:0.2, rel:0.18});
+      os=[o1,o2]; break;
+    }
+    case "pad": {
+      stopAt = end + 1.4;
+      const o1=osc("sawtooth", f, when, stopAt, -10), o2=osc("sawtooth", f, when, stopAt, 10), o3=osc("triangle", f/2, when, stopAt), lp=AC.createBiquadFilter(), g3=amp(0.5);
+      lp.type="lowpass"; lp.Q.value=1; lp.frequency.value=Math.min(2200, f*4);
+      o1.connect(lp); o2.connect(lp); o3.connect(g3); g3.connect(lp); lp.connect(out);
+      env(out, when, end, {a:0.35, peak:0.08*vel, sus:0.85, dt:0.6, rel:1.2});
+      os=[o1,o2,o3]; break;
+    }
+    case "strings": {
+      stopAt = end + 0.9;
+      const o1=osc("sawtooth", f, when, stopAt, -5), o2=osc("sawtooth", f, when, stopAt, 6), lp=AC.createBiquadFilter();
+      const lfo=osc("sine", 5.2, when, stopAt), lg=amp(0); lg.gain.setValueAtTime(0, when); lg.gain.linearRampToValueAtTime(9, when+0.4);
+      lfo.connect(lg); lg.connect(o1.detune); lg.connect(o2.detune);
+      lp.type="lowpass"; lp.frequency.value=Math.min(3200, f*5); lp.Q.value=0.7;
+      o1.connect(lp); o2.connect(lp); lp.connect(out);
+      env(out, when, end, {a:0.14, peak:0.1*vel, sus:0.9, dt:0.4, rel:0.6});
+      os=[o1,o2,lfo]; break;
+    }
+    case "marimba": {
+      stopAt = Math.min(end, when+1.2) + 0.4;
+      const o1=osc("sine", f, when, stopAt), o2=osc("sine", f*4, when, stopAt), g2=amp(0); g2.gain.setValueAtTime(0.35, when); g2.gain.setTargetAtTime(0, when, 0.04);
+      o1.connect(out); o2.connect(g2); g2.connect(out);
+      env(out, when, Math.min(end, when+1.2), {a:0.002, peak:0.3*vel, sus:0.01, dt:Math.max(0.12, 0.5-(m-50)*0.006), rel:0.08});
+      os=[o1,o2]; break;
+    }
+    case "chip": {
+      stopAt = end + 0.1;
+      const o1=osc("square", f, when, stopAt);
+      o1.connect(out);
+      env(out, when, end, {a:0.002, peak:0.07*vel, sus:0.8, dt:0.15, rel:0.03});
+      os=[o1]; break;
+    }
+    default: { // piano
+      const o1=osc("triangle", f, when, stopAt), o2=osc("sine", f*2, when, stopAt), o3=osc("sine", f*0.5, when, stopAt);
+      const g2=amp(0.25), g3=amp(m<55?0.2:0.05);
+      o1.connect(out); o2.connect(g2); g2.connect(out); o3.connect(g3); g3.connect(out);
+      env(out, when, end, {a:0.006, peak:0.22*vel*lowB, sus:0.25, dt:Math.max(0.6, 3.2-(m-40)*0.03)/3, rel:0.27});
+      os=[o1,o2,o3];
+    }
+  }
+  voices.push({g:out, os, stopAt});
 }
 function silenceAll(){
   if (!AC) return; const now=AC.currentTime;
@@ -892,6 +977,10 @@ $("#names").onclick = () => { P.names=!P.names; $("#names").style.borderColor = 
 function updLoopBtns(){ $("#loopA").style.borderColor = P.loopA!=null?"var(--acc)":""; $("#loopB").style.borderColor = P.loopB!=null?"var(--acc)":""; }
 $("#loopA").onclick = () => { if (P.loopA!=null){ P.loopA=P.loopB=null; } else { P.loopA=Math.max(0,now()); P.loopB=null; toast("Début de boucle posé. Appuie sur B pour la fin.",2000); } updLoopBtns(); };
 $("#loopB").onclick = () => { if (P.loopA==null){ toast("Pose d'abord le point A.",1800); return; } const t=now(); if (t<=P.loopA+0.5){ toast("B doit être après A.",1800); return; } P.loopB=t; updLoopBtns(); seek(P.loopA); };
+$("#instr").innerHTML = Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("");
+$("#instr").value = INSTR;
+$("#instr").onchange = e => { INSTR = e.target.value; try{ localStorage.setItem("pc-instr", INSTR); }catch(err){} if (P.playing) seek(now()); else previewNote(); };
+function previewNote(){ ensureAudio(); AC.resume && AC.resume(); const t=AC.currentTime+0.03; [60,64,67].forEach((m,i)=>voice(m, t+i*0.12, 0.6, 0.7)); }
 $("#vol").onclick = () => { muted=!muted; $("#vol").textContent = muted?"🔇":"🔊"; if (muted) silenceAll(); };
 document.addEventListener("keydown", e => {
   if (!$("#player").classList.contains("on")) return;
