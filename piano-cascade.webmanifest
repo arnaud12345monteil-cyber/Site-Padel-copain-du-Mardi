@@ -1,0 +1,37 @@
+{
+  "name": "Piano Cascade",
+  "short_name": "Piano Cascade",
+  "description": "Apprends des morceaux au piano avec des notes qui tombent sur le clavier.",
+  "id": "./piano-cascade.html",
+  "start_url": "./piano-cascade.html",
+  "scope": "./piano-cascade",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1015",
+  "theme_color": "#0e1015",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "piano-cascade-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "piano-cascade-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "piano-cascade-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "piano-cascade-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

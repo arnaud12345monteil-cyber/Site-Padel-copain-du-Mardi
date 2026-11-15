@@ -100,19 +100,27 @@ main{max-width:1100px;margin:0 auto;padding:16px}
   .bar .title{display:none}
 }
 </style>
+<link rel="manifest" href="piano-cascade.webmanifest">
+<meta name="theme-color" content="#0e1015">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Piano Cascade">
+<link rel="apple-touch-icon" href="piano-cascade-apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="piano-cascade-icon-192.png">
 </head>
 <body>
 <header>
   <div class="logo"></div>
   <h1>Piano Cascade</h1>
   <button class="primary" id="installBtn" style="display:none;padding:4px 10px;font-size:12px">Installer</button>
-  <button class="ghost" id="verBadge" style="padding:2px 8px;font-size:12px;border-radius:20px" title="Nouveautés"></button>
   <span class="status" id="storeStatus"></span>
   <nav>
     <button data-v="lib" class="on">Bibliothèque</button>
     <button data-v="search">Rechercher</button>
     <button data-v="help">Aide</button>
   </nav>
+  <button class="ghost" id="verBadge" style="padding:2px 8px;font-size:12px;border-radius:20px" title="Nouveautés"></button>
 </header>
 
 <main>
@@ -187,7 +195,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       <h2 style="margin-top:16px">Partition défilante</h2>
       <p class="muted">Le bouton « Partition » du lecteur affiche au-dessus du clavier la partition des deux mains, qui défile en même temps que la musique. Elle est reconstruite à partir du MIDI : rythmes arrondis à la double-croche, pas de triolets, une seule voix par main, armure devinée. Elle aide à se repérer, mais elle n'aura pas la qualité d'une partition éditée.</p>
       <h2 style="margin-top:16px">Installer l'application</h2>
-      <p class="muted">La version web app (fichier piano-cascade-webapp.zip) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil et la conversion photo/PDF n'est pas disponible (elle passe par Claude).</p>
+      <p class="muted">La version web app (fichiers piano-cascade.html, piano-cascade-sw.js, piano-cascade.webmanifest et icônes piano-cascade-*) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil et la conversion photo/PDF n'est pas disponible (elle passe par Claude).</p>
       <h2 style="margin-top:16px">Raccourcis (clavier physique)</h2>
       <p class="muted">Espace : lecture/pause · ← → : ±5 s · ↑ ↓ : vitesse · Échap : fermer le lecteur</p>
     </div>
@@ -759,8 +767,11 @@ function buildScanNotes(measures, time0, bpm){
 }
 
 /* ---------- versions de l'application ---------- */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 const CHANGELOG = [
+  {v:"1.4.1", d:"15 nov. 2026", items:[
+    "Fichiers de la web app renommés en piano-cascade-* pour cohabiter avec d'autres sites dans le même dossier",
+    "Numéro de version déplacé en haut à droite"]},
   {v:"1.4.0", d:"15 nov. 2026", items:[
     "Partition défilante en option au-dessus du clavier, synchronisée avec la lecture",
     "Web app installable sur l'écran d'accueil, utilisable hors connexion une fois chargée",
@@ -1335,6 +1346,11 @@ document.addEventListener("keydown", e => {
   await Store.init();
   await refresh();
 })();
+</script>
+<script>
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")){
+  window.addEventListener("load", () => { navigator.serviceWorker.register("piano-cascade-sw.js", { scope: "./piano-cascade" }).catch(() => {}); });
+}
 </script>
 </body>
 </html>
