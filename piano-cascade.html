@@ -54,7 +54,14 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 /* Player */
 #player{display:none;position:fixed;inset:0;background:#07080b;z-index:10;flex-direction:column}
 #player.on{display:flex}
-#stage{flex:1;position:relative;min-height:0}
+#stage{flex:1;position:relative;min-height:0;display:flex;flex-direction:column}
+#cvWrap{flex:1;position:relative;min-height:0}
+#scoreBox{display:none;position:relative;background:#fbfaf6;overflow:hidden;flex:0 0 auto;border-bottom:2px solid #000}
+#scoreBox.on{display:block}
+#scoreInner{position:absolute;left:0;top:0;will-change:transform}
+#scoreInner svg{display:block}
+#scoreHead{position:absolute;top:0;bottom:0;left:30%;width:2px;background:rgba(245,140,40,.85);box-shadow:0 0 6px rgba(245,140,40,.6)}
+#scoreMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#666;font-size:13px;text-align:center;padding:0 16px}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line);padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .bar .title{font-weight:600;font-size:14px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -98,6 +105,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 <header>
   <div class="logo"></div>
   <h1>Piano Cascade</h1>
+  <button class="primary" id="installBtn" style="display:none;padding:4px 10px;font-size:12px">Installer</button>
   <button class="ghost" id="verBadge" style="padding:2px 8px;font-size:12px;border-radius:20px" title="Nouveautés"></button>
   <span class="status" id="storeStatus"></span>
   <nav>
@@ -176,6 +184,10 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       <p class="muted">L'app repère les portées, découpe la page en systèmes et fait lire chaque système par Claude, qui renvoie les notes. Ça consomme ton usage Claude (un appel toutes les 3 bandes) et ça prend 30 s à 1 min par appel. Sur une partition simple et propre, le résultat est souvent exploitable. Sur une partition dense, attends-toi à des fausses notes, des octaves décalées et des rythmes approximatifs. Les reprises ne sont pas déroulées. Pour une transcription fiable, passe par <b>Audiveris</b> (gratuit, reconnaissance dédiée) ou par l'import PDF de <b>MuseScore 4</b>, puis importe le MusicXML ici.</p>
       <h2 style="margin-top:16px">Récupérer le fichier MIDI</h2>
       <p class="muted">Le bouton « Exporter » d'un morceau télécharge un .zip contenant le .mid (le format .mid seul n'est pas autorisé par la page).</p>
+      <h2 style="margin-top:16px">Partition défilante</h2>
+      <p class="muted">Le bouton « Partition » du lecteur affiche au-dessus du clavier la partition des deux mains, qui défile en même temps que la musique. Elle est reconstruite à partir du MIDI : rythmes arrondis à la double-croche, pas de triolets, une seule voix par main, armure devinée. Elle aide à se repérer, mais elle n'aura pas la qualité d'une partition éditée.</p>
+      <h2 style="margin-top:16px">Installer l'application</h2>
+      <p class="muted">La version web app (fichier piano-cascade-webapp.zip) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil et la conversion photo/PDF n'est pas disponible (elle passe par Claude).</p>
       <h2 style="margin-top:16px">Raccourcis (clavier physique)</h2>
       <p class="muted">Espace : lecture/pause · ← → : ±5 s · ↑ ↓ : vitesse · Échap : fermer le lecteur</p>
     </div>
@@ -183,7 +195,10 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 </main>
 
 <div id="player">
-  <div id="stage"><canvas id="cv"></canvas><div id="rotate">Tourne ton téléphone pour un clavier plus large</div></div>
+  <div id="stage">
+    <div id="scoreBox"><div id="scoreInner"></div><div id="scoreHead"></div><div id="scoreMsg"></div></div>
+    <div id="cvWrap"><canvas id="cv"></canvas><div id="rotate">Tourne ton téléphone pour un clavier plus large</div></div>
+  </div>
   <div class="bar">
     <button id="close" title="Fermer">✕</button>
     <span class="title" id="ptitle"></span>
@@ -201,6 +216,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
     <span class="hand"><span class="dot" style="background:var(--lh)"></span><button id="hL">MG : son</button></span>
     <span class="hand" id="accWrap"><span class="dot" style="background:#8a93a3"></span><button id="hA">Acc : son</button></span>
     <button id="tracksBtn">Pistes</button>
+    <button id="scoreBtn" title="Afficher la partition">Partition</button>
     <button id="swap" title="Inverser les mains">⇄</button>
     <button id="names" title="Noms des notes">Do Ré Mi</button>
     <button id="loopA" title="Début de boucle">A</button>
@@ -297,12 +313,13 @@ function midiToNotes(u8){
   midi.tracks.forEach(t => {
     if (!t.notes.length || t.channel===9 || (t.instrument && t.instrument.percussion)) return;
     const ti = tracks.length; let sum=0, lo=127, hi=0;
-    t.notes.forEach(n => { notes.push({m:n.midi, t:n.time, d:Math.max(0.03,n.duration), v:n.velocity||0.7, tr:ti}); sum+=n.midi; if (n.midi<lo) lo=n.midi; if (n.midi>hi) hi=n.midi; });
+    t.notes.forEach(n => { notes.push({m:n.midi, t:n.time, d:Math.max(0.03,n.duration), v:n.velocity||0.7, tr:ti, tk:n.ticks, dtk:n.durationTicks}); sum+=n.midi; if (n.midi<lo) lo=n.midi; if (n.midi>hi) hi=n.midi; });
     const ins = t.instrument || {};
     tracks.push({ name:(t.name||"").trim(), prog: ins.number||0, family: ins.family||"piano", iname: ins.name||"", count:t.notes.length, avg:sum/t.notes.length, lo, hi });
   });
   notes.sort((a,b)=>a.t-b.t || a.m-b.m);
-  return { notes, tracks, trackCount: tracks.length, name: midi.name || (midi.header && midi.header.name) || "" };
+  const ts0 = (midi.header.timeSignatures && midi.header.timeSignatures[0] && midi.header.timeSignatures[0].timeSignature) || [4,4];
+  return { notes, tracks, trackCount: tracks.length, header: midi.header, ppq: midi.header.ppq || 480, ts: ts0, name: midi.name || (midi.header && midi.header.name) || "" };
 }
 
 async function readMusicXMLFile(file){
@@ -742,8 +759,12 @@ function buildScanNotes(measures, time0, bpm){
 }
 
 /* ---------- versions de l'application ---------- */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const CHANGELOG = [
+  {v:"1.4.0", d:"15 nov. 2026", items:[
+    "Partition défilante en option au-dessus du clavier, synchronisée avec la lecture",
+    "Web app installable sur l'écran d'accueil, utilisable hors connexion une fois chargée",
+    "Bouton « Installer » quand le navigateur le propose"]},
   {v:"1.3.0", d:"15 nov. 2026", items:[
     "Panneau Pistes : chaque piste d'un MIDI peut être main droite, main gauche, les deux mains, accompagnement ou ignorée",
     "Proposition automatique de répartition (pistes de piano repérées en priorité)",
@@ -762,6 +783,9 @@ function showNews(onlyNew){
   $("#newsM").classList.add("on");
 }
 function cmpVer(a,b){ const x=a.split(".").map(Number), y=String(b).split(".").map(Number); for (let i=0;i<3;i++){ if ((x[i]||0)!==(y[i]||0)) return (x[i]||0)-(y[i]||0); } return 0; }
+let deferredInstall=null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstall=e; $("#installBtn").style.display=""; });
+$("#installBtn").onclick = async () => { if (!deferredInstall) return; deferredInstall.prompt(); try{ await deferredInstall.userChoice; }catch(e){} deferredInstall=null; $("#installBtn").style.display="none"; };
 function initVersion(){
   $("#verBadge").textContent = "v"+APP_VERSION;
   $("#helpVer").innerHTML = "Version "+APP_VERSION+" · <a href=\"#\" id=\"helpNews\">voir les nouveautés</a>";
@@ -904,7 +928,7 @@ const cv=$("#cv"), cx=cv.getContext("2d");
 
 function openPlayer(s){
   let info; try{ info = midiToNotes(bytesFromB64(s.b64)); }catch(e){ toast("Fichier MIDI illisible."); return; }
-  P.song=s; P.all=info.notes; P.tracks=info.tracks;
+  P.song=s; P.all=info.notes; P.tracks=info.tracks; P.hdr=info.header; P.ppq=info.ppq; P.ts=info.ts; Score.anchors=null;
   const saved = s.trackCfg;
   const fresh = !(saved && Array.isArray(saved.roles) && saved.roles.length===P.tracks.length);
   P.cfg = fresh ? defaultCfg(P.tracks) : {...defaultCfg(P.tracks), ...saved};
@@ -913,6 +937,7 @@ function openPlayer(s){
   P.loopA=P.loopB=null; updLoopBtns();
   $("#ptitle").textContent=s.title;
   $("#player").classList.add("on");
+  setScoreVisible(Score.want, true);
   seek(-1.5); resize(); requestAnimationFrame(loop);
   if (fresh && P.tracks.length>2){ openTracks(); toast(P.tracks.length+" pistes détectées : vérifie la répartition proposée.", 4000); }
 }
@@ -964,7 +989,7 @@ let cfgSaveT=null;
 function cfgChanged(){
   const t = now(), was = P.playing; if (was) pause();
   applyCfg(); resize(); P.songT = Math.min(t, P.dur); if (was) play();
-  renderTracks();
+  renderTracks(); if (Score.want) scheduleScore();
   $("#tracksSaved").textContent = "Enregistrement…";
   clearTimeout(cfgSaveT);
   cfgSaveT = setTimeout(async () => {
@@ -1002,6 +1027,165 @@ $("#accVol").onchange = e => { P.cfg.accVol = e.target.value/100; cfgChanged(); 
 $("#accShow").onchange = e => { P.cfg.accShow = e.target.value; cfgChanged(); };
 $("#splitPt").onchange = e => { P.cfg.split = +e.target.value; cfgChanged(); };
 $("#tracksAuto").onclick = () => { P.cfg = defaultCfg(P.tracks); cfgChanged(); };
+
+/* ---------- partition : notes -> MusicXML (2 portées) ---------- */
+const MAJOR_PCS = [0,2,4,5,7,9,11];
+function estimateFifths(notes){
+  const w = new Array(12).fill(0);
+  notes.forEach(n => w[n.m%12] += Math.max(1, n.dq16||1));
+  let best=-1, bestF=0;
+  for (let f=-6; f<=6; f++){
+    const tonic = ((f*7)%12+12)%12;
+    let sc=0; MAJOR_PCS.forEach(p => sc += w[(tonic+p)%12]);
+    if (sc > best + 1e-9 || (Math.abs(sc-best)<1e-9 && Math.abs(f)<Math.abs(bestF))){ best=sc; bestF=f; }
+  }
+  return bestF;
+}
+const SHARP_SP = [["C",0],["C",1],["D",0],["D",1],["E",0],["F",0],["F",1],["G",0],["G",1],["A",0],["A",1],["B",0]];
+const FLAT_SP  = [["C",0],["D",-1],["D",0],["E",-1],["E",0],["F",0],["G",-1],["G",0],["A",-1],["A",0],["B",-1],["B",0]];
+function spell(m, fifths){
+  const [step, alter] = (fifths<0 ? FLAT_SP : SHARP_SP)[m%12];
+  let oct = Math.floor(m/12)-1;
+  return {step, alter, oct};
+}
+const DUR_TYPES = [[16,"whole",0],[12,"half",1],[8,"half",0],[6,"quarter",1],[4,"quarter",0],[3,"eighth",1],[2,"eighth",0],[1,"16th",0]];
+function splitDur(pos, len, measLen){
+  // découpe une durée (en double-croches) en valeurs écrivables, en respectant les temps
+  const out=[]; let p=pos, left=len;
+  while (left>0){
+    const al = d => d>=4 ? 4 : d>=2 ? 2 : 1;
+    let pick = DUR_TYPES.find(([d]) => d<=left && p+d<=measLen && p%al(d)===0) || DUR_TYPES[DUR_TYPES.length-1];
+    out.push(pick); p+=pick[0]; left-=pick[0];
+  }
+  return out;
+}
+/* notes : [{m, q16 (début en double-croches), dq16 (durée), staff:1|2}] */
+function buildMusicXML(notes, opts){
+  const beats = opts.beats||4, beatType = opts.beatType||4;
+  const measLen = Math.max(1, Math.round(beats*16/beatType));
+  const fifths = opts.fifths!=null ? opts.fifths : estimateFifths(notes);
+  const end = notes.reduce((a,n)=>Math.max(a, n.q16+n.dq16), 0);
+  const nMeas = Math.max(1, Math.ceil(end/measLen));
+  // flux d'accords par portée, sans chevauchement
+  const streams = {1:[],2:[]};
+  [1,2].forEach(st => {
+    const by = new Map();
+    notes.filter(n=>n.staff===st).forEach(n => { const k=n.q16; if (!by.has(k)) by.set(k, {q:k, ms:new Set(), d:0}); const e=by.get(k); e.ms.add(n.m); e.d=Math.max(e.d, n.dq16); });
+    const evs = [...by.values()].sort((a,b)=>a.q-b.q);
+    evs.forEach((e,i) => { const nx = evs[i+1]; e.d = Math.max(1, Math.min(e.d, nx ? nx.q-e.q : e.d)); });
+    streams[st] = evs;
+  });
+  const xmlNote = (st, pitches, dType, tieStart, tieStop) => {
+    const [d, type, dot] = dType;
+    if (!pitches) return `<note><rest/><duration>${d}</duration><voice>${st===1?1:5}</voice><type>${type}</type>${dot?"<dot/>":""}<staff>${st}</staff></note>`;
+    return pitches.map((m,i) => { const sp = spell(m, fifths);
+      return `<note>${i?"<chord/>":""}<pitch><step>${sp.step}</step>${sp.alter?`<alter>${sp.alter}</alter>`:""}<octave>${sp.oct}</octave></pitch><duration>${d}</duration>${tieStop?'<tie type="stop"/>':""}${tieStart?'<tie type="start"/>':""}<voice>${st===1?1:5}</voice><type>${type}</type>${dot?"<dot/>":""}<staff>${st}</staff>${(tieStart||tieStop)?`<notations>${tieStop?'<tied type="stop"/>':""}${tieStart?'<tied type="start"/>':""}</notations>`:""}</note>`; }).join("");
+  };
+  const meas = [];
+  for (let mi=0; mi<nMeas; mi++){
+    const m0 = mi*measLen, m1 = m0+measLen;
+    let body = "";
+    [1,2].forEach((st, si) => {
+      if (si===1) body += `<backup><duration>${measLen}</duration></backup>`;
+      const evs = streams[st].filter(e => e.q < m1 && e.q+e.d > m0);
+      if (!evs.length){ body += `<note><rest measure="yes"/><duration>${measLen}</duration><voice>${st===1?1:5}</voice><staff>${st}</staff></note>`; return; }
+      let pos = 0;
+      evs.forEach(e => {
+        const s = Math.max(e.q, m0) - m0, en = Math.min(e.q+e.d, m1) - m0;
+        if (s > pos){ splitDur(pos, s-pos, measLen).forEach(dt => { body += xmlNote(st, null, dt); }); pos = s; }
+        if (s < pos) return; // sécurité
+        const ms = [...e.ms].sort((a,b)=>a-b);
+        const parts = splitDur(s, en-s, measLen);
+        const contFromPrev = e.q < m0, contToNext = e.q+e.d > m1;
+        parts.forEach((dt, i) => { body += xmlNote(st, ms, dt, i<parts.length-1 || contToNext, i>0 || contFromPrev); });
+        pos = en;
+      });
+      if (pos < measLen) splitDur(pos, measLen-pos, measLen).forEach(dt => { body += xmlNote(st, null, dt); });
+    });
+    const attr = mi===0 ? `<attributes><divisions>4</divisions><key><fifths>${fifths}</fifths></key><time><beats>${beats}</beats><beat-type>${beatType}</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>` : "";
+    meas.push(`<measure number="${mi+1}">${attr}${body}</measure>`);
+  }
+  return { xml: `<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list><part id="P1">${meas.join("")}</part></score-partwise>`, measLen, nMeas, fifths };
+}
+
+const Score = { want:false, anchors:null, osmd:null, timer:null, loading:null, unit:8, buildId:0 };
+try{ Score.want = localStorage.getItem("pc-score")==="1"; }catch(e){}
+function loadOSMD(){
+  if (window.opensheetmusicdisplay) return Promise.resolve();
+  if (Score.loading) return Score.loading;
+  Score.loading = new Promise((res, rej) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@2.3.1/build/opensheetmusicdisplay.min.js";
+    sc.onload = () => res(); sc.onerror = () => { Score.loading=null; rej(new Error("chargement impossible")); };
+    document.head.appendChild(sc);
+  });
+  return Score.loading;
+}
+function setScoreVisible(on, silent){
+  Score.want = on;
+  try{ localStorage.setItem("pc-score", on?"1":"0"); }catch(e){}
+  $("#scoreBtn").style.borderColor = on ? "var(--acc)" : "";
+  $("#scoreBox").classList.toggle("on", on);
+  if (on){ if (!Score.anchors) scheduleScore(0); else sizeScoreBox(); }
+  resize();
+}
+$("#scoreBtn").onclick = () => setScoreVisible(!Score.want);
+function scheduleScore(delay=500){ clearTimeout(Score.timer); Score.timer = setTimeout(buildScore, delay); }
+function scoreMsg(t){ $("#scoreMsg").textContent = t||""; $("#scoreMsg").style.display = t ? "flex" : "none"; }
+function sizeScoreBox(){
+  const svg = $("#scoreInner svg"); const stageH = $("#stage").getBoundingClientRect().height || 400;
+  const h = svg ? Math.min(svg.getBoundingClientRect().height, stageH*0.42) : 90;
+  $("#scoreBox").style.height = Math.max(90, h)+"px";
+}
+async function buildScore(){
+  if (!Score.want || !P.song) return;
+  const id = ++Score.buildId;
+  Score.anchors = null; $("#scoreInner").innerHTML = ""; $("#scoreBox").style.height="90px"; scoreMsg("Préparation de la partition…"); resize();
+  try{ await loadOSMD(); }catch(e){ scoreMsg("Impossible de charger le moteur de partition (connexion ?)."); return; }
+  if (id !== Score.buildId) return;
+  const q = P.ppq/4;
+  const src = P.notes.filter(n => handOf(n) < 2 && n.tk!=null);
+  if (!src.length){ scoreMsg("Aucune note en main droite ou gauche à afficher."); return; }
+  const notes = src.map(n => ({ m:n.m, q16:Math.round(n.tk/q), dq16:Math.max(1, Math.round(n.dtk/q)), staff: handOf(n)===0 ? 1 : 2 }));
+  const [beats, beatType] = P.ts;
+  const res = buildMusicXML(notes, {beats, beatType});
+  await new Promise(r => setTimeout(r, 20));
+  try{
+    $("#scoreInner").innerHTML = "";
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay($("#scoreInner"), {
+      autoResize:false, backend:"svg", drawTitle:false, drawSubtitle:false, drawComposer:false, drawLyricist:false,
+      drawPartNames:false, drawPartAbbreviations:false, drawCredits:false, renderSingleHorizontalStaffline:true, autoBeam:true });
+    await osmd.load(res.xml);
+    if (id !== Score.buildId) return;
+    osmd.zoom = 0.75; osmd.render();
+    Score.osmd = osmd; Score.unit = 10*osmd.zoom;
+    // ancres temps (double-croches) -> position x
+    const pts = [];
+    osmd.GraphicSheet.MeasureList.forEach(staves => {
+      staves.forEach(gm => { if (!gm) return;
+        const base = gm.parentSourceMeasure.AbsoluteTimestamp.RealValue*16, ax = gm.PositionAndShape.AbsolutePosition.x;
+        gm.staffEntries.forEach(se => pts.push([base + se.relInMeasureTimestamp.RealValue*16, ax + se.PositionAndShape.RelativePosition.x]));
+        pts.push([base + gm.parentSourceMeasure.Duration.RealValue*16, ax + gm.PositionAndShape.Size.width]);
+      });
+    });
+    pts.sort((a,b)=>a[0]-b[0] || a[1]-b[1]);
+    const anchors = []; pts.forEach(p => { const l = anchors[anchors.length-1]; if (!l || p[0] > l[0]+1e-6) anchors.push(p); });
+    Score.anchors = anchors;
+    scoreMsg(""); sizeScoreBox(); resize();
+  }catch(e){ console.error(e); scoreMsg("La partition n'a pas pu être dessinée pour ce morceau."); }
+}
+function moveScore(t){
+  const A = Score.anchors; if (!A.length) return;
+  const ticks = t<=0 ? t*(P.ppq*2) : P.hdr.secondsToTicks(t);
+  const q = ticks/(P.ppq/4);
+  let x;
+  if (q <= A[0][0]) x = A[0][1] + (q - A[0][0]) * 1.2;
+  else if (q >= A[A.length-1][0]) x = A[A.length-1][1];
+  else { let lo=0, hi=A.length-1; while (hi-lo>1){ const m=(lo+hi)>>1; if (A[m][0] <= q) lo=m; else hi=m; }
+    const [q0,x0]=A[lo], [q1,x1]=A[hi]; x = x0 + (x1-x0)*(q-q0)/(q1-q0); }
+  const head = $("#scoreBox").clientWidth*0.3;
+  $("#scoreInner").style.transform = `translateX(${Math.round(head - x*Score.unit)}px)`;
+}
 
 function closePlayer(){ pause(); $("#player").classList.remove("on"); }
 $("#close").onclick = closePlayer;
@@ -1052,7 +1236,7 @@ function resize(){
   }
   $("#rotate").style.display = (W < 520 && H > W) ? "block" : "none";
 }
-window.addEventListener("resize", () => { if ($("#player").classList.contains("on")) resize(); });
+window.addEventListener("resize", () => { if ($("#player").classList.contains("on")){ if (Score.want && Score.anchors) sizeScoreBox(); resize(); } });
 
 const COL = [ ["#4fd1a5","#2c9c78"], ["#5b9cff","#3768c4"], ["#5d6573","#454c58"] ];
 function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
@@ -1106,6 +1290,7 @@ function loop(){
   // interface
   $("#time").textContent = fmt(Math.max(0,t))+" / "+fmt(P.dur);
   if (!seeking) $("#seek").value = Math.round(Math.max(0,t)/P.dur*1000);
+  if (Score.want && Score.anchors) moveScore(t);
   requestAnimationFrame(loop);
 }
 
@@ -1122,7 +1307,7 @@ function updHands(){ $("#hR").textContent="MD : "+HSTATE[P.hands[0]]; $("#hL").t
 $("#hA").onclick = () => { P.hands[2]=(P.hands[2]+1)%3; updHands(); if (P.playing){ seek(now()); } };
 $("#hR").onclick = () => { P.hands[0]=(P.hands[0]+1)%3; updHands(); if (P.playing){ seek(now()); } };
 $("#hL").onclick = () => { P.hands[1]=(P.hands[1]+1)%3; updHands(); if (P.playing){ seek(now()); } };
-$("#swap").onclick = () => { P.swap=!P.swap; if (P.playing) seek(now()); toast(P.swap?"Mains inversées":"Mains d'origine",1500); };
+$("#swap").onclick = () => { P.swap=!P.swap; if (P.playing) seek(now()); if (Score.want) scheduleScore(); toast(P.swap?"Mains inversées":"Mains d'origine",1500); };
 $("#names").onclick = () => { P.names=!P.names; $("#names").style.borderColor = P.names?"var(--acc)":""; };
 function updLoopBtns(){ $("#loopA").style.borderColor = P.loopA!=null?"var(--acc)":""; $("#loopB").style.borderColor = P.loopB!=null?"var(--acc)":""; }
 $("#loopA").onclick = () => { if (P.loopA!=null){ P.loopA=P.loopB=null; } else { P.loopA=Math.max(0,now()); P.loopB=null; toast("Début de boucle posé. Appuie sur B pour la fin.",2000); } updLoopBtns(); };
