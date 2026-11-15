@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/build/Midi.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <style>
 :root{
   --bg:#0e1015; --panel:#171a21; --panel2:#1f232c; --line:#2a2f3a; --txt:#e8eaf0; --mut:#8b93a5;
@@ -67,6 +69,15 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
 .modal.on{display:flex}
 .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:100%;max-width:380px}
+.thumbs{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:340px;overflow:auto}
+.thumbs figure{margin:0;background:#fff;border-radius:6px;overflow:hidden;position:relative}
+.thumbs img{display:block;width:100%}
+.thumbs figcaption{position:absolute;left:6px;top:4px;font-size:11px;background:rgba(0,0,0,.65);color:#fff;padding:1px 6px;border-radius:10px}
+.thumbs figure.done figcaption{background:#2c9c78}
+.thumbs figure.err figcaption{background:var(--danger)}
+.scanopts label{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px}
+.scanopts select,.scanopts input{width:auto;padding:6px 8px}
+#scanLog{font-size:13px;margin-top:10px;min-height:18px}
 .status{font-size:12px;color:var(--mut);margin-left:8px}
 #rotate{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(20,22,28,.9);border:1px solid var(--line);padding:6px 12px;border-radius:20px;font-size:12px;color:var(--mut);display:none}
 @media (max-width:640px){
@@ -102,6 +113,26 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       </div>
       <p class="muted" style="margin:10px 0 0">Les partitions MusicXML sont converties en MIDI à l'import. Tout est rangé dans ta bibliothèque.</p>
     </div>
+    <div class="card" id="scanCard">
+      <h2>Convertir une partition (photo, scan ou PDF) en MIDI</h2>
+      <p class="muted" id="scanOff" style="margin:0">Cette fonction passe par Claude : elle ne marche que dans l'app ouverte depuis Claude, pas dans le fichier HTML seul.</p>
+      <div id="scanOn" style="display:none">
+        <div class="row">
+          <button class="primary" id="scanPick">Choisir JPEG / PNG / PDF</button>
+          <input type="file" id="scanFile" multiple accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden>
+          <span class="muted" id="scanInfo"></span>
+        </div>
+        <div class="row scanopts" style="margin-top:10px">
+          <label>Portées par système <select id="perSys"><option value="auto">Auto</option><option value="1">1</option><option value="2">2 (piano)</option><option value="3">3</option></select></label>
+          <label>Tempo (noire =) <input type="number" id="scanTempo" min="20" max="240" placeholder="auto" style="width:80px"></label>
+          <button id="scanGo" disabled>Convertir</button>
+          <button id="scanStop" style="display:none">Arrêter</button>
+        </div>
+        <div id="scanLog" class="muted"></div>
+        <div class="thumbs" id="thumbs"></div>
+        <p class="muted" style="margin:10px 0 0">Conseils : partition imprimée, page entière, photo bien droite et nette. Chaque bande ci-dessus est lue séparément. Une partition manuscrite ou très chargée donnera beaucoup d'erreurs.</p>
+      </div>
+    </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
         <h2 style="margin:0">Ma bibliothèque <span class="muted" id="count"></span></h2>
@@ -132,8 +163,8 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       3. Lance la lecture : les notes tombent sur le clavier, main droite en vert, main gauche en bleu.</p>
       <h2 style="margin-top:16px">Mains droite / gauche</h2>
       <p class="muted">Si le fichier a deux pistes (cas des MIDI de piano bien faits et des MusicXML à deux portées), la première est la main droite. Sinon, l'app sépare au Do central. Le bouton ⇄ inverse les mains, et chaque main peut être jouée, rendue muette ou masquée pour t'entraîner.</p>
-      <h2 style="margin-top:16px">Et les partitions PDF ?</h2>
-      <p class="muted">Un PDF est une image : il faut une reconnaissance optique (OMR) pour en tirer des notes. Le logiciel gratuit <b>MuseScore 4</b> sait importer un PDF (via son service d'OMR) puis exporter en MIDI ou MusicXML. Le résultat demande souvent des corrections.</p>
+      <h2 style="margin-top:16px">Partitions en photo ou PDF</h2>
+      <p class="muted">L'app repère les portées, découpe la page en systèmes et fait lire chaque système par Claude, qui renvoie les notes. Ça consomme ton usage Claude (un appel toutes les 3 bandes) et ça prend 30 s à 1 min par appel. Sur une partition simple et propre, le résultat est souvent exploitable. Sur une partition dense, attends-toi à des fausses notes, des octaves décalées et des rythmes approximatifs. Les reprises ne sont pas déroulées. Pour une transcription fiable, passe par <b>Audiveris</b> (gratuit, reconnaissance dédiée) ou par l'import PDF de <b>MuseScore 4</b>, puis importe le MusicXML ici.</p>
       <h2 style="margin-top:16px">Récupérer le fichier MIDI</h2>
       <p class="muted">Le bouton « Exporter » d'un morceau télécharge un .zip contenant le .mid (le format .mid seul n'est pas autorisé par la page).</p>
       <h2 style="margin-top:16px">Raccourcis (clavier physique)</h2>
@@ -334,7 +365,7 @@ function render(){
   $("#lib").innerHTML = list.map(s => `
     <div class="song">
       <div class="t">${esc(s.title||"Sans titre")}</div>
-      <div class="m"><span class="tag">${s.source==="musicxml"?"MusicXML":"MIDI"}</span>${fmt(s.duration||0)} · ${s.noteCount||0} notes · ${s.tracks>=2?"2 mains":"1 piste"}</div>
+      <div class="m"><span class="tag">${({musicxml:"MusicXML",scan:"Scan"})[s.source]||"MIDI"}</span>${fmt(s.duration||0)} · ${s.noteCount||0} notes · ${s.tracks>=2?"2 mains":"1 piste"}</div>
       <div class="a">
         <button class="primary" data-act="play" data-id="${s.id}">▶ Jouer</button>
         <button data-act="export" data-id="${s.id}">Exporter</button>
@@ -345,7 +376,7 @@ function render(){
 }
 $("#filter").addEventListener("input", render);
 
-async function importFiles(files){
+async function importFiles(files, opts={}){
   let ok=0;
   for (const file of files){
     try{
@@ -353,7 +384,7 @@ async function importFiles(files){
       let bytes, info, source, tempo=120, title = file.name.replace(/\.(midi?|musicxml|xml|mxl)$/i,"");
       if (/\.(mid|midi)$/.test(lower)){
         bytes = new Uint8Array(await file.arrayBuffer());
-        info = midiToNotes(bytes); source="midi";
+        info = midiToNotes(bytes); source=opts.source||"midi";
       } else if (/\.(xml|musicxml|mxl)$/.test(lower)){
         const x = musicXMLToNotes(await readMusicXMLFile(file));
         if (x.title) title = x.title;
@@ -376,7 +407,7 @@ $("#file").onchange = e => { importFiles([...e.target.files]); e.target.value=""
 const drop = $("#drop");
 ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hover"); }));
 ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hover"); }));
-drop.addEventListener("drop", e => importFiles([...e.dataTransfer.files]));
+drop.addEventListener("drop", e => { const fs=[...e.dataTransfer.files]; const sc=fs.filter(isScanFile), rest=fs.filter(f=>!isScanFile(f)); if (rest.length) importFiles(rest); if (sc.length) loadScan(sc); });
 
 $("#demo").onclick = async () => {
   // petite étude originale : arpèges main droite, basses main gauche
@@ -428,6 +459,253 @@ const SOURCES = [
 ];
 $("#sform").addEventListener("submit", e => { e.preventDefault(); const q=$("#q").value.trim(); if (!q) return; const enc=encodeURIComponent(q);
   $("#links").innerHTML = SOURCES.map(s=>`<a href="${s.u(enc)}" target="_blank" rel="noopener"><b>${s.n} ↗</b><span>${s.d}</span></a>`).join(""); });
+
+/* ---------- partition image / PDF -> MIDI ---------- */
+const Scan = { sample:null, maxImgs:3, pages:[], strips:[], ctl:null, busy:false, title:"" };
+if (window.pdfjsLib) try{ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }catch(e){}
+
+async function initScan(){
+  try{
+    if (!(window.claude && claude.use)) return;
+    const s = await claude.use("sample"); if (!s) return;
+    const lim = await s.limits().catch(()=>null);
+    if (!lim || !lim.images) return;
+    Scan.sample = s; Scan.maxImgs = Math.max(1, Math.min(3, lim.images.maxCount||3));
+    $("#scanOff").style.display="none"; $("#scanOn").style.display="block";
+  }catch(e){}
+}
+const isScanFile = f => /\.(pdf|jpe?g|png|webp)$/i.test(f.name) || /^image\//.test(f.type) || f.type==="application/pdf";
+$("#scanPick").onclick = () => $("#scanFile").click();
+$("#scanFile").onchange = e => { loadScan([...e.target.files]); e.target.value=""; };
+$("#perSys").onchange = () => { if (Scan.pages.length) cutStrips(); };
+
+async function loadScan(files){
+  if (!Scan.sample){ toast("La conversion de partitions n'est disponible que dans l'app ouverte depuis Claude."); return; }
+  if (Scan.busy) return;
+  Scan.pages=[]; $("#scanLog").textContent="Lecture des fichiers…";
+  Scan.title = files[0] ? files[0].name.replace(/\.[^.]+$/,"") : "Partition";
+  for (const f of files){
+    try{
+      if (/\.pdf$/i.test(f.name) || f.type==="application/pdf"){
+        if (!window.pdfjsLib) throw new Error("lecteur PDF indisponible");
+        const pdf = await pdfjsLib.getDocument({data: new Uint8Array(await f.arrayBuffer())}).promise;
+        const n = Math.min(pdf.numPages, 12);
+        if (pdf.numPages>12) toast("Seules les 12 premières pages sont prises.");
+        for (let i=1;i<=n;i++){
+          $("#scanLog").textContent = "Rendu de la page "+i+"/"+n+"…";
+          const page = await pdf.getPage(i); const vp0 = page.getViewport({scale:1});
+          const vp = page.getViewport({scale: Math.min(3.5, 2400/vp0.width)});
+          const c = document.createElement("canvas"); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+          const g = c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
+          await page.render({canvasContext:g, viewport:vp}).promise;
+          Scan.pages.push(c);
+        }
+      } else {
+        const bmp = await createImageBitmap(f);
+        const sc = Math.min(1, 2600/bmp.width);
+        const c = document.createElement("canvas"); c.width=Math.round(bmp.width*sc); c.height=Math.round(bmp.height*sc);
+        const g = c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(bmp,0,0,c.width,c.height);
+        Scan.pages.push(c);
+      }
+    }catch(e){ console.error(e); toast("Impossible de lire "+f.name+" ("+(e.message||"erreur")+")"); }
+  }
+  cutStrips();
+}
+
+/* redresse une page légèrement penchée (photo) */
+function deskew(c){
+  const sw = Math.min(1400, c.width), sc = sw/c.width, sh = Math.max(1, Math.round(c.height*sc));
+  const t = document.createElement("canvas"); t.width=sw; t.height=sh;
+  const tg = t.getContext("2d"); tg.drawImage(c,0,0,sw,sh);
+  const d = tg.getImageData(0,0,sw,sh).data;
+  let mean=0; for (let j=0;j<d.length;j+=4) mean += d[j]; mean /= (d.length/4);
+  const pts=[], wts=[]; for (let y=0;y<sh;y++) for (let x=0;x<sw;x++){ const v=d[(y*sw+x)*4]; if (v < mean*0.92){ pts.push(x,y); wts.push(mean-v); } }
+  if (pts.length < 200) return c;
+  let best=0, bestA=0;
+  const score = a => { const tn=Math.tan(a*Math.PI/180), H=new Float64Array(sh*3+sw); const off=sh+sw;
+    for (let i=0,k=0;i<pts.length;i+=2,k++){ const yy=Math.round(pts[i+1] - pts[i]*tn)+off; if (yy>=0&&yy<H.length) H[yy]+=wts[k]; }
+    let s=0; for (let i=0;i<H.length;i++) s+=H[i]*H[i]; return s; };
+  for (let a=-4; a<=4.001; a+=0.25){ const s=score(a); if (s>best){best=s;bestA=a;} }
+  for (let a=bestA-0.25; a<=bestA+0.25; a+=0.05){ const s=score(a); if (s>best){best=s;bestA=a;} }
+  if (Math.abs(bestA) < 0.08) return c;
+  const r = bestA*Math.PI/180;
+  const o = document.createElement("canvas"); o.width=c.width; o.height=c.height;
+  const g = o.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,o.width,o.height);
+  g.translate(o.width/2, o.height/2); g.rotate(-r); g.drawImage(c, -c.width/2, -c.height/2);
+  return o;
+}
+
+/* repère les lignes de portée par projection horizontale */
+function findStaves(c){
+  const w=c.width, h=c.height, d=c.getContext("2d").getImageData(0,0,w,h).data;
+  const gray = new Uint8Array(w*h); const hist = new Array(256).fill(0);
+  for (let i=0,j=0;i<gray.length;i++,j+=4){ const v=(d[j]*0.3+d[j+1]*0.59+d[j+2]*0.11)|0; gray[i]=v; hist[v]++; }
+  // seuil d'Otsu
+  let sum=0; for (let i=0;i<256;i++) sum+=i*hist[i];
+  let sB=0,wB=0,best=0,thr=128;
+  for (let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=gray.length-wB; if(!wF) break; sB+=t*hist[t]; const mB=sB/wB, mF=(sum-sB)/wF; const between=wB*wF*(mB-mF)*(mB-mF); if(between>best){best=between;thr=t;} }
+  const ratio = new Float32Array(h); let mx=0;
+  for (let y=0;y<h;y++){ let n=0; const o=y*w; for (let x=0;x<w;x++) if (gray[o+x]<thr) n++; ratio[y]=n/w; if (ratio[y]>mx) mx=ratio[y]; }
+  const lim = Math.max(0.22, mx*0.5);
+  const lines=[]; let y=0;
+  while (y<h){ if (ratio[y]>=lim){ let y2=y; while (y2+1<h && ratio[y2+1]>=lim) y2++; lines.push((y+y2)/2); y=y2+1; } else y++; }
+  const staves=[]; let g=[];
+  const close = () => { if (g.length>=4) staves.push({top:g[0], bot:g[g.length-1], sp:(g[g.length-1]-g[0])/(g.length-1)}); };
+  for (const ly of lines){
+    if (!g.length){ g=[ly]; continue; }
+    const gap = ly - g[g.length-1];
+    const ok = g.length===1 ? (gap>2 && gap < h/28) : Math.abs(gap-(g[1]-g[0])) < 0.35*(g[1]-g[0]);
+    if (ok && g.length<5) g.push(ly); else { close(); g=[ly]; }
+  }
+  close();
+  return staves;
+}
+
+function groupSystems(staves){
+  let per = $("#perSys").value;
+  if (per==="auto"){
+    per = 1;
+    if (staves.length>=2 && staves.length%2===0){
+      const inner=[], outer=[];
+      for (let i=0;i<staves.length-1;i++) (i%2===0?inner:outer).push(staves[i+1].top-staves[i].bot);
+      const mi = inner.reduce((a,b)=>a+b,0)/inner.length, mo = outer.length ? outer.reduce((a,b)=>a+b,0)/outer.length : Infinity;
+      per = mi <= mo*1.1 ? 2 : 1;
+    }
+  } else per = parseInt(per);
+  const sys=[];
+  for (let i=0;i<staves.length;i+=per){ const grp=staves.slice(i,i+per); sys.push({top:grp[0].top, bot:grp[grp.length-1].bot, sp:grp[0].sp}); }
+  return {sys, per};
+}
+
+function cutStrips(){
+  Scan.strips.forEach(s=>URL.revokeObjectURL(s.url)); Scan.strips=[];
+  const box=$("#thumbs"); box.innerHTML="";
+  let warn=false, perUsed=null;
+  const jobs = [];
+  Scan.pages.forEach((c, pi) => {
+    const staves = findStaves(c);
+    const {sys, per} = groupSystems(staves); perUsed = per;
+    if (!sys.length){ warn=true; jobs.push({c, y0:0, y1:c.height, label:"Page "+(pi+1)+" entière"}); return; }
+    sys.forEach((s,i) => {
+      const prev = sys[i-1], next = sys[i+1];
+      let y0 = prev ? (prev.bot + s.top)/2 : s.top - 7*s.sp;
+      let y1 = next ? (s.bot + next.top)/2 : s.bot + 6*s.sp;
+      jobs.push({c, y0:Math.max(0,Math.floor(y0)), y1:Math.min(c.height,Math.ceil(y1)), label:"P"+(pi+1)+" · système "+(i+1)});
+    });
+  });
+  Promise.all(jobs.map(j => new Promise(res => {
+    const sc = Math.min(1, 2000/j.c.width);
+    const o = document.createElement("canvas"); o.width=Math.round(j.c.width*sc); o.height=Math.max(1,Math.round((j.y1-j.y0)*sc));
+    const g=o.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,o.width,o.height);
+    g.drawImage(j.c, 0, j.y0, j.c.width, j.y1-j.y0, 0, 0, o.width, o.height);
+    o.toBlob(b => res({blob:b, label:j.label}), "image/jpeg", 0.9);
+  }))).then(list => {
+    Scan.strips = list.filter(x=>x.blob).map(x => ({...x, url:URL.createObjectURL(x.blob)}));
+    box.innerHTML = Scan.strips.map((s,i)=>`<figure id="st${i}"><img src="${s.url}" alt=""><figcaption>${esc(s.label)}</figcaption></figure>`).join("");
+    const calls = Math.ceil(Scan.strips.length/Scan.maxImgs);
+    $("#scanInfo").textContent = Scan.strips.length ? Scan.strips.length+" bande(s), "+calls+" appel(s) à Claude" : "";
+    $("#scanLog").textContent = warn ? "Portées non repérées sur certaines pages : elles seront envoyées entières (moins précis). Essaie une image plus droite et contrastée." :
+      (Scan.strips.length ? "Vérifie que chaque bande contient un système complet"+(perUsed===2?" (2 portées)":"")+", sinon change « Portées par système »." : "");
+    $("#scanGo").disabled = !Scan.strips.length;
+  });
+}
+
+const STEPS = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function pitchToMidi(p){
+  const m = /^\s*([A-Ga-g])\s*(##|bb|x|#|b|♯|♭|n)?\s*(-?\d)\s*$/.exec(String(p)); if (!m) return null;
+  const acc = {"#":1,"♯":1,"##":2,"x":2,"b":-1,"♭":-1,"bb":-2,"n":0}[m[2]||"n"]||0;
+  const v = (parseInt(m[3])+1)*12 + STEPS[m[1].toUpperCase()] + acc;
+  return v>=21 && v<=108 ? v : null;
+}
+function tsLen(ts){ const m=/^(\d+)\s*\/\s*(\d+)$/.exec(String(ts||"")); return m ? parseInt(m[1])*4/parseInt(m[2]) : 0; }
+
+function scanPrompt(k, ctx){
+  return `You are transcribing printed piano sheet music into note data. The ${k} attached image(s) are consecutive systems of one piece, in reading order (image 1 comes first). A system usually has a treble staff (right hand, "rh") and a bass staff (left hand, "lh"). If a system has a single staff, put its notes in "rh".
+Context from the previous systems: key signature: ${ctx.key||"unknown, read it from the image"}; time signature: ${ctx.time||"unknown, read it from the image"}.
+Rules:
+- Give the sounding pitch of every note in scientific notation (C4 = middle C), applying the clef, clef changes, key signature, accidentals carried through the measure, and 8va/8vb signs. Use # and b (e.g. "F#4", "Bb3").
+- "s" = onset in quarter notes from the start of the measure; "d" = duration in quarter notes (eighth 0.5, dotted quarter 1.5, triplet eighth 0.3333, sixteenth 0.25). Notes struck together in one hand share one event with several pitches. Several voices on one staff are fine: just give each event its own onset.
+- Skip rests, dynamics, text, fingering and grace notes. Do not expand repeats: transcribe what is printed, once.
+- A note tied from the previous measure: add "t":1 to its event and give only its duration inside this measure.
+- If the time signature changes at a measure, add "time":"6/8" to that measure.
+- Transcribe every measure of every image in order. Never invent, merge or skip measures. If something is unreadable, make your best guess.
+Reply with only JSON of this shape:
+{"key":"Eb major","time":"3/4","tempo":null,"systems":[{"measures":[{"rh":[{"p":["G4","Bb4"],"s":0,"d":1}],"lh":[{"p":["Eb3"],"s":0,"d":3}]}]}]}
+"key" and "time" are the values in force at the END of the last image. "tempo" is the quarter-note BPM if a metronome mark is printed, otherwise null. "systems" must contain exactly ${k} entries, one per image.`;
+}
+
+$("#scanStop").onclick = () => { if (Scan.ctl) Scan.ctl.abort(); };
+$("#scanGo").onclick = async () => {
+  if (Scan.busy || !Scan.strips.length) return;
+  Scan.busy=true; $("#scanGo").disabled=true; $("#scanStop").style.display=""; $("#scanPick").disabled=true;
+  const ctx = {key:null, time:null}; let tempo=null; const allSystems=[]; let failed=0;
+  const log = t => $("#scanLog").textContent = t;
+  try{
+    for (let i=0;i<Scan.strips.length;i+=Scan.maxImgs){
+      const batch = Scan.strips.slice(i, i+Scan.maxImgs);
+      const tag = "Bandes "+(i+1)+(batch.length>1?"–"+(i+batch.length):"")+" / "+Scan.strips.length;
+      log(tag+" : Claude lit la partition… (30 s à 1 min)");
+      Scan.ctl = new AbortController();
+      let res;
+      try{
+        res = await Scan.sample.json(scanPrompt(batch.length, ctx), { images: batch.map(b=>b.blob), modelTier:"complex", signal: Scan.ctl.signal });
+      }catch(e){
+        if (e && e.code==="cancelled"){ log("Conversion arrêtée."); break; }
+        if (e && (e.code==="not_granted"||e.code==="sampling_disabled")){ log("Claude n'a pas été autorisé pour cette page."); break; }
+        if (e && e.code==="rate_limited"){ log("Limite d'usage Claude atteinte. Réessaie plus tard."); break; }
+        failed += batch.length; batch.forEach((_,j)=>{ const f=$("#st"+(i+j)); if (f) f.classList.add("err"); });
+        allSystems.push(...batch.map(()=>null));
+        continue;
+      }
+      const sys = Array.isArray(res && res.systems) ? res.systems : [];
+      for (let j=0;j<batch.length;j++){
+        const s = sys[j]; allSystems.push(s||null);
+        const f=$("#st"+(i+j)); if (f) f.classList.add(s?"done":"err"); if (!s) failed++;
+      }
+      if (res && res.key) ctx.key = String(res.key);
+      if (res && res.time && tsLen(res.time)) ctx.time = String(res.time);
+      if (!tempo && res && Number(res.tempo)>20) tempo = Number(res.tempo);
+      if (!ctx.firstTime && ctx.time) ctx.firstTime = ctx.time;
+    }
+    const measures = allSystems.filter(Boolean).flatMap(s => Array.isArray(s.measures) ? s.measures : []);
+    if (!measures.length){ if (!/arrêtée|autorisé|Limite/.test($("#scanLog").textContent)) log("Aucune note n'a pu être lue."); return; }
+    const bpm = parseFloat($("#scanTempo").value) || tempo || 80;
+    const notes = buildScanNotes(measures, ctx.firstTime || ctx.time || "4/4", bpm);
+    if (!notes.length){ log("Aucune note exploitable dans la réponse."); return; }
+    const bytes = notesToMidiBytes(notes, bpm, Scan.title);
+    log(measures.length+" mesures lues"+(failed?", "+failed+" bande(s) en échec (en rouge)":"")+". Ajout à la bibliothèque…");
+    await importFiles([new File([bytes], Scan.title+" (scan).mid")], {source:"scan"});
+    log(measures.length+" mesures converties"+(failed?" ("+failed+" bande(s) en échec)":"")+". Le morceau est dans ta bibliothèque, à vérifier à l'écoute.");
+  } finally {
+    Scan.busy=false; Scan.ctl=null; $("#scanGo").disabled=!Scan.strips.length; $("#scanStop").style.display="none"; $("#scanPick").disabled=false;
+  }
+};
+
+function buildScanNotes(measures, time0, bpm){
+  const spq = 60/bpm; let cursor=0, curTs=tsLen(time0)||4; const notes=[]; const last=new Map();
+  measures.forEach((ms, mi) => {
+    if (ms && ms.time && tsLen(ms.time)) curTs = tsLen(ms.time);
+    let maxEnd = 0;
+    ["rh","lh"].forEach((hk, hand) => {
+      const evs = Array.isArray(ms && ms[hk]) ? ms[hk] : [];
+      evs.forEach(ev => {
+        const s = Math.max(0, Number(ev.s)||0), d = Math.max(0.05, Number(ev.d)||0.5);
+        maxEnd = Math.max(maxEnd, s+d);
+        (Array.isArray(ev.p)?ev.p:[ev.p]).forEach(p => {
+          const m = pitchToMidi(p); if (m==null) return;
+          const key = m+"|"+hand, prev = last.get(key), on = cursor+s;
+          if (ev.t && prev && Math.abs(prev.tq+prev.dq - on) < 0.26) prev.dq += d;
+          else { const n={m, tq:on, dq:d, tr:hand, v:0.72}; notes.push(n); last.set(key,n); }
+        });
+      });
+    });
+    const len = (mi===0 && maxEnd>0 && maxEnd < curTs-0.01) ? maxEnd : Math.max(curTs, 0.25);
+    cursor += len;
+  });
+  notes.forEach(n => { n.t = n.tq*spq; n.d = n.dq*spq; });
+  notes.sort((a,b)=>a.t-b.t || a.m-b.m);
+  return notes;
+}
 
 /* ---------- navigation ---------- */
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
@@ -628,6 +906,7 @@ document.addEventListener("keydown", e => {
 (async () => {
   if (!window.Midi){ toast("La bibliothèque MIDI n'a pas pu se charger."); }
   render();
+  initScan();
   await Store.init();
   await refresh();
 })();
