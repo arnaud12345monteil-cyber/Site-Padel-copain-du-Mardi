@@ -39,6 +39,7 @@
   --accent:#6b93ff; --accent-ink:#0b1020; --charge:#3cc78f; --warn:#f0a050; --bad:#ff7a70; --field:#1d2531;
   --home:#3cc78f; --away:#6b93ff; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);overflow-x:clip;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
@@ -171,7 +172,7 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   <!-- Inventaire -->
   <section class="panel" id="invPanel">
     <header><h2>Inventaire</h2>
-      <div class="row"><button type="button" class="mini" id="addBtn">+ Ajouter à la main</button></div></header>
+      <div class="row"><button type="button" class="mini" id="addBtn">+ Ajouter à la main</button><button type="button" class="mini" id="bulkBtn">+ Ajout en série</button></div></header>
     <div class="row">
       <label>Période<select id="fPer"></select></label>
       <label>Type<select id="fType"><option value="">Toutes</option><option value="maison">Maison</option><option value="exterieur">En déplacement</option></select></label>
@@ -286,9 +287,53 @@ dialog .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   </form>
 </dialog>
 
+<dialog id="bulkDlg">
+  <form method="dialog" id="bulkForm">
+    <h2>Ajout en série</h2>
+    <p class="note">Crée plusieurs recharges identiques sur une période, par exemple la recharge à la maison deux soirs par semaine. Elles passent ensuite par l'écran de vérification, comme un import.</p>
+    <div class="grid2">
+      <label>Du<input type="date" id="bFrom" required></label>
+      <label>Au<input type="date" id="bTo" required></label>
+      <label>Périodicité<select id="bRep"><option value="days">Certains jours de la semaine</option><option value="every">Tous les N jours</option></select></label>
+      <label>Heure de début<input type="time" id="bTime" value="22:00"></label>
+    </div>
+    <div id="bDaysBox" class="row" style="gap:10px;margin-top:4px">
+
+    </div>
+    <label id="bEveryBox" hidden>Tous les<input type="number" id="bEvery" min="1" max="60" value="2"> <small>jours</small></label>
+    <label>Énergie de chaque recharge<select id="bMode"><option value="pct">En % de batterie (de … à …)</option><option value="kw">Puissance × durée</option><option value="kwh">En kWh</option></select></label>
+    <div class="grid2" id="bPct">
+      <label>De (%)<input type="number" id="bPctFrom" min="0" max="100" value="30"></label>
+      <label>À (%)<input type="number" id="bPctTo" min="1" max="100" value="80"></label>
+      <label>Batterie utile (kWh)<input type="number" id="bCap" min="5" step="0.1" value="70"></label>
+      <label>Pertes de charge (%)<input type="number" id="bLoss" min="0" max="40" step="1" value="10"></label>
+      <label>Puissance de charge (kW) <small>facultatif, pour l'heure de fin</small><input type="number" id="bPctKw" min="0" step="0.1" placeholder="ex. 7,4"></label>
+    </div>
+    <div class="grid2" id="bKw" hidden>
+      <label>Puissance (kW)<input type="number" id="bKwVal" min="0.5" step="0.1" value="7.4"></label>
+      <label>Durée (h)<input type="number" id="bDur" min="0.1" step="0.25" value="4"></label>
+    </div>
+    <div class="grid2" id="bKwh" hidden>
+      <label>Énergie (kWh)<input type="number" id="bKwhVal" min="0.1" step="0.1" value="25"></label>
+    </div>
+    <div class="grid2">
+      <label>Type<select id="bType"><option value="maison">Maison</option><option value="exterieur">En déplacement</option></select></label>
+      <label>Prix du kWh (€) <small>vide = prix maison</small><input type="number" id="bPrice" min="0" step="0.001"></label>
+      <label>Opérateur<input id="bOp" list="opList"></label>
+      <label>Lieu<input id="bLieu"></label>
+    </div>
+    <p class="note" id="bPrev" role="status"></p>
+    <div class="row">
+      <button type="button" class="mini primary" id="bGo">Vérifier et ajouter</button>
+      <button class="mini" value="cancel" formnovalidate>Annuler</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 "use strict";
 const CHANGELOG=[
+  {v:"1.9", d:"15/11/2026", c:["Ajout en série : plusieurs recharges identiques sur une période (jours de la semaine choisis ou tous les N jours), avec l'énergie en % de batterie, en puissance × durée ou en kWh ; passage par l'écran de vérification avant l'ajout"]},
   {v:"1.8", d:"13/11/2026", c:["Sauvegarde unique : l'export contient tout (recharges et abonnements, mais aussi réglages, favoris et historique de Trajet VE), au même format que le bouton « Sauvegarde » de Trajet VE"]},
   {v:"1.7", d:"01/11/2026", c:["Restauration : accepte aussi la sauvegarde complète exportée depuis Trajet VE (bouton « Sauvegarde »)"]},
   {v:"1.6", d:"31/10/2026", c:[
@@ -869,6 +914,63 @@ function openEdit(s){
   $("dlgDel").hidden=!s; $("dlg").showModal();
 }
 $("addBtn").onclick=()=>openEdit(null);
+
+// ---------- Ajout en série ----------
+const DOW_FR=["lun.","mar.","mer.","jeu.","ven.","sam.","dim."];   // ordre lundi → dimanche (getDay : 1…6, 0)
+$("bDaysBox").innerHTML=DOW_FR.map((d,i)=>`<label class="chkl" style="display:inline-flex;gap:4px;align-items:center;font-weight:400"><input type="checkbox" data-dow="${(i+1)%7}" ${i===1||i===4?"checked":""}>${d}</label>`).join("");
+function bulkFields(){ ["bPct","bKw","bKwh"].forEach(id=>$(id).hidden=true); $({pct:"bPct",kw:"bKw",kwh:"bKwh"}[$("bMode").value]).hidden=false;
+  $("bDaysBox").hidden=$("bRep").value!=="days"; $("bEveryBox").hidden=$("bRep").value!=="every";
+  $("bOp").closest("label").hidden=$("bType").value==="maison"; $("bLieu").closest("label").hidden=$("bType").value==="maison"; }
+// liste des recharges générées à partir du formulaire
+function bulkList(){
+  const from=$("bFrom").value, to=$("bTo").value; if(!from||!to||to<from) return {err:"Choisis une période valide (la fin après le début)."};
+  const time=$("bTime").value||"22:00", mode=$("bMode").value, type=$("bType").value;
+  let kwh=0, durMin=null;
+  if(mode==="pct"){ const a=num($("bPctFrom").value), b=num($("bPctTo").value), cap=num($("bCap").value), loss=num($("bLoss").value)||0;
+    if(!(b>a)||!(cap>0)) return {err:"Le % d'arrivée doit dépasser le % de départ, avec une batterie utile renseignée."};
+    kwh=(b-a)/100*cap/(1-Math.min(40,loss)/100); const kw=num($("bPctKw").value); if(kw>0) durMin=kwh/kw*60; }
+  else if(mode==="kw"){ const kw=num($("bKwVal").value), h=num($("bDur").value); if(!(kw>0)||!(h>0)) return {err:"Indique la puissance et la durée."}; kwh=kw*h; durMin=h*60; }
+  else { kwh=num($("bKwhVal").value); if(!(kwh>0)) return {err:"Indique l'énergie en kWh."}; }
+  const days=new Set([...document.querySelectorAll("#bDaysBox [data-dow]:checked")].map(c=>+c.dataset.dow)), every=Math.max(1,Math.round(num($("bEvery").value)||1));
+  if($("bRep").value==="days" && !days.size) return {err:"Coche au moins un jour de la semaine."};
+  const price=$("bPrice").value===""?null:num($("bPrice").value), out=[];
+  const d=new Date(from+"T12:00"), end=new Date(to+"T12:00");
+  for(let k=0; d<=end && out.length<=400; k++, d.setDate(d.getDate()+1)){
+    if($("bRep").value==="days" ? !days.has(d.getDay()) : k%every!==0) continue;
+    const day=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, start=`${day}T${time}`;
+    let fin=null; if(durMin){ const e=new Date(start); e.setMinutes(e.getMinutes()+Math.round(durMin)); fin=`${e.getFullYear()}-${pad(e.getMonth()+1)}-${pad(e.getDate())}T${pad(e.getHours())}:${pad(e.getMinutes())}`; }
+    const k2=Math.round(kwh*100)/100;
+    out.push({start, noTime:false, end:fin, kwh:k2, cost:price!=null?Math.round(k2*price*100)/100:null, op:type==="maison"?"":$("bOp").value.trim(),
+      lieu:type==="maison"?(S.settings.homeName||"Maison"):$("bLieu").value.trim(), type, src:"serie", note:"ajout en série"});
+  }
+  if(out.length>400) return {err:"Plus de 400 recharges : réduis la période ou la fréquence."};
+  return {list:out, kwh};
+}
+function bulkPrev(){
+  bulkFields();
+  const r=bulkList();
+  if(r.err){ $("bPrev").textContent=r.err; $("bGo").disabled=true; return; }
+  const n=r.list.length, tot=r.list.reduce((a,x)=>a+x.kwh,0), cost=r.list.reduce((a,x)=>a+(x.cost??(x.type==="maison"?x.kwh*(+S.settings.homePrice||0):0)),0);
+  $("bGo").disabled=!n;
+  $("bPrev").textContent=n?`${n} recharge${n>1?"s":""} de ${fmtN(r.kwh,1)} kWh, soit ${fmtN(tot,0)} kWh au total${cost?` · ≈ ${fmtE(cost)}`:""}. Celles qui existent déjà seront signalées et décochées.`:"Aucune date ne correspond à cette périodicité.";
+}
+$("bulkBtn").onclick=()=>{
+  const b=S.settings.bulk||{}, today=new Date(), m1=new Date(); m1.setMonth(m1.getMonth()-1);
+  const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  $("bFrom").value=iso(m1); $("bTo").value=iso(today);
+  for(const [id,k] of [["bCap","cap"],["bLoss","loss"],["bPctFrom","pa"],["bPctTo","pb"],["bTime","time"],["bKwVal","kw"],["bDur","dur"],["bKwhVal","kwh"],["bPctKw","pkw"]]) if(b[k]!=null) $(id).value=b[k];
+  if(b.mode) $("bMode").value=b.mode;
+  $("bulkDlg").showModal(); bulkPrev();
+};
+$("bulkForm").addEventListener("input",bulkPrev); $("bulkForm").addEventListener("change",bulkPrev);
+$("bGo").onclick=()=>{
+  const r=bulkList(); if(r.err||!r.list.length) return;
+  S.settings.bulk={mode:$("bMode").value,cap:$("bCap").value,loss:$("bLoss").value,pa:$("bPctFrom").value,pb:$("bPctTo").value,time:$("bTime").value,kw:$("bKwVal").value,dur:$("bDur").value,kwh:$("bKwhVal").value,pkw:$("bPctKw").value};
+  pushSettings();
+  $("bulkDlg").close();
+  impMsg(`${r.list.length} recharges générées : vérifie-les ci-dessous puis ajoute-les.`);
+  showReview(r.list);
+};
 $("list").addEventListener("click",e=>{ const b=e.target.closest("[data-ed]"); if(b) openEdit(S.sessions.find(s=>s.id===b.dataset.ed)); });
 $("dlg").addEventListener("close",async()=>{
   if($("dlg").returnValue!=="ok") return;
