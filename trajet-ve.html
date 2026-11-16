@@ -891,6 +891,7 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.40.1", d:"16/11/2026", c:["Correctif : l'onglet Trajet restait vide sur téléphone et tablette quand « Masquer les réglages » avait été activé auparavant"]},
   {v:"2.40", d:"16/11/2026", c:[
     "Téléphone : navigation par onglets en bas d'écran (Trajet, Carte, Feuille de route, Voiture), carte en plein écran dans son onglet, menu « Plus » pour les boutons secondaires",
     "Tablette : carte toujours visible à gauche, panneau à droite avec onglets Trajet, Feuille de route et Voiture",
@@ -3708,6 +3709,9 @@ function appLayout(){
   if(app && !phone && appTab==="carte") appTab="route";
   if(app) document.body.dataset.tab=appTab; else delete document.body.dataset.tab;
   if(app!==was) moreLayout(app);
+  // « Masquer les réglages » ne concerne que l'affichage classique : en mode appli, le panneau Trajet doit rester visible
+  if(app) document.body.classList.remove("wide");
+  else { let w=false; try{ w=localStorage.getItem("trajetve-large")==="1"; }catch(e){} document.body.classList.toggle("wide",w); }
   if(app && appTab==="voiture" && $("carPanel").hidden) $("carBtn").click();
   tabSync();
   setTimeout(()=>{ if(map) map.invalidateSize(); },80);
