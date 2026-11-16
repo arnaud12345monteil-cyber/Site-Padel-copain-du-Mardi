@@ -1,5 +1,5 @@
 // Service worker de Piano Cascade : ne gère que les adresses piano-cascade*
-const CACHE = "piano-cascade-1.5.0";
+const CACHE = "piano-cascade-1.7.0";
 const CORE = ["./piano-cascade.html", "./piano-cascade.webmanifest", "./piano-cascade-icon-192.png", "./piano-cascade-icon-512.png", "./piano-cascade-apple-touch-icon.png"];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 const MINE = url => url.origin === location.origin && /\/piano-cascade[^/]*$/.test(url.pathname);

@@ -56,6 +56,16 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 #player.on{display:flex}
 #stage{flex:1;position:relative;min-height:0;display:flex;flex-direction:column}
 #cvWrap{flex:1;position:relative;min-height:0}
+#accPanel{position:absolute;top:8px;right:8px;z-index:3;display:none;flex-direction:column;align-items:flex-end;gap:4px;max-width:min(46%,240px)}
+#accPanelHead{background:rgba(14,16,21,.78);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:3px 8px;font-size:12px;color:#cfd3dc;backdrop-filter:blur(4px)}
+#accChips{display:flex;flex-direction:column;gap:4px;align-items:stretch;background:rgba(14,16,21,.72);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:5px;backdrop-filter:blur(4px);max-height:46vh;overflow:auto}
+#accPanel.min #accChips{display:none}
+.chip{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent;border-radius:7px;padding:4px 7px;font-size:12px;color:#e8eaf0;text-align:left;min-width:0}
+.chip:hover{border-color:rgba(255,255,255,.18)}
+.chip .dot{flex:0 0 auto}
+.chip span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.chip.off{opacity:.38}
+.chip.off span.n{text-decoration:line-through}
 #scoreBox{display:none;position:relative;background:#fbfaf6;overflow:hidden;flex:0 0 auto;border-bottom:2px solid #000}
 #scoreBox.on{display:block}
 #scoreInner{position:absolute;left:0;top:0;will-change:transform}
@@ -137,6 +147,30 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       </div>
       <p class="muted" style="margin:10px 0 0">Les partitions MusicXML sont converties en MIDI à l'import. Tout est rangé dans ta bibliothèque.</p>
     </div>
+    <div class="card" id="storeCard" style="display:none">
+      <h2>Où ranger la bibliothèque</h2>
+      <div class="row scanopts" style="gap:16px">
+        <label><input type="radio" name="storeMode" value="local"> Sur cet appareil</label>
+        <label><input type="radio" name="storeMode" value="drive"> Google Drive (dossier « Piano Cascade »)</label>
+      </div>
+      <div id="driveCfg" style="display:none;margin-top:10px">
+        <div class="row">
+          <div style="flex:1;min-width:220px"><input type="text" id="driveClient" placeholder="ID client OAuth Google (…apps.googleusercontent.com)" autocomplete="off"></div>
+          <button class="primary" id="driveSave">Enregistrer et connecter</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:220px"><input type="text" id="driveFolder" placeholder="Lien du dossier Drive (ou son nom exact)" autocomplete="off"></div>
+          <button id="driveFolderSet">Utiliser ce dossier</button>
+        </div>
+        <p class="muted" style="margin:8px 0 0;font-size:12px">Tous les .mid du dossier et de ses sous-dossiers apparaissent dans la bibliothèque. Les morceaux importés depuis l'app y sont ajoutés. La marche à suivre pour obtenir l'ID client est dans l'onglet Aide.</p>
+      </div>
+      <div class="row" id="driveState" style="margin-top:10px;display:none">
+        <span class="muted" id="driveTxt"></span>
+        <button id="driveConnect">Se connecter</button>
+        <button id="driveMigrate" style="display:none">Envoyer les morceaux de l'appareil vers Drive</button>
+        <button class="ghost" id="driveWipeLocal" style="display:none">Supprimer les copies sur l'appareil</button>
+      </div>
+    </div>
     <div class="card" id="scanCard">
       <h2>Convertir une partition (photo, scan ou PDF) en MIDI</h2>
       <p class="muted" id="scanWhy" style="margin:0 0 8px">Vérification de l'accès à Claude…</p>
@@ -205,6 +239,15 @@ main{max-width:1100px;margin:0 auto;padding:16px}
       <p class="muted">Le bouton « Partition » du lecteur affiche au-dessus du clavier la partition des deux mains, qui défile en même temps que la musique. Elle est reconstruite à partir du MIDI : rythmes arrondis à la double-croche, pas de triolets, une seule voix par main, armure devinée. Elle aide à se repérer, mais elle n'aura pas la qualité d'une partition éditée.</p>
       <h2 style="margin-top:16px">Installer l'application</h2>
       <p class="muted">La version web app (fichiers piano-cascade.html, piano-cascade-sw.js, piano-cascade.webmanifest et icônes piano-cascade-*) s'installe sur l'écran d'accueil une fois mise en ligne. Sur Android ou ordinateur : bouton « Installer » ou menu du navigateur. Sur iPhone : Safari, bouton Partager, « Sur l'écran d'accueil ». Dans cette version, la bibliothèque reste sur l'appareil, et la conversion photo/PDF demande une clé API Anthropic.</p>
+      <h2 style="margin-top:16px">Bibliothèque sur Google Drive (web app)</h2>
+      <p class="muted">Il faut un « ID client OAuth » Google, une seule fois :<br>
+      1. Sur console.cloud.google.com, ouvre un projet (un de tes projets Firebase convient) et active « Google Drive API ».<br>
+      2. « Écran de consentement OAuth » : type Externe, laisse-le en mode Test et ajoute ton adresse Gmail comme utilisateur test.<br>
+      3. « Identifiants » → « Créer des identifiants » → « ID client OAuth » → type « Application Web ». Dans « Origines JavaScript autorisées », mets l'adresse de ton site sans chemin, par exemple https://ton-compte.github.io.<br>
+      4. Copie l'ID client dans le bloc « Où ranger la bibliothèque ».<br>
+      5. Colle le lien de ton dossier de MIDI (dans Drive : clic droit → Partager → Copier le lien) puis « Utiliser ce dossier ». Sans dossier choisi, l'app utilise un dossier « Piano Cascade ».<br>
+      À la première connexion, Google affiche « Google n'a pas validé cette application » : c'est normal pour une app perso en mode Test. Clique sur « Paramètres avancés » puis « Accéder à… ». L'app demande l'accès à Drive en entier (c'est le seul moyen de lire un dossier existant), mais elle ne lit que le dossier choisi.<br>
+      L'app ajoute dans ce dossier un fichier piano-cascade-bibliotheque.json (titres, réglages des pistes). Les fichiers supprimés depuis l'app partent dans la corbeille de Drive.</p>
       <h2 style="margin-top:16px">Raccourcis (clavier physique)</h2>
       <p class="muted">Espace : lecture/pause · ← → : ±5 s · ↑ ↓ : vitesse · Échap : fermer le lecteur</p>
     </div>
@@ -214,7 +257,8 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 <div id="player">
   <div id="stage">
     <div id="scoreBox"><div id="scoreInner"></div><div id="scoreHead"></div><div id="scoreMsg"></div></div>
-    <div id="cvWrap"><canvas id="cv"></canvas><div id="rotate">Tourne ton téléphone pour un clavier plus large</div></div>
+    <div id="cvWrap"><canvas id="cv"></canvas>
+      <div id="accPanel"><button id="accPanelHead" title="Pistes d'accompagnement">Accomp. <span id="accCaret">▾</span></button><div id="accChips"></div></div><div id="rotate">Tourne ton téléphone pour un clavier plus large</div></div>
   </div>
   <div class="bar">
     <button id="close" title="Fermer">✕</button>
@@ -249,10 +293,15 @@ main{max-width:1100px;margin:0 auto;padding:16px}
   <div id="trackRows"></div>
   <div class="row scanopts" style="margin-top:12px;gap:14px">
     <label>Volume accomp. <input type="range" id="accVol" min="0" max="100" style="width:110px"></label>
-    <label>Affichage accomp. <select id="accShow"><option value="grey">En gris</option><option value="hide">Masqué</option></select></label>
+    <label>Affichage accomp. <select id="accShow"><option value="color">En couleurs</option><option value="grey">En gris</option><option value="hide">Masqué</option></select></label>
     <label>Coupure « 2 mains » <select id="splitPt"></select></label>
   </div>
   <div class="row" style="justify-content:space-between;margin-top:14px"><button id="tracksAuto">Revenir à la proposition auto</button><span class="muted" id="tracksSaved"></span></div>
+</div></div>
+<div class="modal" id="driveM"><div class="box">
+  <h2 style="margin:0 0 8px;font-size:15px">Connexion à Google Drive</h2>
+  <p class="muted" style="margin:0 0 12px">Ta bibliothèque est sur Google Drive. La connexion dure une heure, ensuite il faut la renouveler.</p>
+  <div class="row" style="justify-content:flex-end"><button class="ghost" id="driveCancel">Annuler</button><button class="primary" id="driveGo">Se connecter</button></div>
 </div></div>
 <div class="modal" id="newsM"><div class="box" style="max-width:460px;max-height:85vh;overflow:auto">
   <h2 style="margin:0 0 4px;font-size:15px">Nouveautés</h2>
@@ -285,8 +334,178 @@ const NAMES_FR = ["Do","Do#","Ré","Ré#","Mi","Fa","Fa#","Sol","Sol#","La","La#
 const isBlack = n => [1,3,6,8,10].includes(n%12);
 
 /* ---------- stockage : db de l'artifact, sinon IndexedDB ---------- */
+/* ---------- stockage local (IndexedDB) ---------- */
+const LocalDB = {
+  db:null,
+  async open(){ if (this.db) return this.db; this.db = await new Promise((res,rej)=>{ const r=indexedDB.open("piano-cascade",1); r.onupgradeneeded=()=>r.result.createObjectStore("songs",{keyPath:"id"}); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); return this.db; },
+  async all(){ const db=await this.open(); return new Promise((res,rej)=>{ const r=db.transaction("songs").objectStore("songs").getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); },
+  async put(song){ const db=await this.open(); return new Promise((res,rej)=>{ const t=db.transaction("songs","readwrite"); t.objectStore("songs").put(song); t.oncomplete=res; t.onerror=()=>rej(t.error); }); },
+  async del(id){ const db=await this.open(); return new Promise((res,rej)=>{ const t=db.transaction("songs","readwrite"); t.objectStore("songs").delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+};
+
+/* ---------- Google Drive (web app uniquement) ---------- */
+const LS = { get(k,d=""){ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }, del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
+const Drive = {
+  FOLDER:"Piano Cascade", INDEX:"piano-cascade-bibliotheque.json",
+  clientId: LS.get("pc-drive-client"), token:null, exp:0, tc:null,
+  folderId: LS.get("pc-drive-folder"), indexId: LS.get("pc-drive-index"), index:null, chain:Promise.resolve(), cache:new Map(), waiters:[],
+  loadGIS(){
+    if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+    if (this._gis) return this._gis;
+    this._gis = new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src="https://accounts.google.com/gsi/client"; sc.async=true; sc.onload=()=>res(); sc.onerror=()=>{ this._gis=null; rej(new Error("Google indisponible")); }; document.head.appendChild(sc); });
+    return this._gis;
+  },
+  valid(){ return !!this.token && Date.now() < this.exp; },
+  /* à appeler directement depuis un clic (sinon la fenêtre Google est bloquée) */
+  connectNow(){
+    if (!(window.google && google.accounts && google.accounts.oauth2)){ toast("Module Google pas encore chargé, réessaie dans 2 secondes."); this.loadGIS().catch(()=>{}); return; }
+    if (!this.tc) this.tc = google.accounts.oauth2.initTokenClient({ client_id:this.clientId, scope:"https://www.googleapis.com/auth/drive",
+      callback: r => { if (r && r.access_token){ this.token=r.access_token; this.exp=Date.now()+((r.expires_in||3600)-120)*1000; LS.set("pc-drive-ok2","1"); const w=this.waiters; this.waiters=[]; w.forEach(f=>f.res()); $("#driveM").classList.remove("on"); updateDriveUI(); }
+                        else { const w=this.waiters; this.waiters=[]; w.forEach(f=>f.rej(new Error((r&&r.error)||"refus"))); } },
+      error_callback: e => { toast("Connexion Google interrompue ("+(e&&e.type||"erreur")+")."); } });
+    this.tc.requestAccessToken({ prompt: LS.get("pc-drive-ok2") ? "" : "consent" });
+  },
+  ensure(){
+    if (this.valid()) return Promise.resolve();
+    return new Promise((res,rej)=>{ this.waiters.push({res,rej}); $("#driveM").classList.add("on"); });
+  },
+  async api(url, opts={}, retry=true){
+    await this.ensure();
+    const r = await fetch(url.startsWith("http")?url:"https://www.googleapis.com"+url, {...opts, headers:{...(opts.headers||{}), Authorization:"Bearer "+this.token}});
+    if (r.status===401 && retry){ this.token=null; return this.api(url, opts, false); }
+    if (!r.ok){ const t=await r.text().catch(()=>""); const e=new Error("Drive "+r.status+" "+t.slice(0,140)); e.status=r.status; throw e; }
+    return r;
+  },
+  async find(q){ const r = await this.api("/drive/v3/files?spaces=drive&fields=files(id,name)&q="+encodeURIComponent(q)); return (await r.json()).files||[]; },
+  folderName: LS.get("pc-drive-folder-name", "Piano Cascade"),
+  async setFolder(ref){
+    ref = String(ref||"").trim();
+    const m = /folders\/([A-Za-z0-9_-]{10,})/.exec(ref) || /[?&]id=([A-Za-z0-9_-]{10,})/.exec(ref) || /^([A-Za-z0-9_-]{25,})$/.exec(ref);
+    let id = null, name = null;
+    if (m){ const r = await this.api("/drive/v3/files/"+m[1]+"?fields=id,name,mimeType,trashed"); const j = await r.json();
+      if (j.mimeType!=="application/vnd.google-apps.folder") throw new Error("ce lien n'est pas un dossier"); id=j.id; name=j.name; }
+    else {
+      const nm = ref || "Piano Cascade";
+      const f = await this.find(`mimeType='application/vnd.google-apps.folder' and name='${nm.replace(/'/g,"\\'")}' and trashed=false`);
+      if (!f.length) throw new Error("aucun dossier « "+nm+" » trouvé");
+      id = f[0].id; name = f[0].name;
+    }
+    this.folderId = id; this.folderName = name; this.indexId = ""; this.index = null;
+    LS.set("pc-drive-folder", id); LS.set("pc-drive-folder-name", name); LS.del("pc-drive-index"); LS.del("pc-drive-cache");
+    return name;
+  },
+  async folder(){
+    if (this.folderId){ try{ const r=await this.api("/drive/v3/files/"+this.folderId+"?fields=id,trashed"); const j=await r.json(); if (!j.trashed) return this.folderId; }catch(e){ if (e.status!==404) throw e; } }
+    const f = await this.find(`mimeType='application/vnd.google-apps.folder' and name='${this.FOLDER}' and trashed=false`);
+    if (f.length) this.folderId = f[0].id;
+    else { const r = await this.api("/drive/v3/files?fields=id", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:this.FOLDER, mimeType:"application/vnd.google-apps.folder"})}); this.folderId=(await r.json()).id; }
+    LS.set("pc-drive-folder", this.folderId); this.indexId=""; LS.del("pc-drive-index");
+    return this.folderId;
+  },
+  async upload(meta, blob, fileId){
+    const boundary = "pc"+Math.random().toString(36).slice(2);
+    const body = new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`, JSON.stringify(meta), `\r\n--${boundary}\r\nContent-Type: ${blob.type||"application/octet-stream"}\r\n\r\n`, blob, `\r\n--${boundary}--`]);
+    const url = "https://www.googleapis.com/upload/drive/v3/files"+(fileId?"/"+fileId:"")+"?uploadType=multipart&fields=id";
+    const r = await this.api(url, {method: fileId?"PATCH":"POST", headers:{"Content-Type":"multipart/related; boundary="+boundary}, body});
+    return (await r.json()).id;
+  },
+  async loadIndex(){
+    const fid = await this.folder();
+    if (!this.indexId){ const f = await this.find(`name='${this.INDEX}' and '${fid}' in parents and trashed=false`); this.indexId = f.length ? f[0].id : ""; if (this.indexId) LS.set("pc-drive-index", this.indexId); }
+    let idx = {app:"piano-cascade", songs:[]};
+    if (this.indexId){
+      try{ const r = await this.api("/drive/v3/files/"+this.indexId+"?alt=media"); const j = await r.json(); if (j && Array.isArray(j.songs)) idx = j; }
+      catch(e){ if (e.status===404){ this.indexId=""; LS.del("pc-drive-index"); } else throw e; }
+    }
+    this.index = idx; LS.set("pc-drive-cache", JSON.stringify(idx.songs));
+    return idx;
+  },
+  saveIndex(){
+    this.chain = this.chain.then(async () => {
+      const blob = new Blob([JSON.stringify(this.index)], {type:"application/json"});
+      if (this.indexId){ try{ await this.upload({}, blob, this.indexId); LS.set("pc-drive-cache", JSON.stringify(this.index.songs)); return; }catch(e){ if (e.status!==404) throw e; } }
+      this.indexId = await this.upload({name:this.INDEX, parents:[await this.folder()], mimeType:"application/json"}, blob);
+      LS.set("pc-drive-index", this.indexId); LS.set("pc-drive-cache", JSON.stringify(this.index.songs));
+    });
+    const c = this.chain; this.chain = c.catch(()=>{}); return c;
+  },
+  async listMidiFiles(root){
+    const out = [], queue = [root], seen = new Set(); let folders = 0;
+    while (queue.length && folders < 80){
+      const fid = queue.shift(); if (seen.has(fid)) continue; seen.add(fid); folders++;
+      let token = "";
+      do {
+        const q = `'${fid}' in parents and trashed=false and (mimeType='application/vnd.google-apps.folder' or name contains '.mid' or name contains '.MID')`;
+        const r = await this.api("/drive/v3/files?spaces=drive&pageSize=1000&fields=nextPageToken,files(id,name,mimeType,createdTime,size)&q="+encodeURIComponent(q)+(token?"&pageToken="+token:""));
+        const j = await r.json(); token = j.nextPageToken || "";
+        (j.files||[]).forEach(f => { if (f.mimeType==="application/vnd.google-apps.folder") queue.push(f.id); else if (/\.midi?$/i.test(f.name)) out.push(f); });
+      } while (token);
+    }
+    return out;
+  },
+  async list(){
+    const idx = await this.loadIndex();
+    const files = await this.listMidiFiles(await this.folder());
+    const byFile = new Map(idx.songs.filter(x=>x.fileId).map(x=>[x.fileId, x]));
+    const songs = files.map(f => byFile.get(f.id) || { id:"d_"+f.id, fileId:f.id, title:f.name.replace(/\.midi?$/i,""), source:"midi", addedAt: Date.parse(f.createdTime)||Date.now(), pending:true });
+    const changed = songs.length !== idx.songs.length || songs.some(x => !byFile.has(x.fileId));
+    idx.songs = songs;
+    if (changed) this.saveIndex().catch(()=>{});
+    LS.set("pc-drive-cache", JSON.stringify(songs));
+    setTimeout(() => this.analyze(), 50);
+    return songs.map(x=>({...x}));
+  },
+  /* lit en arrière-plan les morceaux jamais ouverts pour connaître durée, notes et pistes */
+  async analyze(){
+    if (this._analyzing || !this.index) return; this._analyzing = true;
+    try{
+      const todo = this.index.songs.filter(x => x.pending).slice(0, 400); let done = 0;
+      const worker = async () => { while (todo.length){ const sg = todo.shift();
+        try{ const b64 = await this.getB64(sg); const info = midiToNotes(bytesFromB64(b64));
+          sg.duration = info.notes.length ? Math.max(...info.notes.map(n=>n.t+n.d)) : 0; sg.noteCount = info.notes.length; sg.tracks = info.trackCount; delete sg.pending;
+          if (this.cache.size > 30) this.cache.delete(this.cache.keys().next().value);
+        }catch(e){ sg.pending = false; sg.unreadable = true; }
+        if (++done % 10 === 0) mergeLibMeta(this.index.songs); } };
+      if (todo.length){ await Promise.all([worker(), worker(), worker()]); mergeLibMeta(this.index.songs); await this.saveIndex(); }
+    } finally { this._analyzing = false; }
+  },
+  async put(song){
+    if (!this.index) await this.loadIndex();
+    const songs = this.index.songs, i = songs.findIndex(x=>x.id===song.id), prev = i>=0 ? songs[i] : null;
+    const {b64, ...meta} = song;
+    const fname = (song.title||"morceau").replace(/[\\/:*?"<>|]+/g,"_").slice(0,90)+".mid";
+    if (!prev || !prev.fileId){
+      if (!b64) throw new Error("fichier absent");
+      meta.fileId = await this.upload({name:fname, parents:[await this.folder()], mimeType:"audio/midi"}, new Blob([bytesFromB64(b64)], {type:"audio/midi"}));
+      this.cache.set(song.id, b64);
+    } else {
+      meta.fileId = prev.fileId;
+      if (prev.title !== song.title) await this.api("/drive/v3/files/"+prev.fileId+"?fields=id", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:fname})});
+    }
+    if (i>=0) songs[i] = meta; else songs.push(meta);
+    song.fileId = meta.fileId;
+    await this.saveIndex();
+  },
+  async del(id){
+    if (!this.index) await this.loadIndex();
+    const songs = this.index.songs, i = songs.findIndex(x=>x.id===id); if (i<0) return;
+    const fid = songs[i].fileId;
+    if (fid){ try{ await this.api("/drive/v3/files/"+fid+"?fields=id", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({trashed:true})}); }catch(e){ if (e.status!==404) throw e; } }
+    songs.splice(i,1); this.cache.delete(id);
+    await this.saveIndex();
+  },
+  async getB64(song){
+    if (this.cache.has(song.id)) return this.cache.get(song.id);
+    if (!song.fileId) throw new Error("fichier absent");
+    const r = await this.api("/drive/v3/files/"+song.fileId+"?alt=media");
+    const b64 = b64FromBytes(new Uint8Array(await r.arrayBuffer()));
+    this.cache.set(song.id, b64); return b64;
+  },
+  cached(){ try{ return JSON.parse(LS.get("pc-drive-cache","[]")); }catch(e){ return []; } }
+};
+
 const Store = {
-  mode:"none", db:null, uid:null, idb:null,
+  mode:"none", db:null, uid:null, mem:null,
   async init(){
     try{
       if (window.claude && claude.use){
@@ -296,29 +515,38 @@ const Store = {
       }
     }catch(e){}
     if (this.mode!=="cloud"){
-      try{ this.idb = await new Promise((res,rej)=>{ const r=indexedDB.open("piano-cascade",1); r.onupgradeneeded=()=>r.result.createObjectStore("songs",{keyPath:"id"}); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); this.mode="local"; }
-      catch(e){ this.mode="memory"; this.mem=new Map(); }
+      if (!window.claude && LS.get("pc-storage")==="drive" && Drive.clientId){ this.mode="drive"; Drive.loadGIS().catch(()=>{}); }
+      else { try{ await LocalDB.open(); this.mode="local"; } catch(e){ this.mode="memory"; this.mem=new Map(); } }
     }
-    $("#storeStatus").textContent = {cloud:"· synchronisé sur ton compte", local:"· stocké dans ce navigateur", memory:"· session uniquement (stockage indisponible)"}[this.mode];
+    this.status();
   },
+  status(){ $("#storeStatus").textContent = {cloud:"· synchronisé sur ton compte", local:"· stocké dans ce navigateur", drive:"· Google Drive", memory:"· session uniquement (stockage indisponible)"}[this.mode]||""; },
   col(){ return this.db.collection("data/users/"+this.uid); },
   async list(){
     if (this.mode==="cloud"){
       const snap = await withTimeout(this.col().get(), 10000);
       return snap.docs.map(d=>({id:d.id, ...d.data()}));
     }
-    if (this.mode==="local") return new Promise((res,rej)=>{ const r=this.idb.transaction("songs").objectStore("songs").getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+    if (this.mode==="drive") return Drive.valid() ? Drive.list() : Drive.cached();
+    if (this.mode==="local") return LocalDB.all();
     return [...this.mem.values()];
   },
   async put(song){
     if (this.mode==="cloud"){ const {id, ...body}=song; await this.col().doc(id).set(body); return; }
-    if (this.mode==="local") return new Promise((res,rej)=>{ const t=this.idb.transaction("songs","readwrite"); t.objectStore("songs").put(song); t.oncomplete=res; t.onerror=()=>rej(t.error); });
+    if (this.mode==="drive") return Drive.put(song);
+    if (this.mode==="local") return LocalDB.put(song);
     this.mem.set(song.id, song);
   },
   async del(id){
     if (this.mode==="cloud"){ await this.col().doc(id).delete(); return; }
-    if (this.mode==="local") return new Promise((res,rej)=>{ const t=this.idb.transaction("songs","readwrite"); t.objectStore("songs").delete(id); t.oncomplete=res; t.onerror=()=>rej(t.error); });
+    if (this.mode==="drive") return Drive.del(id);
+    if (this.mode==="local") return LocalDB.del(id);
     this.mem.delete(id);
+  },
+  async b64(song){
+    if (song.b64) return song.b64;
+    if (this.mode==="drive"){ song.b64 = await Drive.getB64(song); return song.b64; }
+    throw new Error("fichier absent");
   }
 };
 function withTimeout(p, ms){ return Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej({code:"timeout"}), ms))]); }
@@ -419,9 +647,15 @@ function notesToMidiBytes(notes, tempo, name){
 
 /* ---------- bibliothèque ---------- */
 let LIB = [];
+function mergeLibMeta(songs){
+  const by = new Map(songs.map(x=>[x.id,x])); let ch=false;
+  LIB.forEach(s => { const x = by.get(s.id); if (x && (x.noteCount!==s.noteCount || x.pending!==s.pending)){ Object.assign(s, {duration:x.duration, noteCount:x.noteCount, tracks:x.tracks, pending:x.pending, unreadable:x.unreadable}); ch=true; } });
+  if (ch) render();
+}
 async function refresh(){
   try{ LIB = await Store.list(); }
-  catch(e){ toast("Bibliothèque injoignable pour l'instant."); LIB = []; }
+  catch(e){ toast("Bibliothèque injoignable pour l'instant."); LIB = Store.mode==="drive" ? Drive.cached() : []; }
+  if (typeof updateDriveUI==="function") updateDriveUI();
   LIB.sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
   render();
 }
@@ -433,7 +667,7 @@ function render(){
   $("#lib").innerHTML = list.map(s => `
     <div class="song">
       <div class="t">${esc(s.title||"Sans titre")}</div>
-      <div class="m"><span class="tag">${({musicxml:"MusicXML",scan:"Scan"})[s.source]||"MIDI"}</span>${fmt(s.duration||0)} · ${s.noteCount||0} notes · ${(s.tracks||1)>1?s.tracks+" pistes":"1 piste"}</div>
+      <div class="m"><span class="tag">${({musicxml:"MusicXML",scan:"Scan"})[s.source]||"MIDI"}</span>${s.pending ? "analyse en cours…" : s.unreadable ? "fichier illisible" : fmt(s.duration||0)+" · "+(s.noteCount||0)+" notes · "+((s.tracks||1)>1?s.tracks+" pistes":"1 piste")}</div>
       <div class="a">
         <button class="primary" data-act="play" data-id="${s.id}">▶ Jouer</button>
         <button data-act="export" data-id="${s.id}">Exporter</button>
@@ -461,6 +695,7 @@ async function importFiles(files, opts={}){
       } else { toast("Format non géré : "+file.name); continue; }
       if (!info.notes.length){ toast("Aucune note trouvée dans "+file.name); continue; }
       const b64 = b64FromBytes(bytes);
+      if (Store.mode==="drive" && !Drive.valid()){ try{ await Drive.ensure(); }catch(e){ toast("Import annulé : Google Drive non connecté."); return; } }
       if (Store.mode==="cloud" && b64.length > 240000){ toast(file.name+" est trop lourd pour la synchro (max ~180 Ko)."); continue; }
       const last = info.notes[info.notes.length-1];
       const song = { id: "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7), title, source, b64,
@@ -496,7 +731,7 @@ $("#lib").addEventListener("click", async e => {
   const act = b.dataset.act;
   if (act==="play") openPlayer(s);
   if (act==="rename"){ pendingId=s.id; $("#renameI").value=s.title||""; $("#renameM").classList.add("on"); $("#renameI").focus(); }
-  if (act==="del"){ pendingId=s.id; $("#delName").textContent=s.title; $("#delM").classList.add("on"); }
+  if (act==="del"){ pendingId=s.id; $("#delName").textContent=s.title + (Store.mode==="drive" ? " » (le fichier part dans la corbeille de Drive, récupérable 30 jours) «" : ""); $("#delM").classList.add("on"); }
   if (act==="export") exportSong(s);
 });
 $("#renameC").onclick = () => $("#renameM").classList.remove("on");
@@ -508,7 +743,7 @@ $("#delOk").onclick = async () => { $("#delM").classList.remove("on"); try{ awai
 async function exportSong(s){
   const safe = (s.title||"morceau").replace(/[\\/:*?"<>|]+/g,"_").slice(0,80);
   try{
-    const zip = new JSZip(); zip.file(safe+".mid", bytesFromB64(s.b64));
+    const zip = new JSZip(); zip.file(safe+".mid", bytesFromB64(await Store.b64(s)));
     const blob = await zip.generateAsync({type:"blob"});
     const dl = window.claude && claude.use ? await claude.use("downloads") : null;
     if (dl){ await dl.save({filename: safe+".zip", data: blob}); toast("Fichier enregistré."); return; }
@@ -841,9 +1076,83 @@ function buildScanNotes(measures, time0, bpm){
   return notes;
 }
 
+
+/* ---------- choix du stockage ---------- */
+function updateDriveUI(){
+  if (window.claude) return;
+  const mode = Store.mode, inDrive = mode==="drive";
+  document.querySelectorAll('input[name="storeMode"]').forEach(r => r.checked = (r.value===(inDrive?"drive":"local")));
+  $("#driveCfg").style.display = (inDrive || $("#storeCard").dataset.want==="drive") ? "block" : "none";
+  $("#driveClient").value = Drive.clientId || "";
+  $("#driveState").style.display = inDrive ? "flex" : "none";
+  if (inDrive){
+    $("#driveTxt").textContent = (Drive.valid() ? "Connecté. " : "Non connecté : liste de la dernière connexion. ") + "Dossier : « " + (Drive.folderName||"Piano Cascade") + " »";
+    $("#driveConnect").style.display = Drive.valid() ? "none" : "";
+    LocalDB.all().then(l => { $("#driveMigrate").style.display = l.length && Drive.valid() ? "" : "none"; $("#driveMigrate").textContent = "Envoyer les "+l.length+" morceau(x) de l'appareil vers Drive"; }).catch(()=>{});
+  }
+  Store.status();
+}
+function initStoreUI(){
+  if (window.claude) return;          // page Claude : synchronisation déjà assurée par Claude
+  $("#storeCard").style.display = "block";
+  updateDriveUI();
+}
+document.querySelectorAll('input[name="storeMode"]').forEach(r => r.onchange = async e => {
+  const v = e.target.value; $("#storeCard").dataset.want = v;
+  if (v==="local"){ LS.set("pc-storage","local"); Store.mode="local"; try{ await LocalDB.open(); }catch(err){ Store.mode="memory"; Store.mem=new Map(); } $("#driveCfg").style.display="none"; updateDriveUI(); refresh(); }
+  else { $("#driveCfg").style.display="block"; if (Drive.clientId){ LS.set("pc-storage","drive"); Store.mode="drive"; Drive.loadGIS().catch(()=>{}); updateDriveUI(); refresh(); } }
+});
+$("#driveSave").onclick = async () => {
+  const id = $("#driveClient").value.trim();
+  if (!/\.apps\.googleusercontent\.com$/.test(id)){ toast("L'ID client se termine par .apps.googleusercontent.com"); return; }
+  if (id !== Drive.clientId){ Drive.clientId=id; Drive.tc=null; Drive.token=null; LS.set("pc-drive-client", id); }
+  LS.set("pc-storage","drive"); Store.mode="drive";
+  try{ await Drive.loadGIS(); }catch(e){ toast("Impossible de charger le module Google."); return; }
+  updateDriveUI(); toast("Appuie sur « Se connecter ».", 2500);
+};
+$("#driveFolderSet").onclick = async () => {
+  const ref = $("#driveFolder").value.trim(); if (!ref){ toast("Colle le lien du dossier (Partager → Copier le lien) ou son nom."); return; }
+  if (Store.mode!=="drive"){ toast("Enregistre d'abord l'ID client."); return; }
+  try{ await Drive.ensure(); const name = await Drive.setFolder(ref); toast("Dossier « "+name+" » sélectionné. Lecture des fichiers…", 3000); $("#driveFolder").value=""; LIB=[]; render(); await refresh(); }
+  catch(e){ toast("Dossier introuvable ("+(e.message||"erreur")+")."); }
+};
+$("#driveConnect").onclick = () => { Drive.waiters.push({res:()=>refresh(), rej:()=>{}}); Drive.connectNow(); };
+$("#driveGo").onclick = () => Drive.connectNow();
+$("#driveCancel").onclick = () => { $("#driveM").classList.remove("on"); const w=Drive.waiters; Drive.waiters=[]; w.forEach(f=>f.rej(new Error("annulé"))); };
+$("#driveMigrate").onclick = async () => {
+  const btn = $("#driveMigrate"); btn.disabled = true;
+  try{
+    const local = await LocalDB.all(); const idx = await Drive.loadIndex(); let n=0;
+    for (const s of local){
+      if (idx.songs.some(x=>x.id===s.id)) continue;
+      btn.textContent = "Envoi "+(++n)+"/"+local.length+"…";
+      await Drive.put({...s});
+    }
+    toast(n ? n+" morceau(x) envoyé(s) sur Drive." : "Tout est déjà sur Drive.");
+    $("#driveWipeLocal").style.display = "";
+    await refresh();
+  }catch(e){ toast("Envoi interrompu ("+(e.message||"erreur")+")."); }
+  btn.disabled = false; updateDriveUI();
+};
+$("#driveWipeLocal").onclick = async () => {
+  try{ const idx = await Drive.loadIndex(); const local = await LocalDB.all(); let n=0;
+    for (const s of local) if (idx.songs.some(x=>x.id===s.id)){ await LocalDB.del(s.id); n++; }
+    toast(n+" copie(s) supprimée(s) de l'appareil. Les morceaux restent sur Drive."); $("#driveWipeLocal").style.display="none"; updateDriveUI();
+  }catch(e){ toast("Suppression impossible."); }
+};
+
 /* ---------- versions de l'application ---------- */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.7.0";
 const CHANGELOG = [
+  {v:"1.7.0", d:"16 nov. 2026", items:[
+    "Google Drive : choix d'un dossier existant (lien ou nom), sous-dossiers compris",
+    "Tous les .mid déjà présents dans le dossier apparaissent dans la bibliothèque, analysés en arrière-plan",
+    "Suppression vers la corbeille de Drive (récupérable)"]},
+  {v:"1.6.0", d:"16 nov. 2026", items:[
+    "Bibliothèque sur Google Drive au choix (web app) : un fichier .mid par morceau dans un dossier « Piano Cascade »",
+    "Envoi des morceaux déjà sur l'appareil vers Drive, puis suppression des copies locales",
+    "Une couleur par piste d'accompagnement",
+    "Petite tablette en haut à droite du lecteur pour activer ou couper chaque accompagnement d'un geste"]},
   {v:"1.5.0", d:"15 nov. 2026", items:[
     "Conversion photo/PDF utilisable sur ton site avec une clé API Anthropic (gardée sur l'appareil)",
     "La page indique pourquoi la conversion via Claude n'est pas disponible",
@@ -1016,7 +1325,8 @@ const P = { song:null, notes:[], dur:0, playing:false, songT:-1.5, ctxStart:0, s
 const HSTATE = ["son","muette","masquée"];
 const cv=$("#cv"), cx=cv.getContext("2d");
 
-function openPlayer(s){
+async function openPlayer(s){
+  if (!s.b64){ try{ toast("Chargement du morceau…", 1500); await Store.b64(s); }catch(e){ toast("Impossible de récupérer le fichier ("+(e.message||"erreur")+")."); return; } }
   let info; try{ info = midiToNotes(bytesFromB64(s.b64)); }catch(e){ toast("Fichier MIDI illisible."); return; }
   P.song=s; P.all=info.notes; P.tracks=info.tracks; P.hdr=info.header; P.ppq=info.ppq; P.ts=info.ts; Score.anchors=null;
   const saved = s.trackCfg;
@@ -1049,7 +1359,10 @@ function autoRoles(tr){
   else { const o=byAvg(idx.filter(i=>tr[i].count>=8)); if (o.length>1){ roles[o[0]]="rh"; roles[o[o.length-1]]="lh"; } else if (o.length) roles[o[0]]="both"; }
   return roles;
 }
-function defaultCfg(tr){ return { roles: autoRoles(tr), instr: tr.map(()=>"auto"), accVol: 0.6, accShow: "grey", split: 60 }; }
+function defaultCfg(tr){ return { roles: autoRoles(tr), instr: tr.map(()=>"auto"), accOn: tr.map(()=>true), accVol: 0.6, accShow: "color", split: 60 }; }
+const ACC_PALETTE = ["#f5a524","#e879f9","#f87171","#facc15","#a78bfa","#fb923c","#2dd4bf","#f472b6","#c4b5fd","#fca5a5"];
+function shade(hex, k){ const n=parseInt(hex.slice(1),16); const f=c=>Math.round(c*k).toString(16).padStart(2,"0"); return "#"+f(n>>16&255)+f(n>>8&255)+f(n&255); }
+const accOn = i => !P.cfg.accOn || P.cfg.accOn[i] !== false;
 function trackInstr(i){ const c=P.cfg.instr[i]; return (c && c!=="auto" && INSTRUMENTS[c]) ? c : (FAMILY_INSTR[P.tracks[i].family]||"piano"); }
 
 function applyCfg(){
@@ -1061,7 +1374,11 @@ function applyCfg(){
     P.notes.push({...n, h, ins: h===2 ? trackInstr(n.tr) : null});
   }
   P.dur = P.notes.length ? Math.max(...P.notes.map(n=>n.t+n.d)) : 1;
+  if (!Array.isArray(c.accOn) || c.accOn.length!==P.tracks.length) c.accOn = P.tracks.map(()=>true);
+  P.accCol = {}; let k=0;
+  P.tracks.forEach((t,i) => { if (c.roles[i]==="acc"){ const base = ACC_PALETTE[k++ % ACC_PALETTE.length]; P.accCol[i] = [base, shade(base, 0.72)]; } });
   const hasAcc = P.notes.some(n=>n.h===2);
+  renderAccPanel();
   $("#accWrap").style.display = hasAcc ? "" : "none";
   $("#tracksBtn").style.display = P.tracks.length>1 ? "" : "none";
   computeRange();
@@ -1080,6 +1397,9 @@ function cfgChanged(){
   const t = now(), was = P.playing; if (was) pause();
   applyCfg(); resize(); P.songT = Math.min(t, P.dur); if (was) play();
   renderTracks(); if (Score.want) scheduleScore();
+  saveCfgSoon();
+}
+function saveCfgSoon(){
   $("#tracksSaved").textContent = "Enregistrement…";
   clearTimeout(cfgSaveT);
   cfgSaveT = setTimeout(async () => {
@@ -1090,10 +1410,10 @@ function cfgChanged(){
 function renderTracks(){
   const c = P.cfg;
   const instrOpts = sel => `<option value="auto"${sel==="auto"?" selected":""}>Son auto</option>`+Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}"${sel===k?" selected":""}>${v}</option>`).join("");
-  const dotCol = r => r==="rh"?"var(--rh)" : r==="lh"?"var(--lh)" : r==="both"?"linear-gradient(90deg,var(--rh) 50%,var(--lh) 50%)" : r==="acc"?"#8a93a3" : "transparent";
+  const dotCol = (r,i) => r==="rh"?"var(--rh)" : r==="lh"?"var(--lh)" : r==="both"?"linear-gradient(90deg,var(--rh) 50%,var(--lh) 50%)" : r==="acc"?((P.accCol[i]||["#8a93a3"])[0]) : "transparent";
   $("#trackRows").innerHTML = P.tracks.map((t,i) => `
     <div class="trow">
-      <span class="dot" style="background:${dotCol(c.roles[i])};border:1px solid #3a4150"></span>
+      <span class="dot" style="background:${dotCol(c.roles[i],i)};border:1px solid #3a4150"></span>
       <div><div class="nm">${esc(t.name || ("Piste "+(i+1)))}</div>
         <div class="sub">${esc(FAMILY_FR[t.family]||t.family)}${t.iname?" · "+esc(t.iname):""} · ${t.count} notes · ${noteName(t.lo)}–${noteName(t.hi)}</div></div>
       <div class="ctl">
@@ -1277,6 +1597,28 @@ function moveScore(t){
   $("#scoreInner").style.transform = `translateX(${Math.round(head - x*Score.unit)}px)`;
 }
 
+
+/* ---------- tablette des accompagnements (sur le lecteur) ---------- */
+function renderAccPanel(){
+  const ids = P.tracks.map((t,i)=>i).filter(i => P.cfg.roles[i]==="acc");
+  const pan = $("#accPanel");
+  if (!ids.length){ pan.style.display="none"; return; }
+  pan.style.display="flex";
+  pan.classList.toggle("min", LS.get("pc-accpanel-min")==="1");
+  $("#accCaret").textContent = pan.classList.contains("min") ? "▸" : "▾";
+  const grey = P.cfg.accShow==="grey";
+  $("#accChips").innerHTML = ids.map(i => { const t=P.tracks[i]; const col = grey ? "#8a93a3" : P.accCol[i][0];
+    return `<button class="chip${accOn(i)?"":" off"}" data-acc="${i}" title="Afficher / masquer"><span class="dot" style="background:${col}"></span><span class="n">${esc(t.name || (FAMILY_FR[t.family]||"Piste")+" "+(i+1))}</span></button>`; }).join("");
+}
+$("#accChips").addEventListener("click", e => {
+  const b = e.target.closest("[data-acc]"); if (!b) return;
+  const i = +b.dataset.acc; P.cfg.accOn[i] = !accOn(i);
+  b.classList.toggle("off", !accOn(i));
+  if (P.playing) seek(now());
+  saveCfgSoon();
+});
+$("#accPanelHead").onclick = () => { const pan=$("#accPanel"); pan.classList.toggle("min"); LS.set("pc-accpanel-min", pan.classList.contains("min")?"1":"0"); $("#accCaret").textContent = pan.classList.contains("min") ? "▸" : "▾"; };
+
 function closePlayer(){ pause(); $("#player").classList.remove("on"); }
 $("#close").onclick = closePlayer;
 
@@ -1302,7 +1644,7 @@ setInterval(() => {
   while (P.schedIdx < P.notes.length && P.notes[P.schedIdx].t < horizon){
     const n = P.notes[P.schedIdx++];
     if (n.t < t - 0.05) continue;
-    if (!muted && P.hands[handOf(n)]===0){
+    if (!muted && P.hands[handOf(n)]===0 && !(n.h===2 && !accOn(n.tr))){
       const when = P.ctxStart + (n.t - P.songStart)/P.speed;
       voice(n.m, Math.max(AC.currentTime, when), n.d/P.speed, n.h===2 ? n.v*P.cfg.accVol : n.v, n.ins);
     }
@@ -1347,16 +1689,17 @@ function loop(){
   const start = firstIdx(t - 8);
   for (let i=start;i<P.notes.length;i++){
     const n=P.notes[i]; if (n.t > tTop) break;
-    const h = handOf(n); if (P.hands[h]===2 || (h===2 && P.cfg.accShow==="hide")) continue;
+    const h = handOf(n); if (P.hands[h]===2 || (h===2 && (P.cfg.accShow==="hide" || !accOn(n.tr)))) continue;
+    const col = h===2 ? (P.cfg.accShow==="grey" ? COL[2] : (P.accCol[n.tr]||COL[2])) : COL[h];
     if (n.t + n.d < t) continue;
     const k = KEYS[n.m]; if (!k) continue;
-    if (n.t <= t) active.set(n.m, h);
+    if (n.t <= t) active.set(n.m, col);
     const yb = hitY - (n.t - t)*pps, yt = hitY - (n.t + n.d - t)*pps;
     const y0 = Math.max(-4, yt), y1 = Math.min(hitY, yb);
     if (y1 <= y0) continue;
     const pad = k.black ? 0.5 : Math.max(1, k.w*0.08);
     roundRect(k.x+pad, y0, k.w-pad*2, y1-y0, Math.min(6,k.w/3));
-    cx.fillStyle = COL[h][k.black?1:0]; cx.globalAlpha = (P.hands[h]===1 ? 0.55 : 1) * (h===2 ? 0.75 : 1); cx.fill(); cx.globalAlpha=1;
+    cx.fillStyle = col[k.black?1:0]; cx.globalAlpha = (P.hands[h]===1 ? 0.55 : 1) * (h===2 ? 0.85 : 1); cx.fill(); cx.globalAlpha=1;
     if (P.names && (y1-y0)>14 && k.w>12){ cx.fillStyle="rgba(0,0,0,.65)"; cx.font=`600 ${Math.min(11,k.w*0.42)}px Inter`; cx.textAlign="center"; cx.fillText(NAMES_FR[n.m%12].replace("#","♯"), k.x+k.w/2, y1-5); }
   }
   // ligne de frappe
@@ -1365,14 +1708,14 @@ function loop(){
   // touches blanches
   for (let m=P.lo;m<=P.hi;m++){ const k=KEYS[m]; if (!k||k.black) continue;
     const a = active.get(m);
-    cx.fillStyle = a!=null ? COL[a][0] : "#f3f3f0"; cx.fillRect(k.x+0.5, hitY, k.w-1, KH);
+    cx.fillStyle = a ? a[0] : "#f3f3f0"; cx.fillRect(k.x+0.5, hitY, k.w-1, KH);
     cx.fillStyle="rgba(0,0,0,.18)"; cx.fillRect(k.x+k.w-1, hitY, 1, KH);
     if (m%12===0 && k.w>14){ cx.fillStyle="#9aa"; cx.font=`500 ${Math.min(10,k.w*0.4)}px Inter`; cx.textAlign="center"; cx.fillText("Do"+(Math.floor(m/12)-1), k.x+k.w/2, H-6); }
   }
   // touches noires
   for (let m=P.lo;m<=P.hi;m++){ const k=KEYS[m]; if (!k||!k.black) continue;
     const a = active.get(m);
-    cx.fillStyle = a!=null ? COL[a][1] : "#1b1d22"; roundRect(k.x, hitY, k.w, KH*0.62, 2); cx.fill();
+    cx.fillStyle = a ? a[1] : "#1b1d22"; roundRect(k.x, hitY, k.w, KH*0.62, 2); cx.fill();
   }
   cx.fillStyle="#000"; cx.fillRect(0,hitY,W,2);
   // compte à rebours
@@ -1423,6 +1766,7 @@ document.addEventListener("keydown", e => {
   initVersion();
   initScan();
   await Store.init();
+  initStoreUI();
   await refresh();
 })();
 </script>
