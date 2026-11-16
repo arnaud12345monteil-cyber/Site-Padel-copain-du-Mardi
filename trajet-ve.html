@@ -481,10 +481,10 @@ body.app #exportBar{background:var(--panel);border:1px solid var(--line);border-
   body.app .swap{padding:8px 4px}
 }
 /* blocs affichés selon l'onglet */
-body.app[data-tab="trajet"] [data-v]:not([data-v="trajet"]),
-body.app[data-tab="carte"] [data-v]:not([data-v="carte"]),
-body.app[data-tab="route"] [data-v]:not([data-v="route"]),
-body.app[data-tab="voiture"] [data-v]:not([data-v="voiture"]){display:none!important}
+body.app[data-tab="trajet"] [data-pane]:not([data-pane="trajet"]),
+body.app[data-tab="carte"] [data-pane]:not([data-pane="carte"]),
+body.app[data-tab="route"] [data-pane]:not([data-pane="route"]),
+body.app[data-tab="voiture"] [data-pane]:not([data-pane="voiture"]){display:none!important}
 /* onglets */
 .tabbar button{appearance:none;border:0;background:none;color:var(--muted);font:600 .74rem var(--f-body);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:6px 2px;border-radius:12px;-webkit-tap-highlight-color:transparent}
 .tabbar svg{width:24px;height:24px}
@@ -501,7 +501,7 @@ body.app header.top .top-right.more{-webkit-mask-image:none;mask-image:none}
 body.phone .stat{padding:8px 10px}
 body.phone .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* --- tablette : carte à gauche, panneau à droite avec onglets en haut --- */
-body.tablet .wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,1fr);gap:12px;align-items:start}
+body.tablet .wrap{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(330px,1fr);gap:12px;align-items:start}
 body.tablet .wrap>*,body.tablet #stats,body.tablet #quick{grid-column:2}
 body.tablet .tabbar{order:0}
 body.tablet #map{display:block!important;grid-column:1;grid-row:1 / span 40;position:sticky;top:calc(var(--hdrH,56px) + 8px);height:calc(100dvh - var(--hdrH,56px) - 24px);min-height:420px;border-radius:var(--radius)}
@@ -510,7 +510,57 @@ body.tablet .tabbar button[data-t="carte"]{display:none}
 body.tablet .tabbar button{flex-direction:row;gap:8px;font-size:.86rem;padding:9px 6px}
 body.tablet .tabbar button[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;width:22px}
-@media (orientation:portrait){ body.tablet .wrap{grid-template-columns:minmax(0,1fr) minmax(340px,1.05fr)} }
+@media (orientation:portrait){ body.tablet .wrap{grid-template-columns:minmax(0,1.2fr) minmax(320px,1fr)} }
+
+/* ===================== Style « appli de sport » (v2.41) : gros chiffres, cartes, pastilles ===================== */
+body.app{font-size:16.5px;line-height:1.5;background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 7%,var(--bg)) 0,var(--bg) 280px) fixed,var(--bg)}
+body.app header.top{background:transparent}
+body.app header.top.stuck{background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px)}
+body.app header.top h1{font-size:1.45rem;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+body.app header.top h1::before{content:"";width:30px;height:30px;border-radius:9px;flex:none;background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13 2 4 14h7l-1 8 9-12h-7z' fill='white'/%3E%3C/svg%3E") center/18px no-repeat;box-shadow:0 4px 10px -3px color-mix(in srgb,var(--accent) 60%,transparent)}
+body.app h2{font-size:1.3rem;font-weight:700}
+body.app .panel{padding:18px;border-radius:18px}
+body.app .mini{border-radius:999px;font-size:.9rem;padding:8px 14px}
+body.app .mini.primary{box-shadow:0 6px 14px -6px color-mix(in srgb,var(--accent) 70%,transparent)}
+body.app input:not([type=checkbox]):not([type=radio]),body.app select{border-radius:12px;font-size:1rem}
+body.app button.go{border-radius:14px;font-size:1.1rem;padding:14px;box-shadow:0 8px 18px -8px color-mix(in srgb,var(--accent) 75%,transparent)}
+body.app .sec-t{font-size:.92rem;color:var(--ink);letter-spacing:.06em;font-weight:700;display:flex;align-items:center;gap:8px}
+body.app .sec-t::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--accent)}
+body.app details.sec>summary{padding:14px 0}
+body.app label{font-size:.95rem}
+/* chiffres clés : une carte par valeur, gros chiffres */
+body.app .stats{background:none;border:0;box-shadow:none;gap:10px;overflow:visible}
+body.app .stat{background:var(--panel);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:16px;box-shadow:0 1px 2px rgb(0 0 0/.04),0 8px 18px -12px rgb(0 0 0/.2);padding:12px 14px;position:relative;overflow:hidden}
+body.app .stat b{font:700 1.75rem/1.1 var(--f-display);letter-spacing:-.01em}
+body.app .stat span{font-size:.7rem;font-weight:600;letter-spacing:.08em;display:block;margin-top:4px}
+body.app .stat.hl{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 70%,#7a3cff));border:0;color:#fff}
+body.app .stat.hl b{color:#fff} body.app .stat.hl span{color:rgb(255 255 255/.82)}
+body.phone .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.tablet .stat b{font-size:1.45rem}
+/* feuille de route */
+body.app .clock{font:700 1.05rem var(--f-display)}
+body.app ol.road>li{grid-template-columns:58px 24px 1fr}
+body.app .item h3{font-size:1.12rem;font-weight:700}
+body.app .item p{font-size:.95rem}
+body.app .dot{width:18px;height:18px}
+body.app .dot.charge{box-shadow:0 0 0 5px color-mix(in srgb,var(--charge) 22%,transparent)}
+body.app .rail::before{width:4px;border-radius:2px}
+body.app .chip{font-size:.8rem;padding:3px 10px}
+/* onglets : pastille pleine pour l'onglet actif */
+body.phone .tabbar{height:calc(68px + env(safe-area-inset-bottom,0px))}
+body.phone{--tabH:68px}
+.tabbar button{font-size:.76rem}
+body.phone .tabbar button[aria-selected="true"]{color:var(--accent)}
+body.phone .tabbar button[aria-selected="true"] svg{background:var(--accent);color:#fff;stroke:#fff}
+body.phone .tabbar button[aria-selected="true"] svg path{stroke:#fff}
+body.tablet .tabbar{border-radius:999px;padding:5px}
+body.tablet .tabbar button{border-radius:999px;font-size:.92rem}
+body.tablet .tabbar button[aria-selected="true"]{background:var(--accent);color:#fff}
+body.tablet .tabbar button[aria-selected="true"] svg path{stroke:#fff}
+/* carte */
+body.app #map{border-radius:20px;border:0;box-shadow:0 10px 30px -14px rgb(0 0 0/.35)}
+body.app .viewctl button{font-size:13px;padding:8px 11px}
+body.app .car-card b{font:700 1.25rem var(--f-display)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -544,7 +594,7 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
     <button type="button" data-t="route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Feuille de route</span></button>
     <button type="button" data-t="voiture"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l1.6-4.4A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.6L19 11m-14 0h14v5a1 1 0 0 1-1 1h-1v1.5M5 11v5a1 1 0 0 0 1 1h1v1.5M7.5 14h.01M16.5 14h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Voiture</span></button>
   </nav>
-  <aside class="panel" data-v="trajet">
+  <aside class="panel" data-pane="trajet">
     <form id="f" autocomplete="off">
       <div class="syncbar" id="syncbar" hidden>
         <span id="syncTxt">Favoris enregistrés sur cet appareil</span>
@@ -729,7 +779,7 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
   </aside>
 
   <section class="main">
-    <div class="panel car" id="carPanel" data-v="voiture" hidden>
+    <div class="panel car" id="carPanel" data-pane="voiture" hidden>
       <div class="car-head">
         <h2>Ma voiture</h2>
         <span class="note" id="carAge"></span>
@@ -758,8 +808,8 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
         <div id="hSum"></div>
       </div>
     </div>
-    <div id="map" data-v="carte"></div>
-    <div class="resbar" id="resbar" data-v="route" hidden>
+    <div id="map" data-pane="carte"></div>
+    <div class="resbar" id="resbar" data-pane="route" hidden>
       <div class="stats" id="stats"></div>
       <div class="quick panel" id="quick">
         <div class="qhead"><h2>Ajuster</h2><button type="button" class="swap" data-all="quick" data-open="1">Tout développer</button><button type="button" class="swap" data-all="quick" data-open="0">Tout réduire</button></div>
@@ -796,7 +846,7 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
         </details>
       </div>
     </div>
-    <div class="here panel" id="hereBox" data-v="route" hidden>
+    <div class="here panel" id="hereBox" data-pane="route" hidden>
       <div class="here-form">
         <h2>Je suis ici</h2>
         <div class="hsrc">
@@ -821,7 +871,7 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
       <p class="note" id="hereLiveSt"></p>
       <div id="hereOut" role="status"></div>
     </div>
-    <div class="export" id="exportBar" data-v="route" hidden>
+    <div class="export" id="exportBar" data-pane="route" hidden>
       <button type="button" class="mini primary" id="hereBtn">Je suis ici</button>
       <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
       <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
@@ -829,15 +879,15 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
       <button type="button" class="mini" id="copyBtn">Copier la feuille de route</button>
       <p class="note" id="exportNote"></p>
     </div>
-    <div class="panel" id="roadPanel" data-v="route">
+    <div class="panel" id="roadPanel" data-pane="route">
       <h2 style="margin-bottom:12px">Feuille de route</h2>
       <div id="road"><p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l'heure, la borne et le temps de charge.</p></div>
     </div>
-    <div class="panel" id="chartPanel" data-v="route" hidden>
+    <div class="panel" id="chartPanel" data-pane="route" hidden>
       <h2 style="margin-bottom:8px">Niveau de batterie sur le trajet</h2>
       <div class="chart-box" id="chart"></div>
     </div>
-    <p class="note" data-v="route">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation calculée selon la vitesse de chaque portion et la saison ; le relief, le vent et la pluie ne sont pas pris en compte. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
+    <p class="note" data-pane="route">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation calculée selon la vitesse de chaque portion et la saison ; le relief, le vent et la pluie ne sont pas pris en compte. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
   </section>
 </div>
 
@@ -891,6 +941,11 @@ body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;w
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.41", d:"16/11/2026", c:[
+    "Correctif : les boutons Trajet, Voiture, Les deux et Moi de la carte étaient masqués en mode appli",
+    "Tablette : carte plus large, volet de droite plus étroit",
+    "Carte : bouton « Plein écran » toujours présent avec Trajet, Voiture, Les deux et Moi",
+    "Style « appli de sport » sur téléphone et tablette : polices plus grandes, chiffres clés en grosses cartes, onglet actif en pastille pleine, boutons arrondis, feuille de route plus lisible"]},
   {v:"2.40.1", d:"16/11/2026", c:["Correctif : l'onglet Trajet restait vide sur téléphone et tablette quand « Masquer les réglages » avait été activé auparavant"]},
   {v:"2.40", d:"16/11/2026", c:[
     "Téléphone : navigation par onglets en bas d'écran (Trajet, Carte, Feuille de route, Voiture), carte en plein écran dans son onglet, menu « Plus » pour les boutons secondaires",
@@ -1697,14 +1752,15 @@ function initMap(){
   // Boutons de cadrage : trajet / voiture / les deux
   const ViewCtl=L.Control.extend({ onAdd(){
       const d=L.DomUtil.create("div","leaflet-bar viewctl");
-      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="me" title="Centrer sur ma position (GPS du téléphone)">Moi</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
+      d.innerHTML='<button type="button" data-v="route" title="Voir tout le trajet">Trajet</button><button type="button" data-v="car" title="Centrer sur la voiture">Voiture</button><button type="button" data-v="me" title="Centrer sur ma position (GPS du téléphone)">Moi</button><button type="button" data-v="full" title="Carte en plein écran">⤢ Plein écran</button><button type="button" data-v="both" title="Trajet et voiture">Les deux</button>';
       L.DomEvent.disableClickPropagation(d);
       d.addEventListener("click",e=>{ const b=e.target.closest("[data-v]"); if(b) frameMap(b.dataset.v); });
       this._d=d; return d; },
     update(){ if(!this._d) return; const hasR=!!lastLine && map.hasLayer(lastLine), hasC=!!carMarker, hasM=!!meFix;
       const bm=this._d.querySelector('[data-v="me"]'); if(bm) bm.hidden=!hasM;
       this._d.querySelector('[data-v="route"]').hidden=!hasR; this._d.querySelector('[data-v="car"]').hidden=!hasC; this._d.querySelector('[data-v="both"]').hidden=!(hasR&&hasC);
-      this._d.hidden=!(hasR||hasC||hasM); } });
+      const bf=this._d.querySelector('[data-v="full"]'); if(bf) bf.textContent=document.body.classList.contains("mapfull")?"⤡ Réduire":"⤢ Plein écran";
+      this._d.hidden=false; } });
   viewCtl=new ViewCtl({position:"topleft"}).addTo(map); viewCtl.update();
   // suivi en temps réel directement depuis la carte
   const LiveCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar livectl");
@@ -2548,6 +2604,7 @@ function frameMap(v){
   if(!map) return;
   const hasR=!!lastLine && map.hasLayer(lastLine);
   if(v==="car" && carMarker){ map.setView(carMarker.getLatLng(),14); carMarker.openTooltip(); return; }
+  if(v==="full"){ setMapFull(!document.body.classList.contains("mapfull")); return; }
   if(v==="me"){ if(meFix) map.setView([meFix.coords.latitude,meFix.coords.longitude],15); else locateMe(true); return; }
   if(v==="route" && hasR){ carMarker?.closeTooltip(); map.fitBounds(lastLine.getBounds(),{padding:[20,20]}); return; }
   if(v==="both"){ const b=hasR?L.latLngBounds(lastLine.getBounds().getSouthWest(),lastLine.getBounds().getNorthEast()):null;
@@ -3140,7 +3197,7 @@ addEventListener("appinstalled",()=>{ $("installBtn").hidden=true; });
 // ---------- Carte plein écran ----------
 function setMapFull(on){
   document.body.classList.toggle("mapfull",on); $("mapFullBtn").setAttribute("aria-pressed",on);
-  $("mapFullBtn").textContent=on?"Quitter le plein écran":"Carte plein écran";
+  $("mapFullBtn").textContent=on?"Quitter le plein écran":"Carte plein écran"; viewCtl?.update();
   setTimeout(()=>{ if(map){ const c=map.getCenter(), z=map.getZoom(); map.invalidateSize(); map.setView(c,z,{animate:false}); } },60);
 }
 $("mapFullBtn").addEventListener("click",()=>setMapFull(!document.body.classList.contains("mapfull")));
