@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="tension-chart.umd.min.js"></script>
+<script src="tension-firebase.js"></script>
 <style>
 :root{
   --bg:#f5f4f0; --card:#ffffff; --ink:#1d1f22; --muted:#6b6f76; --line:#e3e1db; --accent:#b8322a;
@@ -72,12 +73,31 @@ textarea{width:100%;height:220px;font:12px "IBM Plex Mono",monospace;background:
 .toast.on{opacity:1}
 h2{font-size:15px;margin:0 0 10px;font-weight:600}
 .ref td{padding:5px 8px;font-size:13px}
+#login{position:fixed;inset:0;background:var(--bg);z-index:40;display:flex;align-items:center;justify-content:center;padding:20px}
+#login .box{width:100%;max-width:360px}
+#login form{display:flex;flex-direction:column;gap:10px}
+#login .err{color:var(--c-h2);font-size:13px;min-height:18px}
+.sync{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:0}
+.sync.ok{background:var(--c-opt)} .sync.wait{background:var(--c-nh)}
 </style>
 </head>
 <body>
+<div id="login" class="hidden">
+  <div class="box card">
+    <h1 style="margin-bottom:4px">Suivi tension artérielle</h1>
+    <p class="hint" style="margin:0 0 14px">Connectez-vous pour retrouver vos mesures sur tous vos appareils.</p>
+    <form id="loginForm">
+      <label class="f">E-mail<input type="email" id="lEmail" autocomplete="username" required></label>
+      <label class="f">Mot de passe<input type="password" id="lPass" autocomplete="current-password" required></label>
+      <div class="err" id="lErr"></div>
+      <button class="btn primary" type="submit" id="lBtn">Se connecter</button>
+      <button class="btn" type="button" id="lReset">Mot de passe oublié</button>
+    </form>
+  </div>
+</div>
 <header>
   <h1>Suivi tension artérielle</h1>
-  <span class="row"><span id="status">Chargement…</span><button class="btn small primary hidden" id="btnInstall">Installer l'appli</button><span id="appVersion" class="ver"></span></span>
+  <span class="row"><span id="status"><i class="sync"></i>Connexion…</span><button class="btn small primary hidden" id="btnInstall">Installer l'appli</button><span id="appVersion" class="ver"></span></span>
 </header>
 <nav>
   <button data-tab="chart" class="on">Courbes</button>
@@ -187,7 +207,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 
   <div class="card">
     <h2>Points de sauvegarde</h2>
-    <p class="hint" style="margin-top:0">Les données sont enregistrées automatiquement à chaque modification. Un point de sauvegarde fige l'état actuel pour pouvoir y revenir.</p>
+    <p class="hint" style="margin-top:0">Chaque modification part directement dans Firebase (et attend le retour du réseau si vous êtes hors ligne). Un point de sauvegarde fige l'état actuel pour pouvoir y revenir.</p>
     <div class="row" style="margin-top:8px">
       <input id="snapName" placeholder="Nom (facultatif)" style="flex:1;min-width:150px">
       <button class="btn primary" id="btnSnap">Créer un point</button>
@@ -204,6 +224,18 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
       <button class="btn" id="btnImpJson">Restaurer un fichier .json</button>
     </div>
     <p class="hint">Le .json contient toutes les mesures ; il permet de tout restaurer sur un autre appareil.</p>
+  </div>
+
+  <div class="card">
+    <h2>Compte</h2>
+    <div class="row" style="justify-content:space-between">
+      <span id="accEmail" class="hint" style="margin:0"></span>
+      <button class="btn" id="btnLogout">Se déconnecter</button>
+    </div>
+    <div id="migrateBox" class="hidden" style="margin-top:10px">
+      <p class="hint" style="margin:0 0 8px" id="migrateTxt"></p>
+      <div class="row"><button class="btn primary" id="btnMigrate">Envoyer dans Firebase</button><button class="btn" id="btnMigrateNo">Ignorer</button></div>
+    </div>
   </div>
 
   <div class="card" id="installCard">
@@ -223,12 +255,27 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 <div class="toast" id="toast"></div>
 
 <script>
+/* =====================================================================
+   CONFIGURATION FIREBASE : colle ici la config de ton projet
+   (Console Firebase > Paramètres du projet > Vos applications > Web)
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyC0CQFaB45sIbnJ-aEAuH2sWoJz7NBUmbw",
+  authDomain: "tension-fb3e1.firebaseapp.com",
+  projectId: "tension-fb3e1",
+  storageBucket: "tension-fb3e1.firebasestorage.app",
+  messagingSenderId: "584072811625",
+  appId: "1:584072811625:web:16ba4ac5646d68d9273ef8",
+  measurementId: "G-4Y05QCY1P6"
+};
+
+const APP_VERSION = '2.0.0';
+
 /* ---------- utilitaires ---------- */
-const APP_VERSION = '1.0.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const pad = n => String(n).padStart(2,'0');
-const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); };
+const toast = (msg) => { const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2800); };
 const fmtD = d => { const [y,m,j]=d.split('-'); return `${j}/${m}/${y}`; };
 const DAYS = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
 const dayName = d => DAYS[new Date(d+'T12:00:00').getDay()];
@@ -259,56 +306,122 @@ const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(
 const badge = c => `<span class="badge" style="background:${c.color}">${c.label}</span>`;
 
 /* ---------- état ---------- */
-let state = { measures: [], updatedAt: 0 };
-const local = lsGet('tension_state', null);
-if (local && Array.isArray(local.measures)) state = local;
+let state = { measures: [] };
+let sync = { ready:false, pending:false, offline:false };
 const ui = Object.assign({rank:'avg23', slot:'any', hour:'23:00', tol:'60', from:'', to:'', pulse:false, onlyAbn:false, tab:'chart'}, lsGet('tension_ui',{}));
 
-/* ---------- stockage distant (espace privé de l'utilisateur) ---------- */
-let db=null, uid=null, mainRef=null, remoteOK=false;
+/* ---------- Firebase ---------- */
+const F = window.TensionFB;
+const configured = !String(firebaseConfig.apiKey).includes('A_REMPLACER');
+let auth=null, fs=null, user=null, unsubM=null, unsubS=null;
+const colM = () => F.collection(fs, 'users', user.uid, 'mesures');
+const colS = () => F.collection(fs, 'users', user.uid, 'sauvegardes');
+const BATCH = 400;
+
 function setStatus(){
   const n = state.measures.length;
-  const where = remoteOK ? 'enregistré dans votre espace' : 'enregistré sur cet appareil';
-  $('#status').textContent = `${n} mesure${n>1?'s':''} · ${where}`;
+  let cls='', txt;
+  if (!configured) txt = 'Firebase non configuré';
+  else if (!user) txt = 'Non connecté';
+  else if (!sync.ready) txt = 'Chargement…';
+  else if (sync.pending) { cls='wait'; txt = `${n} mesures · envoi en attente`; }
+  else if (sync.offline) { cls='wait'; txt = `${n} mesures · hors ligne`; }
+  else { cls='ok'; txt = `${n} mesure${n>1?'s':''} · synchronisé`; }
+  $('#status').innerHTML = `<i class="sync ${cls}"></i>${txt}`;
 }
-let saveTimer=null, saving=Promise.resolve();
-function persist(){
-  state.updatedAt = Date.now();
-  lsSet('tension_state', state);
-  setStatus();
-  if (!remoteOK) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=>{
-    const body = { measures: state.measures, updatedAt: state.updatedAt };
-    saving = saving.then(()=>mainRef.set(body)).catch(e=>{
-      if (e && e.code==='quota_exceeded') toast('Espace de stockage plein : exportez un .json.');
-      else toast('Sauvegarde distante impossible, données gardées sur l\'appareil.');
-    });
-  }, 700);
+const fbError = e => {
+  const c = e && e.code || '';
+  if (c==='permission-denied') return 'Accès refusé par Firebase (vérifie les règles).';
+  if (c.includes('quota')) return 'Quota Firebase atteint.';
+  return 'Erreur Firebase : ' + (e && e.message || c);
+};
+/* Les écritures sont prises en compte localement tout de suite ; la promesse
+   ne se termine qu'au retour du serveur (peut attendre si hors ligne). */
+function commitBatches(ops){
+  const jobs=[];
+  for (let i=0;i<ops.length;i+=BATCH){
+    const b = F.writeBatch(fs);
+    ops.slice(i,i+BATCH).forEach(fn=>fn(b));
+    jobs.push(b.commit());
+  }
+  return Promise.all(jobs).catch(e=>{ toast(fbError(e)); throw e; });
 }
-function withTimeout(p,ms){ return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r({code:'timeout'}),ms))]); }
-async function initRemote(){
-  try{
-    if (!window.claude || !claude.use) return;
-    const [d,u] = await Promise.all([claude.use('db'), claude.use('user')]);
-    if (!d || !u) return;
-    const id = await u.id();
-    if (!id) return;
-    db=d; uid=id;
-    mainRef = db.collection('data/users/'+uid).doc('mesures');
-    const snap = await withTimeout(mainRef.get(), 10000);
-    remoteOK = true;
-    if (snap.exists){
-      const data = snap.data();
-      if ((data.updatedAt||0) > (state.updatedAt||0) && Array.isArray(data.measures)){
-        state = { measures: data.measures.map(m=>({...m})), updatedAt: data.updatedAt };
-        lsSet('tension_state', state);
-        render();
-      } else if ((state.updatedAt||0) > (data.updatedAt||0)) { persist(); }
-    } else if (state.measures.length){ persist(); }
-    setStatus(); renderSnaps();
-  }catch(e){ remoteOK=false; setStatus(); }
+const writeMeasures = list => commitBatches(list.map(m => b => b.set(F.doc(colM(), m.id), clean(m))));
+const deleteMeasures = ids => commitBatches(ids.map(id => b => b.delete(F.doc(colM(), id))));
+function replaceAll(list){
+  const keep = new Set(list.map(m=>m.id));
+  const ops = state.measures.filter(m=>!keep.has(m.id)).map(m => b => b.delete(F.doc(colM(), m.id)))
+    .concat(list.map(m => b => b.set(F.doc(colM(), m.id), clean(m))));
+  return commitBatches(ops);
 }
+const clean = m => ({ id:m.id, d:m.d, t:m.t, sys:m.sys, dia:m.dia, pul:m.pul??null, irr:!!m.irr, mov:!!m.mov, note:m.note||'' });
+
+function startData(){
+  sync = { ready:false, pending:false, offline:false };
+  unsubM = F.onSnapshot(colM(), { includeMetadataChanges:true }, snap=>{
+    state.measures = snap.docs.map(d=>d.data()).sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+    sync.ready = true; sync.pending = snap.metadata.hasPendingWrites; sync.offline = snap.metadata.fromCache && !navigator.onLine;
+    render(); checkMigration();
+  }, e=>{ toast(fbError(e)); });
+  unsubS = F.onSnapshot(F.query(colS(), F.orderBy('createdAt','desc')), snap=>{
+    snaps = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    renderSnaps();
+  }, e=>{});
+}
+function stopData(){ unsubM && unsubM(); unsubS && unsubS(); unsubM=unsubS=null; state.measures=[]; snaps=[]; }
+
+function initFirebase(){
+  if (!F){ $('#status').textContent='Bibliothèque Firebase non chargée'; return; }
+  if (!configured){
+    $('#login').classList.remove('hidden');
+    $('#lErr').textContent = 'Renseigne firebaseConfig en haut du fichier tension.html.';
+    $('#lBtn').disabled = true; setStatus(); return;
+  }
+  const app = F.initializeApp(firebaseConfig, 'tension');
+  auth = F.getAuth(app);
+  F.setPersistence(auth, F.browserLocalPersistence).catch(()=>{});
+  try { fs = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
+  catch(e){ fs = F.initializeFirestore(app, {}); }
+  F.onAuthStateChanged(auth, u=>{
+    stopData(); user = u;
+    $('#login').classList.toggle('hidden', !!u);
+    $('#accEmail').textContent = u ? `Connecté : ${u.email}` : '';
+    if (u) startData();
+    render();
+  });
+}
+$('#loginForm').onsubmit = async e=>{
+  e.preventDefault(); $('#lErr').textContent=''; $('#lBtn').disabled=true;
+  try { await F.signInWithEmailAndPassword(auth, $('#lEmail').value.trim(), $('#lPass').value); $('#lPass').value=''; }
+  catch(err){
+    const c=err.code||'';
+    $('#lErr').textContent = c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found') ? 'E-mail ou mot de passe incorrect.'
+      : c.includes('too-many-requests') ? 'Trop d\'essais, réessaie dans quelques minutes.'
+      : c.includes('network') ? 'Pas de connexion réseau.' : 'Connexion impossible ('+c+').';
+  } finally { $('#lBtn').disabled=false; }
+};
+$('#lReset').onclick = async ()=>{
+  const em=$('#lEmail').value.trim();
+  if (!em) { $('#lErr').textContent='Saisis ton e-mail d\'abord.'; return; }
+  try { await F.sendPasswordResetEmail(auth, em); $('#lErr').textContent='E-mail de réinitialisation envoyé (si le compte existe).'; }
+  catch(e){ $('#lErr').textContent='Envoi impossible.'; }
+};
+$('#btnLogout').onclick = ()=> confirmBox('Se déconnecter ? Les mesures restent dans Firebase.', ()=>F.signOut(auth));
+window.addEventListener('online', setStatus); window.addEventListener('offline', ()=>{ sync.offline=true; setStatus(); });
+
+/* ---------- reprise des données de la v1 (stockées sur l'appareil) ---------- */
+function checkMigration(){
+  const old = lsGet('tension_state', null);
+  const box=$('#migrateBox');
+  if (!old || !Array.isArray(old.measures) || !old.measures.length || lsGet('tension_migrated',false)) { box.classList.add('hidden'); return; }
+  const ids = new Set(state.measures.map(m=>m.id));
+  const missing = old.measures.filter(m=>!ids.has(m.id));
+  if (!missing.length){ lsSet('tension_migrated', true); box.classList.add('hidden'); return; }
+  $('#migrateTxt').textContent = `${missing.length} mesure${missing.length>1?'s':''} de l'ancienne version (enregistrée${missing.length>1?'s':''} sur cet appareil) ${missing.length>1?'ne sont':'n\'est'} pas encore dans Firebase.`;
+  box.classList.remove('hidden'); box._missing = missing;
+}
+$('#btnMigrate').onclick = ()=>{ const m=$('#migrateBox')._missing||[]; writeMeasures(m).then(()=>toast('Mesures envoyées.')).catch(()=>{}); lsSet('tension_migrated', true); $('#migrateBox').classList.add('hidden'); };
+$('#btnMigrateNo').onclick = ()=>{ lsSet('tension_migrated', true); $('#migrateBox').classList.add('hidden'); };
 
 /* ---------- parsing CSV ---------- */
 const MONTHS = {jan:0,janv:0,feb:1,fev:1,'fév':1,'févr':1,fevr:1,mar:2,mars:2,apr:3,avr:3,may:4,mai:4,jun:5,juin:5,jul:6,juil:6,aug:7,aou:7,'aoû':7,'août':7,sep:8,sept:8,oct:9,nov:10,dec:11,'déc':11};
@@ -325,10 +438,7 @@ function parseDate(s){
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
   return null;
 }
-function parseTime(s){
-  const m = (s||'').trim().match(/^(\d{1,2})[:hH](\d{2})/);
-  return m ? `${pad(+m[1])}:${m[2]}` : null;
-}
+function parseTime(s){ const m=(s||'').trim().match(/^(\d{1,2})[:hH](\d{2})/); return m ? `${pad(+m[1])}:${m[2]}` : null; }
 function splitCSV(text, sep){
   const rows=[]; let row=[], cur='', q=false;
   for (let i=0;i<text.length;i++){
@@ -368,13 +478,7 @@ function parseOmron(text){
 function mk(d,t,s,di,p,irr=false,mov=false,note=''){
   return { id:`${d}_${t}_${s}_${di}`, d, t, sys:s, dia:di, pul:p, irr, mov, note };
 }
-function mergeMeasures(list, replace){
-  const map = new Map(replace ? [] : state.measures.map(m=>[m.id,m]));
-  let added=0;
-  for (const m of list){ if (!map.has(m.id)){ map.set(m.id,m); added++; } }
-  state.measures = [...map.values()].sort((a,b)=> (a.d+a.t).localeCompare(b.d+b.t));
-  return added;
-}
+const dedupe = list => [...new Map(list.map(m=>[m.id,m])).values()];
 
 /* ---------- séances ---------- */
 const GAP = 15; // minutes max entre deux mesures d'une même séance
@@ -405,14 +509,13 @@ function inSlot(t){
 }
 const inRange = d => (!ui.from || d>=ui.from) && (!ui.to || d<=ui.to);
 function filteredSessions(){ return sessions().filter(s=>inRange(s.d) && inSlot(s.t)); }
-/* renvoie les points retenus + les mesures utilisées */
 function selectPoints(sess){
   const pts=[], used=new Set();
   for (const s of sess){
     const it=s.items, n=it.length;
-    const push = (arr, label, t) => { arr.forEach(m=>used.add(m.id)); const a=arr.length===1?{sys:arr[0].sys,dia:arr[0].dia,pul:arr[0].pul}:avgOf(arr); pts.push({ d:s.d, t:t||s.t, ...a, n:arr.length, label, single: arr.length===1 && n===1 }); };
+    const push = (arr, label, t) => { arr.forEach(m=>used.add(m.id)); const a=arr.length===1?{sys:arr[0].sys,dia:arr[0].dia,pul:arr[0].pul}:avgOf(arr); pts.push({ d:s.d, t:t||s.t, ...a, n:arr.length, label }); };
     switch(ui.rank){
-      case 'all': it.forEach((m,i)=>push([m], `${i+1}ʳᵉ/ᵉ`, m.t)); break;
+      case 'all': it.forEach((m,i)=>push([m], `mesure ${i+1}`, m.t)); break;
       case 'avg': push(it, `moy. ${n}`); break;
       case 'avg23': push(n>1? it.slice(1): it, n>1?`moy. ${n-1} (sans 1ʳᵉ)`:'mesure unique'); break;
       case 'last': push([it[n-1]], 'dernière', it[n-1].t); break;
@@ -427,7 +530,6 @@ let chart=null;
 function renderChart(){
   const sess = filteredSessions();
   const {pts} = selectPoints(sess);
-  // stats
   const st=$('#stats');
   if (!pts.length){
     st.innerHTML = `<div class="stat"><b>—</b><span>Aucune donnée pour ces filtres</span></div>`;
@@ -508,55 +610,36 @@ function renderRef(){
   $('#catLegend').innerHTML = CATS.map(c=>`<span><i class="dot" style="background:${c.color}"></i>${c.label}</span>`).join('');
 }
 
-/* ---------- sauvegardes (points) ---------- */
-async function listSnaps(){
-  if (remoteOK){
-    try{
-      const q = await db.collection('data/users/'+uid).get();
-      return q.docs.filter(d=>d.id.startsWith('snap-')).map(d=>({id:d.id, ...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
-    }catch(e){ return []; }
-  }
-  return lsGet('tension_snaps',[]);
-}
-async function renderSnaps(){
-  const box=$('#snaps');
-  const snaps = await listSnaps();
-  box.innerHTML = snaps.length ? snaps.map(s=>{
+/* ---------- points de sauvegarde (Firestore : users/{uid}/sauvegardes) ---------- */
+let snaps = [];
+function renderSnaps(){
+  $('#snaps').innerHTML = snaps.length ? snaps.map(s=>{
     const dt=new Date(s.createdAt);
-    return `<div class="snap"><span><b>${esc(s.name||'Sans nom')}</b><br><small class="hint">${dt.toLocaleDateString('fr-FR')} ${pad(dt.getHours())}:${pad(dt.getMinutes())} · ${s.measures.length} mesures</small></span>
-      <span class="row"><button class="btn small" data-restore="${s.id}">Restaurer</button><button class="btn small" data-delsnap="${s.id}">Supprimer</button></span></div>`;
+    return `<div class="snap"><span><b>${esc(s.name||'Sans nom')}</b><br><small class="hint">${dt.toLocaleDateString('fr-FR')} ${pad(dt.getHours())}:${pad(dt.getMinutes())} · ${(s.measures||[]).length} mesures</small></span>
+      <span class="row"><button class="btn small" data-restore="${esc(s.id)}">Restaurer</button><button class="btn small" data-delsnap="${esc(s.id)}">Supprimer</button></span></div>`;
   }).join('') : `<p class="hint">Aucun point de sauvegarde pour l'instant.</p>`;
-  box._snaps = snaps;
 }
-async function createSnap(){
+function createSnap(){
+  if (!user) return;
   if (!state.measures.length) return toast('Rien à sauvegarder.');
   const name = $('#snapName').value.trim() || `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`;
-  const snap = { kind:'snap', name, createdAt:Date.now(), measures: state.measures };
-  if (remoteOK){
-    try{ await db.collection('data/users/'+uid).doc('snap-'+snap.createdAt).set(snap); }
-    catch(e){ return toast(e && e.code==='quota_exceeded' ? 'Stockage plein : supprimez d\'anciens points.' : 'Échec de la sauvegarde.'); }
-  } else {
-    const list = lsGet('tension_snaps',[]); list.unshift({id:'snap-'+snap.createdAt, ...snap});
-    if (!lsSet('tension_snaps', list.slice(0,20))) return toast('Stockage local indisponible : exportez un .json.');
-  }
-  $('#snapName').value=''; toast('Point de sauvegarde créé.'); renderSnaps();
+  const createdAt = Date.now();
+  // Un document Firestore est limité à 1 Mo : environ 8 000 mesures par point de sauvegarde.
+  F.setDoc(F.doc(colS(), 'snap-'+createdAt), { name, createdAt, app:'tension', version:APP_VERSION, measures: state.measures.map(clean) })
+    .catch(e=>toast(fbError(e)));
+  $('#snapName').value=''; toast('Point de sauvegarde créé.');
 }
 function confirmBox(msg, onOk){
   openModal(`<p>${msg}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="mNo">Annuler</button><button class="btn primary" id="mOk">Confirmer</button></div>`);
   $('#mNo').onclick=closeModal; $('#mOk').onclick=()=>{ closeModal(); onOk(); };
 }
-$('#snaps').addEventListener('click', async e=>{
+$('#snaps').addEventListener('click', e=>{
   const r=e.target.dataset.restore, d=e.target.dataset.delsnap;
-  const snaps=$('#snaps')._snaps||[];
   if (r){ const s=snaps.find(x=>x.id===r); if(!s) return;
     confirmBox(`Remplacer les ${state.measures.length} mesures actuelles par les ${s.measures.length} de « ${esc(s.name)} » ?`, ()=>{
-      state.measures = s.measures.map(m=>({...m})); persist(); render(); toast('Sauvegarde restaurée.'); });
+      replaceAll(s.measures).then(()=>toast('Sauvegarde restaurée.')).catch(()=>{}); });
   }
-  if (d){ confirmBox('Supprimer ce point de sauvegarde ?', async ()=>{
-      if (remoteOK){ try{ await db.collection('data/users/'+uid).doc(d).delete(); }catch(e){ toast('Suppression impossible.'); } }
-      else lsSet('tension_snaps', lsGet('tension_snaps',[]).filter(x=>x.id!==d));
-      renderSnaps(); });
-  }
+  if (d){ confirmBox('Supprimer ce point de sauvegarde ?', ()=>{ F.deleteDoc(F.doc(colS(), d)).catch(e=>toast(fbError(e))); }); }
 });
 
 /* ---------- export ---------- */
@@ -564,10 +647,6 @@ function openModal(html){ $('#modalBox').innerHTML=html; $('#modal').classList.r
 function closeModal(){ $('#modal').classList.add('hidden'); }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 async function offerFile(filename, data){
-  try{
-    const dl = window.claude && claude.use ? await claude.use('downloads') : null;
-    if (dl){ await dl.save({filename, data}); toast('Fichier enregistré.'); return; }
-  }catch(e){ if (e && e.code==='declined') return; }
   try{
     const type = filename.endsWith('.json') ? 'application/json' : 'text/csv';
     const file = new File([data], filename, {type});
@@ -580,7 +659,7 @@ async function offerFile(filename, data){
     setTimeout(()=>URL.revokeObjectURL(url), 4000);
     toast('Fichier téléchargé.'); return;
   }catch(e){ if (e && e.name==='AbortError') return; }
-  openModal(`<h2>${esc(filename)}</h2><p class="hint">Le téléchargement direct n'est pas disponible ici. Copiez le contenu et collez-le dans un fichier.</p>
+  openModal(`<h2>${esc(filename)}</h2><p class="hint">Le téléchargement direct n'a pas fonctionné. Copiez le contenu et collez-le dans un fichier.</p>
     <textarea readonly id="mTxt">${esc(data)}</textarea>
     <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="mClose">Fermer</button><button class="btn primary" id="mCopy">Copier</button></div>`);
   $('#mClose').onclick=closeModal;
@@ -589,7 +668,7 @@ async function offerFile(filename, data){
 const stamp = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
 $('#btnExpJson').onclick = ()=>{
   if (!state.measures.length) return toast('Aucune mesure.');
-  offerFile(`tension-sauvegarde-${stamp()}.json`, JSON.stringify({app:'tension', version:APP_VERSION, exportedAt:new Date().toISOString(), measures:state.measures}, null, 1));
+  offerFile(`tension-sauvegarde-${stamp()}.json`, JSON.stringify({app:'tension', version:APP_VERSION, exportedAt:new Date().toISOString(), measures:state.measures.map(clean)}, null, 1));
 };
 $('#btnExpCsv').onclick = ()=>{
   if (!state.measures.length) return toast('Aucune mesure.');
@@ -602,43 +681,52 @@ $('#btnExpCsv').onclick = ()=>{
   offerFile(`tension-${stamp()}.csv`, '﻿'+lines.join('\n'));
 };
 
-/* ---------- import ---------- */
-$('#btnCsv').onclick=()=>$('#fileCsv').click();
-$('#btnImpJson').onclick=()=>$('#fileJson').click();
+/* ---------- import & saisie ---------- */
+const needUser = () => { if (!user){ toast('Connecte-toi d\'abord.'); return false; } return true; };
+$('#btnCsv').onclick=()=>{ if(needUser()) $('#fileCsv').click(); };
+$('#btnImpJson').onclick=()=>{ if(needUser()) $('#fileJson').click(); };
 $('#fileCsv').onchange = async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{
     const {out, skipped} = parseOmron(await f.text());
-    if (!out.length) return toast('Aucune mesure reconnue dans ce fichier.');
+    const list = dedupe(out);
+    if (!list.length) return toast('Aucune mesure reconnue dans ce fichier.');
     const replace = document.querySelector('input[name=imode]:checked').value==='replace';
-    const go = ()=>{ const added=mergeMeasures(out, replace); persist(); render(); toast(`${added} mesure${added>1?'s':''} ajoutée${added>1?'s':''}${skipped?` · ${skipped} ligne(s) ignorée(s)`:''}.`); };
-    if (replace && state.measures.length) confirmBox(`Remplacer les ${state.measures.length} mesures actuelles par les ${out.length} du fichier ?`, go); else go();
+    const extra = skipped?` · ${skipped} ligne(s) ignorée(s)`:'';
+    if (replace){
+      const go = ()=>{ replaceAll(list).catch(()=>{}); toast(`${list.length} mesures importées${extra}.`); };
+      if (state.measures.length) confirmBox(`Remplacer les ${state.measures.length} mesures actuelles par les ${list.length} du fichier ?`, go); else go();
+    } else {
+      const ids = new Set(state.measures.map(m=>m.id));
+      const add = list.filter(m=>!ids.has(m.id));
+      if (add.length) writeMeasures(add).catch(()=>{});
+      toast(`${add.length} mesure${add.length>1?'s':''} ajoutée${add.length>1?'s':''}${extra}.`);
+    }
   }catch(err){ toast('Import impossible : '+err.message); }
 };
 $('#fileJson').onchange = async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{
     const j = JSON.parse(await f.text());
-    const ms = (j.measures||[]).filter(m=>m && m.d && m.t && m.sys && m.dia).map(m=>mk(m.d,m.t,+m.sys,+m.dia,m.pul==null?null:+m.pul,!!m.irr,!!m.mov,m.note||''));
+    const ms = dedupe((j.measures||[]).filter(m=>m && m.d && m.t && m.sys && m.dia).map(m=>mk(m.d,m.t,+m.sys,+m.dia,m.pul==null?null:+m.pul,!!m.irr,!!m.mov,m.note||'')));
     if (!ms.length) return toast('Fichier de sauvegarde vide ou invalide.');
-    confirmBox(`Restaurer ${ms.length} mesures ? Les mesures actuelles (${state.measures.length}) seront remplacées.`, ()=>{ mergeMeasures(ms,true); persist(); render(); toast('Restauration terminée.'); });
+    confirmBox(`Restaurer ${ms.length} mesures ? Les mesures actuelles (${state.measures.length}) seront remplacées.`, ()=>{ replaceAll(ms).catch(()=>{}); toast('Restauration lancée.'); });
   }catch(err){ toast('Fichier .json illisible.'); }
 };
 $('#addForm').onsubmit = e=>{
-  e.preventDefault();
+  e.preventDefault(); if(!needUser()) return;
   const p=$('#aP').value;
   const m = mk($('#aD').value, $('#aT').value, +$('#aS').value, +$('#aDi').value, p?+p:null);
-  const added=mergeMeasures([m], false);
-  if (!added) return toast('Cette mesure existe déjà.');
-  persist(); render(); toast('Mesure ajoutée.');
+  if (state.measures.some(x=>x.id===m.id)) return toast('Cette mesure existe déjà.');
+  writeMeasures([m]).catch(()=>{}); toast('Mesure ajoutée.');
   $('#aS').value=$('#aDi').value=$('#aP').value='';
 };
 $('#list').addEventListener('click', e=>{
   const id=e.target.dataset.del; if(!id) return;
   const m=state.measures.find(x=>x.id===id); if(!m) return;
-  confirmBox(`Supprimer la mesure ${m.sys}/${m.dia} du ${fmtD(m.d)} à ${m.t} ?`, ()=>{ state.measures=state.measures.filter(x=>x.id!==id); persist(); render(); });
+  confirmBox(`Supprimer la mesure ${m.sys}/${m.dia} du ${fmtD(m.d)} à ${m.t} ?`, ()=>{ deleteMeasures([id]).catch(()=>{}); });
 });
-$('#btnWipe').onclick = ()=>{ if(!state.measures.length) return; confirmBox(`Effacer définitivement les ${state.measures.length} mesures ? (les points de sauvegarde sont conservés)`, ()=>{ state.measures=[]; persist(); render(); }); };
+$('#btnWipe').onclick = ()=>{ if(!state.measures.length) return; confirmBox(`Effacer définitivement les ${state.measures.length} mesures de Firebase ? (les points de sauvegarde sont conservés)`, ()=>{ deleteMeasures(state.measures.map(m=>m.id)).catch(()=>{}); }); };
 $('#btnSnap').onclick = createSnap;
 
 /* ---------- filtres & onglets ---------- */
@@ -659,7 +747,6 @@ function showTab(t){
   ['chart','list','data'].forEach(x=>$('#tab-'+x).classList.toggle('hidden', x!==t));
   $('#filterCard').classList.toggle('hidden', t==='data');
   if (t==='chart') renderChart();
-  if (t==='data') renderSnaps();
 }
 $$('nav button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 function render(){
@@ -677,21 +764,20 @@ function render(){
 }
 const today=new Date(); $('#aD').value=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`; $('#aT').value=`${pad(today.getHours())}:${pad(today.getMinutes())}`;
 $('#appVersion').textContent = 'v' + APP_VERSION;
-renderRef(); syncUI(); showTab(ui.tab); render();
+renderRef(); renderSnaps(); syncUI(); showTab(ui.tab); render();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ if(ui.tab==='chart') renderChart(); });
-initRemote();
+initFirebase();
 
-/* ---------- PWA : installation, hors-ligne, stockage persistant ---------- */
+/* ---------- PWA : installation, hors-ligne ---------- */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('tension-sw.js', { scope: './tension' }).catch(()=>{});
 }
-if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
 let deferredPrompt = null;
 function installHint(){
   const h = $('#installHint');
-  if (standalone) { h.textContent = "L'application est installée. Les données restent sur cet appareil : exportez un .json de temps en temps."; return; }
+  if (standalone) { h.textContent = "L'application est installée."; return; }
   if (deferredPrompt) h.innerHTML = 'Appuyez sur « Installer l\'appli » en haut de l\'écran.';
   else if (isIOS) h.innerHTML = 'Sur iPhone / iPad, dans Safari : bouton <b>Partager</b> → <b>Sur l\'écran d\'accueil</b>.';
   else h.innerHTML = 'Dans Chrome ou Edge : menu ⋮ → <b>Installer l\'application</b> (ou icône d\'installation dans la barre d\'adresse).';

@@ -2,7 +2,7 @@
   "id": "./tension.html",
   "name": "Suivi tension artérielle",
   "short_name": "Tension",
-  "description": "Courbes et suivi des mesures de tension (import CSV OMRON).",
+  "description": "Courbes et suivi des mesures de tension (import CSV OMRON), synchronisé via Firebase.",
   "lang": "fr",
   "start_url": "./tension.html",
   "scope": "./tension",
