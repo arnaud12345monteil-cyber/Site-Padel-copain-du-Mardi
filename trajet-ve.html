@@ -941,6 +941,7 @@ body.app .car-card b{font:700 1.25rem var(--f-display)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.41.1", d:"16/11/2026", c:["Correctif : la consommation selon la température restait sur « Calcul… » quand Ma voiture s'ouvrait avant la connexion au compte (cas de l'onglet Voiture rouvert au démarrage)"]},
   {v:"2.41", d:"16/11/2026", c:[
     "Correctif : les boutons Trajet, Voiture, Les deux et Moi de la carte étaient masqués en mode appli",
     "Tablette : carte plus large, volet de droite plus étroit",
@@ -2691,7 +2692,8 @@ function carRender(r){
   }
   const noHist='<p class="note">Pas encore d\'historique : il faut lancer psa_car_controller avec l\'option -r (enregistrement). Les données s\'accumulent ensuite au fil des trajets et des recharges.</p>';
   const trips=(r.trips||[]).slice().sort((a,b)=>(+carDate(b.start_at)||0)-(+carDate(a.start_at)||0));
-  html+=csec("autres","Autres données de la voiture",extraHtml(r));
+  let xh=""; try{ xh=extraHtml(r); }catch(e){ console.error(e); xh=`<p class="note">Affichage impossible (${esc(e.message)}).</p>`; }
+  html+=csec("autres","Autres données de la voiture",xh);
   html+=csec("ctemp","Consommation selon la température",`<div id="cTemp">${cTempHtml||'<p class="note">Calcul à partir de tes trajets enregistrés…</p>'}</div>`);
   html+=csec("trajets","Derniers trajets",(trips.length?`<div class="car-tbl"><table><thead><tr><th>Départ</th><th>Distance</th><th>Durée</th><th>Vitesse moy.</th><th>Énergie</th><th>Conso</th><th>Dénivelé</th></tr></thead><tbody>${trips.slice(0,30).map(t=>`<tr><td>${fmtDT(carDate(t.start_at))}</td><td>${t.distance!=null?n1(t.distance)+" km":"—"}</td><td>${t.duration!=null?fmtH(t.duration):"—"}</td><td>${t.speed_average!=null?Math.round(t.speed_average)+" km/h":"—"}</td><td>${t.consumption!=null?n1(t.consumption)+" kWh":"—"}</td><td>${t.consumption_km!=null?n1(t.consumption_km)+" kWh/100":"—"}</td><td>${t.altitude_diff!=null?Math.round(t.altitude_diff)+" m":"—"}</td></tr>`).join("")}</tbody></table></div>`
     +(()=>{ const T=trips.filter(t=>t.distance>0 && t.consumption!=null); if(!T.length) return ""; const d=T.reduce((a,t)=>a+t.distance,0), e=T.reduce((a,t)=>a+t.consumption,0); return `<p class="note">Consommation réelle moyenne sur ${T.length} trajets : <b>${n1(e/d*100)} kWh/100 km</b> (${n1(d)} km). Compare-la à tes valeurs à 90 et 130 km/h dans Voiture.</p>`; })():noHist));
@@ -3718,8 +3720,11 @@ function extraHtml(r){
 
 // ---------- Consommation réelle selon la température (trajets enregistrés + température des relevés) ----------
 var cTempHtml="";
-async function loadConsoTemp(){
-  if(!fb || !fb.auth.currentUser) return;
+let cTempBusy=false;
+async function loadConsoTemp(tries=0){
+  // compte pas encore connecté (ouverture de l'appli) : on réessaie quelques secondes plus tard
+  if(!fb || !fb.auth.currentUser){ if(tries<20) setTimeout(()=>loadConsoTemp(tries+1),1500); else if($("cTemp")) $("cTemp").innerHTML='<p class="note">Connecte-toi pour calculer la consommation selon la température.</p>'; return; }
+  if(cTempBusy) return; cTempBusy=true;
   try{
     const since=new Date(Date.now()-180*86400000), sinceIso=isoDay(since), id=firebase.firestore.FieldPath.documentId();
     const [tr,jr]=await Promise.all([carColl("trajets").where("jour",">=",sinceIso).get(), carColl("jours").where(id,">=",sinceIso).get()]);
@@ -3740,6 +3745,7 @@ async function loadConsoTemp(){
         +`<p class="note">${used} trajets des 6 derniers mois, température moyenne relevée pendant chaque trajet. Les % comparent à la tranche la plus économe (au moins 20 km). C'est la consommation réelle, vitesses et dénivelés mélangés : à comparer avec les coefficients de saison du calcul (mi-saison +10 %, hiver +25 %).</p>`;
     }
   }catch(e){ cTempHtml=`<p class="note">Calcul impossible (${esc(e.code||e.message)}).</p>`; }
+  cTempBusy=false;
   if($("cTemp")) $("cTemp").innerHTML=cTempHtml;
 }
 
