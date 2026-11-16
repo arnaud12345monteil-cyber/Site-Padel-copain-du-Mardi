@@ -454,6 +454,63 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 .soh-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:.82rem;color:var(--muted);margin:6px 0}
 .soh-legend i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:6px}
 .bak-grid{display:grid;gap:10px}
+
+/* ===================== Mise en page « appli » : téléphone et tablette (v2.40) ===================== */
+:root{--tabH:62px;--radius:14px}
+#moreBtn,.tabbar{display:none}
+.more-menu{position:absolute;right:0;top:100%;z-index:1300;display:flex;flex-direction:column;gap:6px;min-width:230px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 12px 32px rgb(0 0 0/.22)}
+.more-menu>*{width:100%;text-align:left;min-height:42px;display:flex!important;align-items:center;gap:8px}
+.more-menu .ver{justify-content:flex-start}
+body.app{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));padding-top:8px}
+body.app header.top{margin-bottom:8px;padding:6px 0 8px}
+body.app header.top h1{font-size:1.25rem}
+body.app #moreBtn{display:inline-flex;align-items:center}
+body.app #carBtn,body.app #panelBtn,body.app #carClose{display:none!important}
+body.app .panel{border-radius:var(--radius);border-color:color-mix(in srgb,var(--line) 70%,transparent);box-shadow:0 1px 2px rgb(0 0 0/.04),0 6px 18px -10px rgb(0 0 0/.18)}
+body.app .wrap{max-width:none}
+body.app section.main{display:contents}
+body.app .stats{border-radius:var(--radius)}
+/* feuille de route : résumé, actions, arrêts, puis réglages rapides et graphique */
+body.app .resbar:not([hidden]){display:contents}
+body.app #stats{order:1} body.app #exportBar{order:2} body.app #hereBox{order:3} body.app #roadPanel{order:4} body.app #quick{order:5} body.app #chartPanel{order:6} body.app section.main>p.note{order:7}
+body.app #exportBar{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
+/* cibles tactiles */
+@media (pointer:coarse){
+  body.app .mini{min-height:40px;padding:8px 12px}
+  body.app input:not([type=checkbox]):not([type=radio]),body.app select{min-height:44px}
+  body.app .swap{padding:8px 4px}
+}
+/* blocs affichés selon l'onglet */
+body.app[data-tab="trajet"] [data-v]:not([data-v="trajet"]),
+body.app[data-tab="carte"] [data-v]:not([data-v="carte"]),
+body.app[data-tab="route"] [data-v]:not([data-v="route"]),
+body.app[data-tab="voiture"] [data-v]:not([data-v="voiture"]){display:none!important}
+/* onglets */
+.tabbar button{appearance:none;border:0;background:none;color:var(--muted);font:600 .74rem var(--f-body);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:6px 2px;border-radius:12px;-webkit-tap-highlight-color:transparent}
+.tabbar svg{width:24px;height:24px}
+.tabbar button[aria-selected="true"]{color:var(--accent)}
+.tabbar button[aria-selected="true"] svg{background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:999px;padding:2px 14px;width:52px;box-sizing:content-box;height:22px}
+/* --- téléphone : un écran à la fois, barre d'onglets en bas --- */
+body.phone{padding-bottom:calc(var(--tabH) + env(safe-area-inset-bottom,0px) + 12px)}
+body.phone .wrap{display:flex;flex-direction:column;gap:12px}
+body.phone .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:1400;height:calc(var(--tabH) + env(safe-area-inset-bottom,0px));padding:4px 6px env(safe-area-inset-bottom,0px);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+body.phone #map{height:calc(100dvh - var(--hdrH,56px) - var(--tabH) - env(safe-area-inset-bottom,0px) - 28px);min-height:320px;border-radius:var(--radius)}
+body.phone #mapFullBtn{display:none!important}
+body.app .resbar .stats{align-self:stretch}
+body.app header.top .top-right.more{-webkit-mask-image:none;mask-image:none}
+body.phone .stat{padding:8px 10px}
+body.phone .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* --- tablette : carte à gauche, panneau à droite avec onglets en haut --- */
+body.tablet .wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,1fr);gap:12px;align-items:start}
+body.tablet .wrap>*,body.tablet #stats,body.tablet #quick{grid-column:2}
+body.tablet .tabbar{order:0}
+body.tablet #map{display:block!important;grid-column:1;grid-row:1 / span 40;position:sticky;top:calc(var(--hdrH,56px) + 8px);height:calc(100dvh - var(--hdrH,56px) - 24px);min-height:420px;border-radius:var(--radius)}
+body.tablet .tabbar{display:grid;grid-template-columns:repeat(3,1fr);position:sticky;top:calc(var(--hdrH,56px) + 8px);z-index:900;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 6px 18px -12px rgb(0 0 0/.3)}
+body.tablet .tabbar button[data-t="carte"]{display:none}
+body.tablet .tabbar button{flex-direction:row;gap:8px;font-size:.86rem;padding:9px 6px}
+body.tablet .tabbar button[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+body.tablet .tabbar button[aria-selected="true"] svg{background:none;padding:0;width:22px}
+@media (orientation:portrait){ body.tablet .wrap{grid-template-columns:minmax(0,1fr) minmax(340px,1.05fr)} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -473,12 +530,21 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
     <button type="button" class="mini" id="panelBtn" aria-pressed="false">Masquer les réglages</button>
     <button type="button" class="mini" id="installBtn" hidden>Installer l'appli</button>
     <button type="button" class="ver" id="ver" aria-expanded="false" aria-controls="changelog">v…</button>
+    <button type="button" class="mini" id="layoutBtn" hidden>Affichage appli</button>
+    <button type="button" class="mini" id="moreBtn" aria-expanded="false" aria-controls="moreMenu">Plus ▾</button>
   </div>
+  <div class="more-menu" id="moreMenu" hidden></div>
   <div class="changelog" id="changelog" hidden></div>
 </header>
 
 <div class="wrap">
-  <aside class="panel">
+  <nav class="tabbar" id="tabbar" aria-label="Sections">
+    <button type="button" data-t="trajet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3a3 3 0 0 1 3 3c0 2.2-3 5.5-3 5.5S3 8.2 3 6a3 3 0 0 1 3-3zm12 9a3 3 0 0 1 3 3c0 2.2-3 5.5-3 5.5S15 17.2 15 15a3 3 0 0 1 3-3zM6 13v2a4 4 0 0 0 4 4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Trajet</span></button>
+    <button type="button" data-t="carte"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Carte</span></button>
+    <button type="button" data-t="route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Feuille de route</span></button>
+    <button type="button" data-t="voiture"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l1.6-4.4A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.6L19 11m-14 0h14v5a1 1 0 0 1-1 1h-1v1.5M5 11v5a1 1 0 0 0 1 1h1v1.5M7.5 14h.01M16.5 14h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Voiture</span></button>
+  </nav>
+  <aside class="panel" data-v="trajet">
     <form id="f" autocomplete="off">
       <div class="syncbar" id="syncbar" hidden>
         <span id="syncTxt">Favoris enregistrés sur cet appareil</span>
@@ -663,7 +729,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
   </aside>
 
   <section class="main">
-    <div class="panel car" id="carPanel" hidden>
+    <div class="panel car" id="carPanel" data-v="voiture" hidden>
       <div class="car-head">
         <h2>Ma voiture</h2>
         <span class="note" id="carAge"></span>
@@ -692,8 +758,8 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
         <div id="hSum"></div>
       </div>
     </div>
-    <div id="map"></div>
-    <div class="resbar" id="resbar" hidden>
+    <div id="map" data-v="carte"></div>
+    <div class="resbar" id="resbar" data-v="route" hidden>
       <div class="stats" id="stats"></div>
       <div class="quick panel" id="quick">
         <div class="qhead"><h2>Ajuster</h2><button type="button" class="swap" data-all="quick" data-open="1">Tout développer</button><button type="button" class="swap" data-all="quick" data-open="0">Tout réduire</button></div>
@@ -730,7 +796,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
         </details>
       </div>
     </div>
-    <div class="here panel" id="hereBox" hidden>
+    <div class="here panel" id="hereBox" data-v="route" hidden>
       <div class="here-form">
         <h2>Je suis ici</h2>
         <div class="hsrc">
@@ -755,7 +821,7 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
       <p class="note" id="hereLiveSt"></p>
       <div id="hereOut" role="status"></div>
     </div>
-    <div class="export" id="exportBar" hidden>
+    <div class="export" id="exportBar" data-v="route" hidden>
       <button type="button" class="mini primary" id="hereBtn">Je suis ici</button>
       <button type="button" class="mini" id="gmapsBtn">Ouvrir dans Google Maps</button>
       <button type="button" class="mini" id="kmlBtn">Télécharger pour Google My Maps (KML)</button>
@@ -763,15 +829,15 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
       <button type="button" class="mini" id="copyBtn">Copier la feuille de route</button>
       <p class="note" id="exportNote"></p>
     </div>
-    <div class="panel" id="roadPanel">
+    <div class="panel" id="roadPanel" data-v="route">
       <h2 style="margin-bottom:12px">Feuille de route</h2>
       <div id="road"><p class="empty">Renseigne le trajet et lance le calcul. Les arrêts proposés apparaîtront ici avec l'heure, la borne et le temps de charge.</p></div>
     </div>
-    <div class="panel" id="chartPanel" hidden>
+    <div class="panel" id="chartPanel" data-v="route" hidden>
       <h2 style="margin-bottom:8px">Niveau de batterie sur le trajet</h2>
       <div class="chart-box" id="chart"></div>
     </div>
-    <p class="note">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation calculée selon la vitesse de chaque portion et la saison ; le relief, le vent et la pluie ne sont pas pris en compte. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
+    <p class="note" data-v="route">Sources : géocodage Photon et Base Adresse Nationale, fond de carte IGN (Esri en secours), itinéraire OSRM, bornes Open Charge Map ou OpenStreetMap (Overpass). Consommation calculée selon la vitesse de chaque portion et la saison ; le relief, le vent et la pluie ne sont pas pris en compte. Les puissances de bornes OSM sont parfois absentes ou fausses.</p>
   </section>
 </div>
 
@@ -825,6 +891,12 @@ dialog.big>header{display:flex;justify-content:space-between;align-items:baselin
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.40", d:"16/11/2026", c:[
+    "Téléphone : navigation par onglets en bas d'écran (Trajet, Carte, Feuille de route, Voiture), carte en plein écran dans son onglet, menu « Plus » pour les boutons secondaires",
+    "Tablette : carte toujours visible à gauche, panneau à droite avec onglets Trajet, Feuille de route et Voiture",
+    "Après un calcul lancé à la main, la feuille de route s'affiche directement ; « voir sur la carte » bascule sur l'onglet Carte",
+    "Menu « Plus » → « Affichage classique » pour revenir à la page unique d'avant, mémorisé sur l'appareil",
+    "Présentation plus soignée : cartes arrondies, ombres légères, boutons et champs plus grands au doigt"]},
   {v:"2.39", d:"13/11/2026", c:["Sauvegarde unique : la restauration remet aussi les recharges, abonnements et relevés de Mes recharges (ajout sans effacement) ; elle accepte aussi une ancienne sauvegarde de Mes recharges"]},
   {v:"2.38", d:"11/11/2026", c:[
     "Historique de la voiture : verrouillage, ouvrants ouverts, alertes, entretien (jours et km), programmes de préconditionnement, signal GPS et altitude enregistrés avec chaque état (nécessite trajetve_voiture.py 2.38)",
@@ -3040,7 +3112,7 @@ $("f").addEventListener("submit", async e=>{
     render(res,p,a,b);
     curSheet=null; renderSheets();
     lastRun = res.summary ? {res,p,a,b,R,fq,tq,vq:vq.map(({q,pause,min})=>({q,pause,...(min!=null?{min}:{})}))} : null;
-    pushActif();
+    pushActif(); if($("map").offsetHeight===0) fitPending=true; if(res.summary) afterCalcTab();
     if(lastPos && watchId!=null && lastRun) setTimeout(()=>hereRender(lastPos,true),0); $("exportBar").hidden=!lastRun; $("exportNote").textContent="";
     lap("total");
     const timing=`Calcul en ${T.total.toFixed(1).replace(".",",")} s (adresses ${T.adr.toFixed(1)} s, itinéraire ${(T.route-T.adr).toFixed(1)} s, bornes ${(T.bornes-T.route).toFixed(1)} s${raw.fromCache?`, ${raw.fromCache} tronçon(s) déjà en mémoire`:""}).`.replace(/(\d)\.(\d)/g,"$1,$2");
@@ -3612,6 +3684,60 @@ async function loadConsoTemp(){
   }catch(e){ cTempHtml=`<p class="note">Calcul impossible (${esc(e.code||e.message)}).</p>`; }
   if($("cTemp")) $("cTemp").innerHTML=cTempHtml;
 }
+
+// ---------- Mise en page appli : téléphone (onglets en bas) et tablette (carte + panneau) ----------
+const APP_MQ=matchMedia("(max-width:1279px), (pointer:coarse) and (max-width:1440px)"), PHONE_MQ=matchMedia("(max-width:760px)");
+const MORE_IDS=["topClear","sohBtn","mapFullBtn","bakBtn","installBtn","layoutBtn","ver"];
+let appTab=(()=>{ try{ return localStorage.getItem("trajetve-tab")||"trajet"; }catch(e){ return "trajet"; } })();
+let calcByUser=false, fitPending=false;
+function moreLayout(app){
+  const menu=$("moreMenu"), bar=document.querySelector("header.top .top-right"), more=$("moreBtn");
+  const rech=bar.querySelector('a[href="trajetve-recharges.html"]')||menu.querySelector('a[href="trajetve-recharges.html"]');
+  const els=[...MORE_IDS.map(id=>$(id)), rech].filter(Boolean);
+  if(app) els.forEach(el=>menu.appendChild(el));
+  else { els.forEach(el=>bar.insertBefore(el,more)); menu.hidden=true; more.setAttribute("aria-expanded","false"); }
+}
+function tabSync(){
+  const t=document.body.dataset.tab||"";
+  document.querySelectorAll("#tabbar [data-t]").forEach(b=>{ b.setAttribute("aria-selected",b.dataset.t===t); b.setAttribute("role","tab"); });
+}
+const classicOn=()=>{ try{ return localStorage.getItem("trajetve-layout")==="classic"; }catch(e){ return false; } };
+function appLayout(){
+  const app=APP_MQ.matches && !classicOn(), phone=app&&PHONE_MQ.matches, was=document.body.classList.contains("app");
+  document.body.classList.toggle("app",app); document.body.classList.toggle("phone",phone); document.body.classList.toggle("tablet",app&&!phone);
+  if(app && !phone && appTab==="carte") appTab="route";
+  if(app) document.body.dataset.tab=appTab; else delete document.body.dataset.tab;
+  if(app!==was) moreLayout(app);
+  if(app && appTab==="voiture" && $("carPanel").hidden) $("carBtn").click();
+  tabSync();
+  setTimeout(()=>{ if(map) map.invalidateSize(); },80);
+}
+function showTab(t){
+  if(document.body.classList.contains("tablet") && t==="carte") t="route";
+  appTab=t; try{ localStorage.setItem("trajetve-tab",t); }catch(e){}
+  if(!document.body.classList.contains("app")) return;
+  document.body.dataset.tab=t; tabSync();
+  if(t==="voiture" && $("carPanel").hidden) $("carBtn").click();
+  if(t==="carte") setTimeout(()=>{ if(!map) return; map.invalidateSize(); if(fitPending && lastLine && map.hasLayer(lastLine)){ map.fitBounds(lastLine.getBounds(),{padding:[24,24]}); fitPending=false; } },60);
+  window.scrollTo({top:0,behavior:"instant"});
+}
+$("tabbar").addEventListener("click",e=>{ const b=e.target.closest("[data-t]"); if(b) showTab(b.dataset.t); });
+$("moreBtn").addEventListener("click",e=>{ e.stopPropagation(); const m=$("moreMenu"); m.hidden=!m.hidden; $("moreBtn").setAttribute("aria-expanded",!m.hidden); });
+document.addEventListener("click",e=>{ const m=$("moreMenu"); if(!m.hidden && !e.target.closest("#moreMenu,#moreBtn")) { m.hidden=true; $("moreBtn").setAttribute("aria-expanded","false"); } });
+$("moreMenu").addEventListener("click",e=>{ if(e.target.closest("button,a") && e.target.id!=="ver") setTimeout(()=>{ $("moreMenu").hidden=true; $("moreBtn").setAttribute("aria-expanded","false"); },0); });
+// sur téléphone, tout ce qui veut montrer la carte bascule sur l'onglet Carte
+{ const mapEl=$("map"), orig=mapEl.scrollIntoView.bind(mapEl);
+  mapEl.scrollIntoView=function(o){ if(document.body.classList.contains("phone")){ showTab("carte"); return; } orig(o); }; }
+// après un calcul lancé à la main : on montre la feuille de route
+$("topCalc").addEventListener("click",()=>{ calcByUser=true; },true);
+document.querySelectorAll("#f button.go").forEach(b=>b.addEventListener("click",()=>{ calcByUser=true; },true));
+function afterCalcTab(){ if(calcByUser && document.body.classList.contains("app")) showTab("route"); calcByUser=false; }
+// bascule affichage appli / classique (mémorisée sur l'appareil)
+function layoutBtnSync(){ const b=$("layoutBtn"); b.hidden=!APP_MQ.matches; b.textContent=classicOn()?"Affichage appli (onglets)":"Affichage classique (une page)"; }
+$("layoutBtn").addEventListener("click",()=>{ try{ localStorage.setItem("trajetve-layout",classicOn()?"app":"classic"); }catch(e){} layoutBtnSync(); appLayout(); });
+APP_MQ.addEventListener("change",layoutBtnSync); layoutBtnSync();
+APP_MQ.addEventListener("change",appLayout); PHONE_MQ.addEventListener("change",appLayout);
+appLayout();
 </script>
 </body>
 </html>
