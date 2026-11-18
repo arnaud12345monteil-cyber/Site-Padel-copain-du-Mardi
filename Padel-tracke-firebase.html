@@ -2,6 +2,23 @@
 <!--
   PADEL TRACKER — Historique des versions
   ─────────────────────────────────────────
+  v1.82 — 2026-11-18
+    (1) Classement des "Paires" : deux boutons "% de victoire" / "Nb de
+    victoires" choisissent le critère, SANS mélange. En "% de victoire" :
+    victoires ÷ matchs (un nul n'est pas une victoire, comme les autres
+    tableaux), seuil "Matchs min." appliqué. En "Nb de victoires" : nombre de
+    victoires, aucun seuil. À critère égal les paires partagent le même rang
+    (l'ordre d'affichage entre ex æquo n'est qu'un ordre de lecture). Le
+    choix est mémorisé sur l'appareil.
+    (2) Robustesse de l'affichage : render() enchaînait ~15 fonctions de rendu
+    dans un seul bloc, donc une erreur dans l'une (donnée de match atypique)
+    empêchait d'afficher toutes celles qui suivent — dont le nouveau tableau
+    "Face-à-face" et le classement des paires. Chaque fonction est maintenant
+    isolée (l'erreur est écrite dans la console, les autres s'affichent) ; le
+    face-à-face et les paires affichent leur propre message d'erreur à la
+    place du tableau, et le face-à-face est aussi recalculé à l'ouverture de
+    l'onglet Statistiques joueurs.
+
   v1.81 — 2026-11-18
     (1) Onglet Classement : 3e classement, "Paires", à la suite des deux autres.
     Il classe les paires de joueurs (2 joueurs dans la même équipe) sur la
@@ -1322,7 +1339,11 @@
   </div>
     <div style="flex:1;min-width:300px;max-width:720px">
       <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--muted);font-size:15px;margin:0 0 10px">Paires</h3>
-      <div class="ranking-filter admin-only" style="margin-bottom:6px">
+      <div class="team-filter-bar" id="pair-mode-bar" style="margin-bottom:8px">
+        <button type="button" class="team-filter-chip" data-pm="pct" onclick="setPairMode('pct')">% de victoire</button>
+        <button type="button" class="team-filter-chip" data-pm="wins" onclick="setPairMode('wins')">Nb de victoires</button>
+      </div>
+      <div class="ranking-filter admin-only" id="pair-min-wrap" style="margin-bottom:6px">
         <label>Matchs min.</label>
         <span style="display:flex;align-items:center;gap:4px">
           <input type="number" id="pair-min-matches" min="1" max="99" step="1" value="3" oninput="onPairMinMatchesChange()">
@@ -1580,7 +1601,7 @@ const SEED_DATA = {
   matches: [],"players":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Olivier DUPOUY","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"sessions":[{"id":1780488378455,"date":"2026-06-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":1779887311262,"date":"2026-06-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Ivano","Geoffrey"],"spots":12},{"id":148,"date":"2026-05-26","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"],"spots":12},{"id":147,"date":"2026-05-19","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":146,"date":"2026-05-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":145,"date":"2026-05-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":144,"date":"2026-04-27","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":143,"date":"2026-04-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":142,"date":"2026-04-14","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":141,"date":"2026-04-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":140,"date":"2026-03-31","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":138,"date":"2026-03-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":137,"date":"2026-03-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine"]},{"id":136,"date":"2026-03-03","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Richard Deloge","Robert Roma"]},{"id":135,"date":"2026-02-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":134,"date":"2026-02-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Robert Roma"]},{"id":133,"date":"2026-02-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":132,"date":"2026-02-03","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":131,"date":"2026-01-27","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma"]},{"id":130,"date":"2026-01-20","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":129,"date":"2026-01-13","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","Richard Deloge","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":127,"date":"2025-12-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Robert Roma"]},{"id":126,"date":"2025-12-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":125,"date":"2025-12-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":128,"date":"2025-12-03","label":"Mardi au Padel","attendees":["Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN"]},{"id":124,"date":"2025-12-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":123,"date":"2025-11-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":122,"date":"2025-11-18","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic OLIVE","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma"]},{"id":121,"date":"2025-11-11","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","David Longuet","Thibault FIRMIN","Nicolas Chidaine","Olivier DUPOUY"]},{"id":120,"date":"2025-11-04","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Yannick Brunel"]},{"id":119,"date":"2025-10-28","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":118,"date":"2025-10-21","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel"]},{"id":117,"date":"2025-10-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Yannick Brunel","Olivier DUPOUY"]},{"id":116,"date":"2025-10-07","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Yannick Brunel","Olivier DUPOUY"]},{"id":115,"date":"2025-09-30","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":114,"date":"2025-09-23","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":113,"date":"2025-09-16","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Julien Trigalet","Thibault FIRMIN","Robert Roma","Olivier DUPOUY"]},{"id":112,"date":"2025-09-09","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]},{"id":111,"date":"2025-09-02","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","David Longuet","Richard Deloge","Nicolas Chidaine"]},{"id":110,"date":"2025-08-25","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","David Longuet","Richard Deloge","Olivier DUPOUY"]},{"id":109,"date":"2025-08-12","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Nicolas Chidaine"]},{"id":108,"date":"2025-08-05","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","Thibault FIRMIN","Nicolas Chidaine"]},{"id":107,"date":"2025-07-29","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Pascal Maury","David Longuet","Julien Trigalet","Olivier DUPOUY"]},{"id":106,"date":"2025-07-22","label":"Mardi au Padel","attendees":["Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine"]},{"id":105,"date":"2025-07-15","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":104,"date":"2025-07-08","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Richard Deloge","Nicolas Chidaine","Olivier DUPOUY"]},{"id":103,"date":"2025-07-01","label":"Mardi au Padel","attendees":["Frederic OLIVE","Thomas Mikolasek","David Longuet","Olivier DUPOUY"]},{"id":102,"date":"2025-06-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Thomas Mikolasek","David Longuet","Richard Deloge","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":101,"date":"2025-06-17","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Pascal Maury","David Longuet","Julien Trigalet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":100,"date":"2025-06-10","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Thomas Mikolasek","Pascal Maury","David Longuet","Nicolas Chidaine","Olivier DUPOUY"]},{"id":139,"date":"2025-03-24","label":"Mardi au Padel","attendees":["Arnaud Monteil","Frederic Prieur","Frederic OLIVE","Thomas Mikolasek","Pascal Maury","David Longuet","Julien Trigalet","Thibault FIRMIN","Nicolas Chidaine","Robert Roma","Olivier DUPOUY"]}]};
 
 var state = { players: [], sessions: [], matches: [], deleted_sessions: [], bot_reservations: [], date_filters: {}, player_photos: {}, player_pins: {} };
-const APP_VERSION = 'v1.81';
+const APP_VERSION = 'v1.82';
 const APP_VERSION_DATE = '2026-11-18';
   
 // ── Firebase ──────────────────────────────────────────────────────────────────
@@ -2246,7 +2267,10 @@ function render() {
   repairMissingSessionIds();
   repairMissingMatchIds();
   autoCreateSessionsFromBotReservations();
-  renderNextSession(); renderTable(); renderStats(); renderHeaderStats(); renderBotReservations(); renderMatches(); renderMatchStats(); renderHeadToHead(); renderOddsRanking(); renderPairRanking(); renderRanking(); renderPresenceRanking(); renderOrphanPhotos(); renderSessionAdmin();
+  // Chaque rendu est isolé : une erreur dans l'un (donnée atypique) ne doit pas empêcher d'afficher les suivants.
+  [renderNextSession, renderTable, renderStats, renderHeaderStats, renderBotReservations, renderMatches, renderMatchStats, renderHeadToHead, renderOddsRanking, renderPairRanking, renderRanking, renderPresenceRanking, renderOrphanPhotos, renderSessionAdmin].forEach(fn => {
+    try { fn(); } catch (e) { console.error('render:', fn.name, e); }
+  });
 }
 
 // Répare les matchs anciens sans id (données migrées avant que le code
@@ -3953,10 +3977,27 @@ function computePairStats(matches) {
   return Object.values(pairs);
 }
 
+let _pairMode = 'pct';
+try { _pairMode = localStorage.getItem('padel_pair_mode') === 'wins' ? 'wins' : 'pct'; } catch (e) {}
+function setPairMode(mode) {
+  _pairMode = mode === 'wins' ? 'wins' : 'pct';
+  try { localStorage.setItem('padel_pair_mode', _pairMode); } catch (e) {}
+  renderPairRanking();
+}
+
 function renderPairRanking() {
   const container = document.getElementById('ranking-container-pairs');
-  const legend = document.getElementById('pair-min-matches-legend');
   if (!container) return;
+  try { _renderPairRanking(container); }
+  catch (e) { console.error('renderPairRanking', e); container.innerHTML = '<div style="color:var(--danger);font-size:12px;padding:12px 0">Erreur d\'affichage : ' + escHtml(e.message || String(e)) + '</div>'; }
+}
+
+function _renderPairRanking(container) {
+  const legend = document.getElementById('pair-min-matches-legend');
+  const wins = _pairMode === 'wins';
+  document.querySelectorAll('#pair-mode-bar [data-pm]').forEach(b => b.classList.toggle('active', b.dataset.pm === _pairMode));
+  const wrap = document.getElementById('pair-min-wrap');
+  if (wrap) wrap.style.display = wins ? 'none' : ''; // le seuil ne concerne que le classement en %
   let minM = parseInt(document.getElementById('pair-min-matches')?.value);
   if (isNaN(minM) || minM < 1) minM = 3;
   const fromDate = document.getElementById('ranking-from-date')?.value || '';
@@ -3968,11 +4009,13 @@ function renderPairRanking() {
     return true;
   });
   const all = computePairStats(matches);
-  const kept = all.filter(r => r.matchs >= minM);
+  const kept = wins ? all : all.filter(r => r.matchs >= minM);
   if (legend) {
-    legend.textContent = 'Classées au % de victoire (un nul = une demi-victoire), puis au nombre de matchs, puis à la différence de jeux. '
-      + 'Seules les paires ayant joué au moins ' + minM + ' match' + (minM > 1 ? 's' : '') + ' figurent ici'
-      + (all.length - kept.length > 0 ? ' — ' + (all.length - kept.length) + ' paire(s) en dessous écartée(s).' : '.');
+    legend.textContent = wins
+      ? 'Classées au nombre de victoires. Les paires à égalité partagent le même rang.'
+      : 'Classées au % de victoire (victoires ÷ matchs), paires ayant joué au moins ' + minM + ' match' + (minM > 1 ? 's' : '')
+        + (all.length - kept.length > 0 ? ' — ' + (all.length - kept.length) + ' paire(s) en dessous écartée(s).' : '.')
+        + ' Les paires à égalité partagent le même rang.';
   }
   if (!all.length) {
     container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucun match avec une paire sur cette période.</div>';
@@ -3982,27 +4025,37 @@ function renderPairRanking() {
     container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Aucune paire n\'atteint ' + minM + ' match' + (minM > 1 ? 's' : '') + ' sur cette période.</div>';
     return;
   }
-  kept.forEach(r => { r.score = (r.v + r.n / 2) / r.matchs; });
-  kept.sort((a, b) => b.score - a.score || b.matchs - a.matchs || (b.jf - b.ja) - (a.jf - a.ja) || a.players[0].localeCompare(b.players[0], 'fr'));
+  // Critère unique : le nombre de victoires OU le % de victoire. Les ex æquo gardent
+  // le même rang ; l'ordre entre eux (moins de matchs en tête pour le nombre de
+  // victoires, plus de matchs en tête pour le %) ne sert qu'à l'affichage.
+  const keyOf = r => wins ? r.v : r.v / r.matchs;
+  kept.forEach(r => { r.key = keyOf(r); });
+  kept.sort((a, b) => (b.key - a.key)
+    || (wins ? a.matchs - b.matchs : b.matchs - a.matchs)
+    || a.players[0].localeCompare(b.players[0], 'fr') || a.players[1].localeCompare(b.players[1], 'fr'));
+  const eq = (x, y) => Math.abs(x - y) < 1e-9;
+  kept.forEach((r, i) => { r.rank = (i > 0 && eq(r.key, kept[i - 1].key)) ? kept[i - 1].rank : i + 1; });
+  const maxKey = Math.max(...kept.map(r => r.key)) || 1;
   const posClass = ['gold', 'silver', 'bronze'];
-  const rows = kept.map((r, i) => {
-    const pos = i < 3 ? '<span class="' + posClass[i] + '">' + (i + 1) + '</span>' : (i + 1);
-    const pct = Math.round(r.score * 100);
+  const rows = kept.map(r => {
+    const pos = r.rank <= 3 ? '<span class="' + posClass[r.rank - 1] + '">' + r.rank + '</span>' : r.rank;
+    const pct = Math.round(r.v / r.matchs * 100);
     const diff = r.jf - r.ja;
     return '<tr>'
       + '<td>' + pos + '</td>'
       + '<td style="text-align:left" title="' + _escAttr(r.players.join(' & ')) + '">'
       +   '<div style="line-height:1.25">' + escHtml(shortName(r.players[0])) + ' &amp; ' + escHtml(shortName(r.players[1])) + '</div>'
-      +   '<div style="height:2px;background:var(--border);border-radius:2px;margin-top:3px"><div style="height:100%;width:' + pct + '%;background:var(--accent);border-radius:2px"></div></div>'
+      +   '<div style="height:2px;background:var(--border);border-radius:2px;margin-top:3px"><div style="height:100%;width:' + Math.round(r.key / maxKey * 100) + '%;background:var(--accent);border-radius:2px"></div></div>'
       + '</td>'
-      + '<td class="val-accent">' + pct + '%</td>'
-      + '<td>' + r.v + '</td><td>' + r.n + '</td><td>' + r.d + '</td>'
+      + '<td' + (wins ? ' class="val-accent"' : '') + '>' + r.v + '</td>'
+      + '<td>' + r.n + '</td><td>' + r.d + '</td>'
       + '<td>' + r.matchs + '</td>'
+      + '<td' + (wins ? '' : ' class="val-accent"') + '>' + pct + '%</td>'
       + '<td title="' + r.jf + ' jeux marqués, ' + r.ja + ' encaissés">' + (diff > 0 ? '+' : '') + diff + '</td>'
       + '</tr>';
   }).join('');
   container.innerHTML = '<table class="ranking-table">'
-    + '<thead><tr><th>#</th><th>Paire</th><th>% Vict.</th><th>V</th><th>N</th><th>D</th><th>Matchs</th><th title="Jeux marqués moins jeux encaissés">+/- Jeux</th></tr></thead>'
+    + '<thead><tr><th>#</th><th>Paire</th><th>V</th><th>N</th><th>D</th><th>Matchs</th><th>% Vict.</th><th title="Jeux marqués moins jeux encaissés">+/- Jeux</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table>';
 }
 
@@ -4030,8 +4083,13 @@ function computeHeadToHead(matches) {
 
 function renderHeadToHead() {
   const container = document.getElementById('h2h-container');
-  const intro = document.getElementById('h2h-intro');
   if (!container) return;
+  try { _renderHeadToHead(container); }
+  catch (e) { console.error('renderHeadToHead', e); container.innerHTML = '<div style="color:var(--danger);font-size:12px;padding:12px 0">Erreur d\'affichage : ' + escHtml(e.message || String(e)) + '</div>'; }
+}
+
+function _renderHeadToHead(container) {
+  const intro = document.getElementById('h2h-intro');
   const matches = (state.matches || []).filter(m => m.team1 && m.team2 && Array.isArray(m.score));
   const rec = computeHeadToHead(matches);
   const names = state.players.filter(p => rec[p]);
@@ -4911,6 +4969,7 @@ function switchTab(tabId) {
   document.querySelector('.tab-btn[data-tab="' + tabId + '"]').classList.add('active');
   localStorage.setItem('padel_active_tab', tabId);
   // Chart.js a besoin d'un resize quand son conteneur redevient visible
+  if (tabId === 'tab-stats') renderHeadToHead();
   if (tabId === 'tab-ranking') {
     setTimeout(() => { renderPairRanking(); renderRanking(); renderPresenceRanking(); }, 30);
   }
