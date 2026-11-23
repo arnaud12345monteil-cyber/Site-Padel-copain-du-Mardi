@@ -96,6 +96,9 @@ header.top .top-right.more{-webkit-mask-image:linear-gradient(to right,#000 82%,
 .xd-box ul{margin:0;padding-left:16px}
 .xd-ok{color:var(--charge);font-weight:600} .xd-bad{color:var(--bad);font-weight:600} .xd-warn{color:var(--warn);font-weight:600}
 .xd-raw{font:.74rem/1.45 var(--f-mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto;background:var(--field);border:1px solid var(--line);border-radius:7px;padding:8px;margin:6px 0 0}
+.xd-day{border-top:1px solid var(--line);padding:6px 0}
+.xd-day>summary{font:600 .88rem var(--f-mono);cursor:pointer}
+.xd-in{margin-top:6px}
 .ct-bar{display:flex;align-items:center;gap:8px;font-size:.84rem;margin:3px 0}
 .ct-bar span:first-child{width:92px;flex:0 0 auto;font-family:var(--f-mono);font-size:.78rem}
 .ct-bar i{display:block;height:12px;border-radius:3px;background:var(--accent);min-width:2px}
@@ -928,7 +931,7 @@ body.app .car-card b{font:700 1.25rem var(--f-display)}
 <dialog class="big" id="bakDlg" aria-labelledby="bakTitle" style="width:min(560px,calc(100vw - 24px))">
   <header><h2 id="bakTitle">Sauvegarde</h2><button type="button" class="mini" id="bakClose">Fermer</button></header>
   <div class="bak-grid">
-    <p class="note">Un seul fichier JSON avec tout : réglages, favoris, feuilles de route, tarifs, et, si tu es connecté, tout l'historique de la voiture (chaque jour, trajets, recharges, santé de la batterie, dernier état) et Mes recharges (recharges, abonnements, relevés du compteur), sans limite de durée.</p>
+    <p class="note">Un seul fichier JSON avec tout : réglages, favoris, feuilles de route, tarifs, et, si tu es connecté, tout l'historique de la voiture (chaque jour, états, trajets, recharges, santé de la batterie, données complètes reçues de la voiture, journal du PC, dernier état) et Mes recharges (recharges, abonnements, relevés du compteur), sans limite de durée.</p>
     <button type="button" class="mini primary" id="bakExport">Exporter toutes les données (.json)</button>
     <label class="mini" style="cursor:pointer;text-align:center">Restaurer depuis une sauvegarde (réglages, favoris, feuilles de route, Mes recharges)…<input type="file" id="bakFile" accept=".json,application/json" hidden></label>
     <p class="note">C'est la même sauvegarde que celle de la page Mes recharges : un seul fichier pour tout. Les recharges sont ajoutées à celles déjà présentes, rien n'est effacé. L'historique de la voiture n'est pas restauré : il est écrit uniquement par le PC (sécurité). Les recharges se restaurent depuis la page Mes recharges, qui accepte ce même fichier.</p>
@@ -941,6 +944,9 @@ body.app .car-card b{font:700 1.25rem var(--f-display)}
 "use strict";
 // ---------- Historique des versions (la plus récente en premier) ----------
 const CHANGELOG=[
+  {v:"2.42", d:"23/11/2026", c:[
+    "Ma voiture : chaque réponse complète de la voiture qui change (portes, alertes, entretien, programmes, charge, position…) est enregistrée dans Firebase (nécessite trajetve_voiture.py 2.39) et consultable jour par jour dans Historique",
+    "Sauvegarde : contient aussi ces données complètes et le journal du PC ; trajet en cours et tâches planifiées lisibles dans le fichier"]},
   {v:"2.41.1", d:"16/11/2026", c:["Correctif : la consommation selon la température restait sur « Calcul… » quand Ma voiture s'ouvrait avant la connexion au compte (cas de l'onglet Voiture rouvert au démarrage)"]},
   {v:"2.41", d:"16/11/2026", c:[
     "Correctif : les boutons Trajet, Voiture, Les deux et Moi de la carte étaient masqués en mode appli",
@@ -2746,13 +2752,14 @@ async function loadHistDay(){
   if(!fb || !fb.auth.currentUser){ msg.className="note status err"; msg.textContent="Connecte-toi (bandeau en haut du panneau) pour voir l'historique."; return; }
   msg.className="note"; msg.textContent="Chargement…";
   try{
-    const [dd,tr,ch]=await Promise.all([carColl("jours").doc(day).get(), carColl("trajets").where("jour","==",day).get(), carColl("recharges").where("jour","==",day).get()]);
+    const [dd,tr,ch,br]=await Promise.all([carColl("jours").doc(day).get(), carColl("trajets").where("jour","==",day).get(), carColl("recharges").where("jour","==",day).get(), carColl("bruts").where("jour","==",day).get().catch(()=>({docs:[]}))]);
+    const BR=br.docs.map(x=>x.data()).sort((a,b)=>a.ts-b.ts);
     const D=dd.exists?dd.data():{}, pts=(D.points||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
     const etMap=new Map(); (D.etats||[]).forEach(x=>etMap.set(x.t,{...(etMap.get(x.t)||{}),...x})); const et=[...etMap.values()].sort((a,b)=>a.t<b.t?-1:1);
     const T=tr.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1), C=ch.docs.map(x=>x.data()).sort((a,b)=>a.t<b.t?-1:1);
     histDayData={day,pts,et};
     msg.textContent="";
-    if(!pts.length && !et.length && !T.length && !C.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>${await histWhyEmpty(day)}`; return; }
+    if(!pts.length && !et.length && !T.length && !C.length && !BR.length){ box.innerHTML=`<p class="empty">Aucune donnée enregistrée le ${new Date(day+"T12:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}.</p>${await histWhyEmpty(day)}`; return; }
     const kms=pts.map(x=>x.km).filter(v=>v!=null), socs=[...pts,...et].map(x=>x.soc).filter(v=>v!=null), temps=[...pts,...et].map(x=>x.temp).filter(v=>v!=null);
     const last=et[et.length-1]||{};
     const card=(v,l)=>`<div class="car-card"><b>${v}</b><span>${l}</span></div>`;
@@ -2772,6 +2779,7 @@ async function loadHistDay(){
       h+=csec("hetats",`États de la voiture (${et.length})`,`<div class="car-tbl"><table><thead><tr><th>Heure</th><th>Batterie</th><th>Autonomie</th><th>Recharge</th><th>Santé</th><th>12 V</th><th>Temp.</th><th>Compteur</th><th>Contact</th><th>Clim</th><th>Portes</th><th>Alertes</th><th>Entretien</th><th>Position</th></tr></thead><tbody>${et.slice().reverse().map(e=>`<tr><td>${fmtClock(carDate(e.t))}</td><td>${e.soc!=null?Math.round(e.soc)+" %":"—"}</td><td>${e.range!=null?Math.round(e.range)+" km":"—"}</td><td>${chT[e.charge||e.chargeStatus]||e.charge||e.chargeStatus||"—"}${e.chargeRate&&(e.charge||e.chargeStatus)==="InProgress"?" · +"+e.chargeRate+" km/h":""}${e.chargeMode&&e.chargeMode!=="No"?" ("+e.chargeMode+")":""}</td><td>${(e.sante??e.health)!=null?(e.sante??e.health)+" %":"—"}</td><td>${e.v12??"—"}</td><td>${e.temp!=null?n1(e.temp)+" °C":"—"}</td><td>${e.km!=null?Math.round(e.km).toLocaleString("fr-FR"):"—"}</td><td>${e.ignition==="Start"?"mis":e.ignition==="Stop"?"coupé":"—"}</td><td>${e.precond?(e.precond==="Disabled"?"arrêt":e.precond.toLowerCase()):"—"}</td><td>${e.locked==null?"—":(e.lockOk?'<span class="xd-ok">verrouillée</span>':'<span class="xd-bad">'+esc(xTr(e.locked))+'</span>')+(e.opens?' · <span class="xd-bad">ouvert : '+esc(String(e.opens).split(",").map(xTr).join(", "))+'</span>':"")}</td><td>${e.alerts==null?"—":e.alerts?`<span class="xd-warn" title="${esc(e.alertsTxt||"")}">${e.alerts}</span>`:"0"}</td><td>${e.maintDays!=null||e.maintKm!=null?[e.maintDays!=null?e.maintDays+" j":"",e.maintKm!=null?Math.round(e.maintKm).toLocaleString("fr-FR")+" km":""].filter(Boolean).join(" · "):"—"}</td><td>${e.lat!=null?`<a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lon}" target="_blank" rel="noopener">voir</a>`:"—"}</td></tr>`).join("")}</tbody></table></div>`);
     }
     if(T.length) h+=csec("htrajets",`Trajets (${T.length})`,tripRows(T));
+    if(BR.length) h+=csec("hbruts",`Données complètes reçues de la voiture (${BR.length})`,`<p class="note">Copie intégrale de chaque réponse de la voiture qui a changé ce jour-là (portes, alertes, entretien, programmes, charge, position…).</p>`+BR.slice().reverse().map(b=>{ let o=null; try{ o=JSON.parse(b.json); }catch(e){} return `<details class="xd-day"><summary>${fmtClock(new Date(b.ts))}${b.carAt?` · donnée voiture de ${fmtClock(new Date(b.carAt))}`:""}</summary>${o?`<div class="xd-in">${(()=>{ try{ return extraHtml({raw:o}); }catch(e){ return ""; } })()}</div>`:`<pre class="xd-raw">${esc(b.json||"")}</pre>`}</details>`; }).join(""));
     if(C.length) h+=csec("hrecharges",`Recharges (${C.length})`,chargeRows(C));
     box.innerHTML=h;
   }catch(e){ msg.className="note status err"; msg.textContent=e.code==="permission-denied"?"Accès refusé : ajoute la règle Firestore de l'historique (voir le script PC).":"Chargement impossible ("+(e.code||e.message)+")."; }
@@ -3307,8 +3315,11 @@ async function collectAll(onStep){
     onStep("Historique de la voiture…");
     const top=await car.get();
     if(top.exists){ const d={...top.data()}; if(typeof d.full==="string"){ try{ d.full=JSON.parse(d.full); }catch(e){} } out.voiture={dernierEtat:d}; } else out.voiture={};
-    const [jours,trajets,recharges,sante]=await Promise.all(["jours","trajets","recharges","sante"].map(n=>all(car.collection(n))));
-    Object.assign(out.voiture,{jours,trajets,recharges,sante});
+    const [jours,trajets,recharges,sante,bruts,journal]=await Promise.all(["jours","trajets","recharges","sante","bruts","journal"].map(n=>all(car.collection(n))));
+    Object.assign(out.voiture,{jours,trajets,recharges,sante,bruts,journal});
+    // données complètes de la voiture et textes JSON rendus lisibles dans le fichier
+    Object.values(out.voiture.bruts||{}).forEach(b=>{ if(typeof b.json==="string"){ try{ b.donnees=JSON.parse(b.json); delete b.json; }catch(e){} } });
+    const de=out.voiture.dernierEtat; if(de) ["pcTasks","actif"].forEach(k=>{ if(typeof de[k]==="string"){ try{ de[k]=JSON.parse(de[k]); }catch(e){} } });
   }catch(e){ out.voiture={erreur:e.code||e.message}; }
   try{
     onStep("Mes recharges…");
@@ -3326,10 +3337,10 @@ $("bakExport").addEventListener("click",async()=>{
     const txt=JSON.stringify(o), a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"})); a.download=`trajetve-sauvegarde-${isoDay(new Date())}.json`;
     document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
-    const V=o.voiture||{}, nJ=Object.keys(V.jours||{}).length, nR=(o.mesRecharges?.sessions||[]).length;
+    const V=o.voiture||{}, nJ=Object.keys(V.jours||{}).length, nR=(o.mesRecharges?.sessions||[]).length, nB=Object.keys(V.bruts||{}).length, nL=Object.keys(V.journal||{}).length;
     const days=Object.keys(V.jours||{}).sort();
     const pl=(n,w)=>`${n} ${w}${n>1?"s":""}`;
-    m.textContent=`Fichier exporté (${(txt.length/1024).toFixed(0)} Ko)`+(o.compte?` : ${nJ} jour${nJ>1?"s":""} d'historique voiture${days.length?` (du ${new Date(days[0]+"T12:00").toLocaleDateString("fr-FR")} au ${new Date(days[days.length-1]+"T12:00").toLocaleDateString("fr-FR")})`:""}, ${pl(Object.keys(V.trajets||{}).length,"trajet")}, ${pl(Object.keys(V.recharges||{}).length,"recharge")} détectée${Object.keys(V.recharges||{}).length>1?"s":""} par la voiture, ${pl(Object.keys(V.sante||{}).length,"mesure")} de santé, ${pl(nR,"recharge")} dans Mes recharges.`:".")+(V.erreur?` Historique voiture non lu (${V.erreur}).`:"")+(o.mesRecharges?.erreur?` Mes recharges non lu (${o.mesRecharges.erreur}).`:"");
+    m.textContent=`Fichier exporté (${(txt.length/1024).toFixed(0)} Ko)`+(o.compte?` : ${nJ} jour${nJ>1?"s":""} d'historique voiture${days.length?` (du ${new Date(days[0]+"T12:00").toLocaleDateString("fr-FR")} au ${new Date(days[days.length-1]+"T12:00").toLocaleDateString("fr-FR")})`:""}, ${pl(Object.keys(V.trajets||{}).length,"trajet")}, ${pl(Object.keys(V.recharges||{}).length,"recharge")} détectée${Object.keys(V.recharges||{}).length>1?"s":""} par la voiture, ${pl(Object.keys(V.sante||{}).length,"mesure")} de santé, ${pl(nR,"recharge")} dans Mes recharges, ${pl(nB,"copie")} complète${nB>1?"s":""} des données de la voiture, ${pl(nL,"ligne")} de journal du PC.`:".")+(V.erreur?` Historique voiture non lu (${V.erreur}).`:"")+(o.mesRecharges?.erreur?` Mes recharges non lu (${o.mesRecharges.erreur}).`:"");
   }catch(e){ m.textContent=`Export impossible (${e.code||e.message}).`; }
   finally{ b.disabled=false; }
 });
